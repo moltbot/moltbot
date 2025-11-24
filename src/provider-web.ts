@@ -6,7 +6,7 @@ import {
 	fetchLatestBaileysVersion,
 	makeCacheableSignalKeyStore,
 	makeWASocket,
-	useMultiFileAuthState,
+	useSingleFileAuthState,
 } from "baileys";
 import type { proto } from "baileys";
 import pino from "pino";
@@ -14,11 +14,11 @@ import qrcode from "qrcode-terminal";
 import { danger, info, logVerbose, success } from "./globals.js";
 import { ensureDir, jidToE164, toWhatsappJid } from "./utils.js";
 
-const WA_WEB_AUTH_DIR = path.join(os.homedir(), ".warelay", "waweb");
+const WA_WEB_AUTH_FILE = path.join(os.homedir(), ".warelay", "credentials.json");
 
 export async function createWaSocket(printQr: boolean, verbose: boolean) {
-	await ensureDir(WA_WEB_AUTH_DIR);
-	const { state, saveCreds } = await useMultiFileAuthState(WA_WEB_AUTH_DIR);
+	await ensureDir(path.dirname(WA_WEB_AUTH_FILE));
+	const { state, saveState } = useSingleFileAuthState(WA_WEB_AUTH_FILE);
 	const { version } = await fetchLatestBaileysVersion();
 	const logger = pino({ level: verbose ? "info" : "silent" });
 	const sock = makeWASocket({
@@ -34,7 +34,7 @@ export async function createWaSocket(printQr: boolean, verbose: boolean) {
 		markOnlineOnConnect: false,
 	});
 
-	sock.ev.on("creds.update", saveCreds);
+	sock.ev.on("creds.update", saveState);
 	sock.ev.on(
 		"connection.update",
 		(update: Partial<import("baileys").ConnectionState>) => {
@@ -132,7 +132,7 @@ export async function loginWeb(
 			return;
 		}
 		if (code === DisconnectReason.loggedOut) {
-			await fs.rm(WA_WEB_AUTH_DIR, { recursive: true, force: true });
+			await fs.rm(WA_WEB_AUTH_FILE, { force: true });
 			console.error(
 				danger(
 					"WhatsApp reported the session is logged out. Cleared cached web session; please rerun warelay web:login and scan the QR again.",
@@ -158,7 +158,14 @@ export async function loginWeb(
 	}
 }
 
-export { WA_WEB_AUTH_DIR };
+export { WA_WEB_AUTH_FILE };
+
+export function webAuthExists() {
+	return fs
+		.access(WA_WEB_AUTH_FILE)
+		.then(() => true)
+		.catch(() => false);
+}
 
 export type WebInboundMessage = {
 	id?: string;

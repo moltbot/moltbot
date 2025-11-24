@@ -10,26 +10,27 @@ You can also use a personal WhatsApp Web session (QR login) via `--provider web`
 2) Configure `.env` (see `.env.example`): set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` (or `TWILIO_API_KEY`/`TWILIO_API_SECRET`), and `TWILIO_WHATSAPP_FROM=whatsapp:+15551234567`. Optional: `TWILIO_SENDER_SID` if you don’t want auto-discovery.  
 3) Send a test: `pnpm warelay send --to +12345550000 --message "Hi from warelay"`  
 4) Run auto-replies in polling mode (no public URL needed):  
-   `pnpm warelay poll --interval 5 --lookback 10 --verbose`  
+   `pnpm warelay relay --provider twilio --interval 5 --lookback 10 --verbose`  
 5) Prefer webhooks? Launch everything in one step (webhook + Tailscale Funnel + Twilio callback):  
    `pnpm warelay up --port 42873 --path /webhook/whatsapp --verbose`
 
 ## Modes at a Glance
 
-- **Polling (`monitor` / `poll`)**: Periodically fetch inbound messages to your WhatsApp number. Easiest to start; no ingress needed. Auto-replies still run.
+- **Polling (`relay --provider twilio`)**: Periodically fetch inbound messages to your WhatsApp number. Easiest to start; no ingress needed. Auto-replies still run.
 - **Webhook (`webhook` / `up`)**: Push delivery from Twilio. `webhook` runs the server locally; `up` also enables Tailscale Funnel and points the Twilio sender/webhook to your public Funnel URL (with fallbacks to phone number and messaging service).
 
 ## Providers (choose per command)
 
 - **Twilio (default)** — full feature set: send, wait/poll delivery, status, inbound polling/webhook, auto-replies. Requires `.env` Twilio creds and a WhatsApp-enabled number (`TWILIO_WHATSAPP_FROM`).
-- **Web (`--provider web`)** — personal WhatsApp Web session via QR. Supports outbound sends (`send --provider web`) and inbound auto-replies when you run `pnpm warelay web:monitor`. No delivery-status polling for web sends. Setup: `pnpm warelay web:login` then either send with `--provider web` or keep `web:monitor` running. Session data lives in `~/.warelay/waweb/`; if logged out, rerun `web:login`. Use at your own risk (personal-account automation can be rate-limited or logged out by WhatsApp).
+- **Web (`--provider web`)** — personal WhatsApp Web session via QR. Supports outbound sends and inbound auto-replies when you run `pnpm warelay relay --provider web`. No delivery-status polling for web sends. Setup: `pnpm warelay web:login` then either send with `--provider web` or keep `relay --provider web` running. Session data lives in `~/.warelay/credentials.json`; if logged out, rerun `web:login`. Use at your own risk (personal-account automation can be rate-limited or logged out by WhatsApp).
 
 ## Common Commands
 
 - Send: `pnpm warelay send --to +12345550000 --message "Hello" --wait 20 --poll 2`
 - Send via personal WhatsApp Web: first `pnpm warelay web:login` (scan QR), then `pnpm warelay send --provider web --to +12345550000 --message "Hi"`
-- Web auto-replies (personal WA): `pnpm warelay web:login` once, then run `pnpm warelay web:monitor` to listen and auto-reply using your `~/.warelay/warelay.json` config
-- Poll (lightweight): `pnpm warelay poll --interval 5 --lookback 10 --verbose`
+- Auto-replies (auto provider): `pnpm warelay relay` (uses web if logged in, otherwise twilio poll)
+- Auto-replies (force web): `pnpm warelay relay --provider web`
+- Auto-replies (force Twilio poll): `pnpm warelay relay --provider twilio --interval 5 --lookback 10 --verbose`
 - Webhook only: `pnpm warelay webhook --port 42873 --path /webhook/whatsapp --verbose`
 - Webhook + Funnel + Twilio update: `pnpm warelay up --port 42873 --path /webhook/whatsapp --verbose`
 - Status (recent sent/received): `pnpm warelay status --limit 20 --lookback 240` (add `--json` for machine-readable)
@@ -50,7 +51,7 @@ You can also use a personal WhatsApp Web session (QR login) via `--provider web`
         "--output-format",
         "json",
         "--dangerously-skip-permissions",
-        "{{Body}}"
+        "{{BodyStripped}}"
       ],
       session: {
         scope: "per-sender",
@@ -81,7 +82,7 @@ Notes:
 
 ## Troubleshooting Delivery
 
-- Auto-reply send failures now print in red with Twilio code/status and the response body (e.g., policy violation 63112). Watch terminal output when running `poll`, `webhook`, or `up`.
+- Auto-reply send failures now print in red with Twilio code/status and the response body (e.g., policy violation 63112). Watch terminal output when running `relay`, `webhook`, or `up`.
 - Check recent messages: `pnpm warelay status --limit 20 --lookback 240`.
 - If you must resend while a reply is long-running, keep messages <1600 chars (WhatsApp limit) and avoid restricted content/templates.
 
@@ -106,4 +107,4 @@ Notes:
 ## Dev Notes
 
 - During dev you can run without building: `pnpm dev -- <subcommand>` (e.g., `pnpm dev -- send --to +1...`).
-- Stop polling/webhook with `Ctrl+C`. CLI uses `pnpm` and `tsx`; no build required for local runs.
+- Stop relay/webhook with `Ctrl+C`. CLI uses `pnpm` and `tsx`; no build required for local runs.

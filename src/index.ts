@@ -18,6 +18,7 @@ import express, { type Request, type Response } from "express";
 import JSON5 from "json5";
 import Twilio from "twilio";
 import type { MessageInstance } from "twilio/lib/rest/api/v2010/account/message.js";
+import { z } from "zod";
 
 import {
 	danger,
@@ -30,16 +31,25 @@ import {
 	success,
 	warn,
 } from "./globals.js";
-import { loginWeb, monitorWebInbox, sendMessageWeb } from "./provider-web.js";
+import {
+	loginWeb,
+	monitorWebInbox,
+	sendMessageWeb,
+	webAuthExists,
+} from "./provider-web.js";
+import { sendCommand } from "./commands/send.js";
+import { statusCommand } from "./commands/status.js";
+import { webhookCommand } from "./commands/webhook.js";
+import { upCommand } from "./commands/up.js";
 import {
 	assertProvider,
 	CONFIG_DIR,
 	normalizeE164,
 	normalizePath,
 	sleep,
-	toWhatsappJid,
 	withWhatsAppPrefix,
 } from "./utils.js";
+import type { Provider } from "./utils.js";
 
 dotenv.config({ quiet: true });
 
@@ -48,6 +58,50 @@ const program = new Command();
 type AuthMode =
 	| { accountSid: string; authToken: string }
 	| { accountSid: string; apiKey: string; apiSecret: string };
+
+type CliDeps = {
+	sendMessage: typeof sendMessage;
+	sendMessageWeb: typeof sendMessageWeb;
+	waitForFinalStatus: typeof waitForFinalStatus;
+	assertProvider: typeof assertProvider;
+	createClient?: typeof createClient;
+	monitorTwilio: typeof monitorTwilio;
+	listRecentMessages: typeof listRecentMessages;
+	ensurePortAvailable: typeof ensurePortAvailable;
+	startWebhook: typeof startWebhook;
+	waitForever: typeof waitForever;
+	ensureBinary: typeof ensureBinary;
+	ensureFunnel: typeof ensureFunnel;
+	getTailnetHostname: typeof getTailnetHostname;
+	readEnv: typeof readEnv;
+	findWhatsappSenderSid: typeof findWhatsappSenderSid;
+	updateWebhook: typeof updateWebhook;
+	handlePortError: typeof handlePortError;
+	monitorWebProvider: typeof monitorWebProvider;
+};
+
+function createDefaultDeps(): CliDeps {
+	return {
+		sendMessage,
+		sendMessageWeb,
+		waitForFinalStatus,
+		assertProvider,
+		createClient,
+		monitorTwilio,
+		listRecentMessages,
+		ensurePortAvailable,
+		startWebhook,
+		waitForever,
+		ensureBinary,
+		ensureFunnel,
+		getTailnetHostname,
+		readEnv,
+		findWhatsappSenderSid,
+		updateWebhook,
+		handlePortError,
+		monitorWebProvider,
+	};
+}
 
 type TwilioRequestOptions = {
 	method: "get" | "post";
@@ -136,35 +190,74 @@ type EnvConfig = {
 	auth: AuthMode;
 };
 
-function readEnv(): EnvConfig {
+type RuntimeEnv = {
+	log: typeof console.log;
+	error: typeof console.error;
+	exit: (code: number) => never;
+};
+
+const defaultRuntime: RuntimeEnv = {
+	log: console.log,
+	error: console.error,
+	exit: (code) => {
+		process.exit(code);
+		throw new Error("unreachable"); // satisfies tests when mocked
+	},
+};
+
+const EnvSchema = z
+	.object({
+		TWILIO_ACCOUNT_SID: z.string().min(1, "TWILIO_ACCOUNT_SID required"),
+		TWILIO_WHATSAPP_FROM: z.string().min(1, "TWILIO_WHATSAPP_FROM required"),
+		TWILIO_SENDER_SID: z.string().optional(),
+		TWILIO_AUTH_TOKEN: z.string().optional(),
+		TWILIO_API_KEY: z.string().optional(),
+		TWILIO_API_SECRET: z.string().optional(),
+	})
+	.superRefine((val, ctx) => {
+		if (val.TWILIO_API_KEY && !val.TWILIO_API_SECRET) {
+			ctx.addIssue({
+				code: "custom",
+				message: "TWILIO_API_SECRET required when TWILIO_API_KEY is set",
+			});
+		}
+		if (val.TWILIO_API_SECRET && !val.TWILIO_API_KEY) {
+			ctx.addIssue({
+				code: "custom",
+				message: "TWILIO_API_KEY required when TWILIO_API_SECRET is set",
+			});
+		}
+		if (!val.TWILIO_AUTH_TOKEN && !(val.TWILIO_API_KEY && val.TWILIO_API_SECRET)) {
+			ctx.addIssue({
+				code: "custom",
+				message:
+					"Provide TWILIO_AUTH_TOKEN or both TWILIO_API_KEY and TWILIO_API_SECRET",
+			});
+		}
+	});
+
+function readEnv(runtime: RuntimeEnv = defaultRuntime): EnvConfig {
 	// Load and validate Twilio auth + sender configuration from env.
-	const accountSid = process.env.TWILIO_ACCOUNT_SID;
-	const whatsappFrom = process.env.TWILIO_WHATSAPP_FROM;
-	const whatsappSenderSid = process.env.TWILIO_SENDER_SID;
-	const authToken = process.env.TWILIO_AUTH_TOKEN;
-	const apiKey = process.env.TWILIO_API_KEY;
-	const apiSecret = process.env.TWILIO_API_SECRET;
-
-	if (!accountSid) {
-		console.error("Missing env var TWILIO_ACCOUNT_SID");
-		process.exit(1);
-	}
-	if (!whatsappFrom) {
-		console.error("Missing env var TWILIO_WHATSAPP_FROM");
-		process.exit(1);
+	const parsed = EnvSchema.safeParse(process.env);
+	if (!parsed.success) {
+		runtime.error("Invalid environment configuration:");
+		parsed.error.issues.forEach((iss) => runtime.error(`- ${iss.message}`));
+		runtime.exit(1);
 	}
 
-	let auth: AuthMode | undefined;
-	if (apiKey && apiSecret) {
-		auth = { accountSid, apiKey, apiSecret };
-	} else if (authToken) {
-		auth = { accountSid, authToken };
-	} else {
-		console.error(
-			"Provide either TWILIO_AUTH_TOKEN or (TWILIO_API_KEY and TWILIO_API_SECRET)",
-		);
-		process.exit(1);
-	}
+	const {
+		TWILIO_ACCOUNT_SID: accountSid,
+		TWILIO_WHATSAPP_FROM: whatsappFrom,
+		TWILIO_SENDER_SID: whatsappSenderSid,
+		TWILIO_AUTH_TOKEN: authToken,
+		TWILIO_API_KEY: apiKey,
+		TWILIO_API_SECRET: apiSecret,
+	} = parsed.data;
+
+	const auth: AuthMode =
+		apiKey && apiSecret
+			? { accountSid, apiKey, apiSecret }
+			: { accountSid, authToken: authToken! };
 
 	return {
 		accountSid,
@@ -312,6 +405,7 @@ async function handlePortError(
 	err: unknown,
 	port: number,
 	context: string,
+	runtime: RuntimeEnv = defaultRuntime,
 ): Promise<never> {
 	if (
 		err instanceof PortInUseError ||
@@ -321,34 +415,38 @@ async function handlePortError(
 			err instanceof PortInUseError
 				? err.details
 				: await describePortOwner(port);
-		console.error(danger(`${context} failed: port ${port} is already in use.`));
+		runtime.error(danger(`${context} failed: port ${port} is already in use.`));
 		if (details) {
-			console.error(info("Port listener details:"));
-			console.error(details);
+			runtime.error(info("Port listener details:"));
+			runtime.error(details);
 			if (/warelay|src\/index\.ts|dist\/index\.js/.test(details)) {
-				console.error(
+				runtime.error(
 					warn(
 						"It looks like another warelay instance is already running. Stop it or pick a different port.",
 					),
 				);
 			}
 		}
-		console.error(
+		runtime.error(
 			info(
 				"Resolve by stopping the process using the port or passing --port <free-port>.",
 			),
 		);
-		process.exit(1);
+		runtime.exit(1);
 	}
-	console.error(danger(`${context} failed: ${String(err)}`));
-	process.exit(1);
+	runtime.error(danger(`${context} failed: ${String(err)}`));
+	return runtime.exit(1);
 }
 
-async function ensureBinary(name: string): Promise<void> {
+async function ensureBinary(
+	name: string,
+	exec: typeof runExec = runExec,
+	runtime: RuntimeEnv = defaultRuntime,
+): Promise<void> {
 	// Abort early if a required CLI tool is missing.
-	await runExec("which", [name]).catch(() => {
-		console.error(`Missing required binary: ${name}. Please install it.`);
-		process.exit(1);
+	await exec("which", [name]).catch(() => {
+		runtime.error(`Missing required binary: ${name}. Please install it.`);
+		runtime.exit(1);
 	});
 }
 
@@ -664,6 +762,7 @@ async function autoReplyIfConfigured(
 	client: ReturnType<typeof createClient>,
 	message: MessageInstance,
 	configOverride?: WarelayConfig,
+	runtime: RuntimeEnv = defaultRuntime,
 ): Promise<void> {
 	// Fire a config-driven reply (text or command) for the inbound message, if configured.
 	const ctx: MsgContext = {
@@ -676,7 +775,7 @@ async function autoReplyIfConfigured(
 	const replyText = await getReplyFromConfig(
 		ctx,
 		{
-			onReplyStart: () => sendTypingIndicator(client, message.sid),
+			onReplyStart: () => sendTypingIndicator(client, message.sid, runtime),
 		},
 		configOverride,
 	);
@@ -711,7 +810,7 @@ async function autoReplyIfConfigured(
 			);
 		}
 	} catch (err) {
-		logTwilioSendError(err, replyTo ?? undefined);
+		logTwilioSendError(err, replyTo ?? undefined, runtime);
 	}
 }
 
@@ -730,6 +829,7 @@ function createClient(env: EnvConfig) {
 async function sendTypingIndicator(
 	client: ReturnType<typeof createClient>,
 	messageSid?: string,
+	runtime: RuntimeEnv = defaultRuntime,
 ) {
 	// Best-effort WhatsApp typing indicator (public beta as of Nov 2025).
 	if (!messageSid) {
@@ -748,16 +848,20 @@ async function sendTypingIndicator(
 		});
 		logVerbose(`Sent typing indicator for inbound ${messageSid}`);
 	} catch (err) {
-	if (isVerbose()) {
-		console.error(warn("Typing indicator failed (continuing without it)"));
-		console.error(err);
-	}
+		if (isVerbose()) {
+			runtime.error(warn("Typing indicator failed (continuing without it)"));
+			runtime.error(err as Error);
+		}
 	}
 }
 
-async function sendMessage(to: string, body: string) {
+async function sendMessage(
+	to: string,
+	body: string,
+	runtime: RuntimeEnv = defaultRuntime,
+) {
 	// Send outbound WhatsApp message; exit non-zero on API failure.
-	const env = readEnv();
+	const env = readEnv(runtime);
 	const client = createClient(env);
 	const from = withWhatsAppPrefix(env.whatsappFrom);
 	const toNumber = withWhatsAppPrefix(to);
@@ -787,9 +891,9 @@ async function sendMessage(to: string, body: string) {
 		const msg =
 			typeof anyErr?.message === "string"
 				? anyErr.message
-				: (anyErr?.message ?? err);
+			: (anyErr?.message ?? err);
 		const more = anyErr?.moreInfo;
-		console.error(
+		runtime.error(
 			`❌ Twilio send failed${code ? ` (code ${code})` : ""}${status ? ` status ${status}` : ""}: ${msg}`,
 		);
 		if (more) console.error(`More info: ${more}`);
@@ -798,7 +902,7 @@ async function sendMessage(to: string, body: string) {
 		if (responseBody) {
 			console.error("Response body:", JSON.stringify(responseBody, null, 2));
 		}
-		process.exit(1);
+		runtime.exit(1);
 	}
 }
 
@@ -810,6 +914,7 @@ async function waitForFinalStatus(
 	sid: string,
 	timeoutSeconds: number,
 	pollSeconds: number,
+	runtime: RuntimeEnv = defaultRuntime,
 ) {
 	// Poll message status until delivered/failed or timeout.
 	const deadline = Date.now() + timeoutSeconds * 1000;
@@ -821,12 +926,12 @@ async function waitForFinalStatus(
 			return;
 		}
 		if (failureTerminalStatuses.has(status)) {
-			console.error(
+			runtime.error(
 				`❌ Delivery failed (status: ${status}${
 					m.errorCode ? `, code ${m.errorCode}` : ""
 				})${m.errorMessage ? `: ${m.errorMessage}` : ""}`,
 			);
-			process.exit(1);
+			runtime.exit(1);
 		}
 		await sleep(pollSeconds * 1000);
 	}
@@ -840,16 +945,17 @@ async function startWebhook(
 	path = "/webhook/whatsapp",
 	autoReply: string | undefined,
 	verbose: boolean,
+	runtime: RuntimeEnv = defaultRuntime,
 ): Promise<import("http").Server> {
 	const normalizedPath = normalizePath(path);
 	// Start Express webhook; generate replies via config or CLI flag.
-	const env = readEnv();
+	const env = readEnv(runtime);
 	const app = express();
 
 	// Twilio sends application/x-www-form-urlencoded
 	app.use(bodyParser.urlencoded({ extended: false }));
 	app.use((req, _res, next) => {
-		console.log(chalk.gray(`REQ ${req.method} ${req.url}`));
+		runtime.log(chalk.gray(`REQ ${req.method} ${req.url}`));
 		next();
 	});
 
@@ -860,7 +966,7 @@ async function startWebhook(
 				MessageSid ?? "no-sid"
 			})`,
 		);
-		if (verbose) console.log(chalk.gray(`Body: ${Body ?? ""}`));
+		if (verbose) runtime.log(chalk.gray(`Body: ${Body ?? ""}`));
 
 		const client = createClient(env);
 		let replyText = autoReply;
@@ -873,7 +979,7 @@ async function startWebhook(
 					MessageSid,
 				},
 				{
-					onReplyStart: () => sendTypingIndicator(client, MessageSid),
+					onReplyStart: () => sendTypingIndicator(client, MessageSid, runtime),
 				},
 			);
 		}
@@ -886,10 +992,10 @@ async function startWebhook(
 					body: replyText,
 				});
 				if (verbose) {
-					console.log(success(`↩️  Auto-replied to ${From}`));
+					runtime.log(success(`↩️  Auto-replied to ${From}`));
 				}
 			} catch (err) {
-				logTwilioSendError(err, From ?? undefined);
+				logTwilioSendError(err, From ?? undefined, runtime);
 			}
 		}
 
@@ -898,7 +1004,7 @@ async function startWebhook(
 	});
 
 	app.use((_req, res) => {
-		if (verbose) console.log(chalk.yellow(`404 ${_req.method} ${_req.url}`));
+		if (verbose) runtime.log(chalk.yellow(`404 ${_req.method} ${_req.url}`));
 		res.status(404).send("warelay webhook: not found");
 	});
 
@@ -907,7 +1013,7 @@ async function startWebhook(
 
 		const onListening = () => {
 			cleanup();
-			console.log(
+			runtime.log(
 				`📥 Webhook listening on http://localhost:${port}${normalizedPath}`,
 			);
 			resolve(server);
@@ -937,9 +1043,9 @@ function waitForever() {
 	});
 }
 
-async function getTailnetHostname() {
+async function getTailnetHostname(exec: typeof runExec = runExec) {
 	// Derive tailnet hostname (or IP fallback) from tailscale status JSON.
-	const { stdout } = await runExec("tailscale", ["status", "--json"]);
+	const { stdout } = await exec("tailscale", ["status", "--json"]);
 	const parsed = stdout ? (JSON.parse(stdout) as Record<string, unknown>) : {};
 	const self =
 		typeof parsed.Self === "object" && parsed.Self !== null
@@ -955,79 +1061,92 @@ async function getTailnetHostname() {
 	throw new Error("Could not determine Tailscale DNS or IP");
 }
 
-async function ensureGoInstalled() {
+async function ensureGoInstalled(
+	exec: typeof runExec = runExec,
+	prompt: typeof promptYesNo = promptYesNo,
+	runtime: RuntimeEnv = defaultRuntime,
+) {
 	// Ensure Go toolchain is present; offer Homebrew install if missing.
-	const hasGo = await runExec("go", ["version"]).then(
+	const hasGo = await exec("go", ["version"]).then(
 		() => true,
 		() => false,
 	);
 	if (hasGo) return;
-	const install = await promptYesNo(
+	const install = await prompt(
 		"Go is not installed. Install via Homebrew (brew install go)?",
 		true,
 	);
 	if (!install) {
-		console.error("Go is required to build tailscaled from source. Aborting.");
-		process.exit(1);
+		runtime.error("Go is required to build tailscaled from source. Aborting.");
+		runtime.exit(1);
 	}
 	logVerbose("Installing Go via Homebrew…");
-	await runExec("brew", ["install", "go"]);
+	await exec("brew", ["install", "go"]);
 }
 
-async function ensureTailscaledInstalled() {
+async function ensureTailscaledInstalled(
+	exec: typeof runExec = runExec,
+	prompt: typeof promptYesNo = promptYesNo,
+	runtime: RuntimeEnv = defaultRuntime,
+) {
 	// Ensure tailscaled binary exists; install via Homebrew tailscale if missing.
-	const hasTailscaled = await runExec("tailscaled", ["--version"]).then(
+	const hasTailscaled = await exec("tailscaled", ["--version"]).then(
 		() => true,
 		() => false,
 	);
 	if (hasTailscaled) return;
 
-	const install = await promptYesNo(
+	const install = await prompt(
 		"tailscaled not found. Install via Homebrew (tailscale package)?",
 		true,
 	);
 	if (!install) {
-		console.error("tailscaled is required for user-space funnel. Aborting.");
-		process.exit(1);
+		runtime.error("tailscaled is required for user-space funnel. Aborting.");
+		runtime.exit(1);
 	}
 	logVerbose("Installing tailscaled via Homebrew…");
-	await runExec("brew", ["install", "tailscale"]);
+	await exec("brew", ["install", "tailscale"]);
 }
 
-async function ensureFunnel(port: number) {
+async function ensureFunnel(
+	port: number,
+	exec: typeof runExec = runExec,
+	runtime: RuntimeEnv = defaultRuntime,
+	prompt: typeof promptYesNo = promptYesNo,
+) {
 	// Ensure Funnel is enabled and publish the webhook port.
 	try {
 		const statusOut = (
-			await runExec("tailscale", ["funnel", "status", "--json"])
+			await exec("tailscale", ["funnel", "status", "--json"])
 		).stdout.trim();
 		const parsed = statusOut
 			? (JSON.parse(statusOut) as Record<string, unknown>)
 			: {};
 		if (!parsed || Object.keys(parsed).length === 0) {
-			console.error(
+			runtime.error(
 				danger("Tailscale Funnel is not enabled on this tailnet/device."),
 			);
-			console.error(
+			runtime.error(
 				info(
 					"Enable in admin console: https://login.tailscale.com/admin (see https://tailscale.com/kb/1223/funnel)",
 				),
 			);
-			console.error(
+			runtime.error(
 				info(
 					"macOS user-space tailscaled docs: https://github.com/tailscale/tailscale/wiki/Tailscaled-on-macOS",
 				),
 			);
-			const proceed = await promptYesNo(
+			const proceed = await prompt(
 				"Attempt local setup with user-space tailscaled?",
 				true,
 			);
-			if (!proceed) process.exit(1);
-			await ensureGoInstalled();
-			await ensureTailscaledInstalled();
+			if (!proceed) runtime.exit(1);
+			await ensureGoInstalled(exec, prompt, runtime);
+			await ensureTailscaledInstalled(exec, prompt, runtime);
 		}
 
 		logVerbose(`Enabling funnel on port ${port}…`);
-		const { stdout } = await runExec(
+		const { stdout } = await exec(
 			"tailscale",
 			["funnel", "--yes", "--bg", `${port}`],
 			{
@@ -1063,20 +1182,20 @@ async function ensureFunnel(port: number) {
 				),
 			);
 		}
-		console.error(
+		runtime.error(
 			"Failed to enable Tailscale Funnel. Is it allowed on your tailnet?",
 		);
-		console.error(
-			info(
-				"Tip: you can fall back to polling (no webhooks needed): `pnpm warelay poll --interval 5 --lookback 10`",
-			),
+		runtime.error(
+					info(
+						"Tip: you can fall back to polling (no webhooks needed): `pnpm warelay relay --provider twilio --interval 5 --lookback 10`",
+					),
 		);
 		if (isVerbose()) {
-			if (stdout.trim()) console.error(chalk.gray(`stdout: ${stdout.trim()}`));
-			if (stderr.trim()) console.error(chalk.gray(`stderr: ${stderr.trim()}`));
-			console.error(err);
+			if (stdout.trim()) runtime.error(chalk.gray(`stdout: ${stdout.trim()}`));
+			if (stderr.trim()) runtime.error(chalk.gray(`stderr: ${stderr.trim()}`));
+			runtime.error(err as Error);
 		}
-		process.exit(1);
+		runtime.exit(1);
 	}
 }
 
@@ -1084,6 +1203,7 @@ async function findWhatsappSenderSid(
 	client: ReturnType<typeof createClient>,
 	from: string,
 	explicitSenderSid?: string,
+	runtime: RuntimeEnv = defaultRuntime,
 ) {
 	// Use explicit sender SID if provided, otherwise list and match by sender_id.
 	if (explicitSenderSid) {
@@ -1115,16 +1235,16 @@ async function findWhatsappSenderSid(
 		}
 		return match.sid;
 	} catch (err) {
-		console.error(danger("Unable to list WhatsApp senders via Twilio API."));
+		runtime.error(danger("Unable to list WhatsApp senders via Twilio API."));
 		if (isVerbose()) {
-			console.error(err);
+			runtime.error(err as Error);
 		}
-		console.error(
+		runtime.error(
 			info(
 				"Set TWILIO_SENDER_SID in .env to skip discovery (Twilio Console → Messaging → Senders → WhatsApp).",
 			),
 		);
-		process.exit(1);
+		runtime.exit(1);
 	}
 }
 
@@ -1205,6 +1325,7 @@ async function updateWebhook(
 	senderSid: string,
 	url: string,
 	method: "POST" | "GET" = "POST",
+	runtime: RuntimeEnv = defaultRuntime,
 ) {
 	// Point Twilio sender webhook at the provided URL.
 	const requester = client as unknown as TwilioRequester;
@@ -1327,18 +1448,18 @@ async function updateWebhook(
 	);
 	if (messagingServiceUpdated) return;
 
-	console.error(danger("Failed to set Twilio webhook."));
-	console.error(
+	runtime.error(danger("Failed to set Twilio webhook."));
+	runtime.error(
 		info(
 			"Double-check your sender SID and credentials; you can set TWILIO_SENDER_SID to force a specific sender.",
 		),
 	);
-	console.error(
+	runtime.error(
 		info(
-			"Tip: if webhooks are blocked, use polling instead: `pnpm warelay poll --interval 5 --lookback 10`",
+			"Tip: if webhooks are blocked, use polling instead: `pnpm warelay relay --provider twilio --interval 5 --lookback 10`",
 		),
 	);
-	process.exit(1);
+	runtime.exit(1);
 }
 
 type TwilioApiError = {
@@ -1359,21 +1480,52 @@ function formatTwilioError(err: unknown): string {
 	return pieces.length ? pieces.join(" | ") : String(err);
 }
 
-function logTwilioSendError(err: unknown, destination?: string) {
+function logTwilioSendError(
+	err: unknown,
+	destination?: string,
+	runtime: RuntimeEnv = defaultRuntime,
+) {
 	const prefix = destination ? `to ${destination}: ` : "";
-	console.error(
+	runtime.error(
 		danger(`❌ Twilio send failed ${prefix}${formatTwilioError(err)}`),
 	);
 	const body = (err as TwilioApiError)?.response?.body;
 	if (body) {
-		console.error(info("Response body:"), JSON.stringify(body, null, 2));
+		runtime.error(info("Response body:"), JSON.stringify(body, null, 2));
 	}
 }
 
-async function monitor(intervalSeconds: number, lookbackMinutes: number) {
+function ensureTwilioEnv(runtime: RuntimeEnv = defaultRuntime) {
+	const required = ["TWILIO_ACCOUNT_SID", "TWILIO_WHATSAPP_FROM"];
+	const missing = required.filter((k) => !process.env[k]);
+	const hasToken = Boolean(process.env.TWILIO_AUTH_TOKEN);
+	const hasKey = Boolean(process.env.TWILIO_API_KEY && process.env.TWILIO_API_SECRET);
+	if (missing.length > 0 || (!hasToken && !hasKey)) {
+		runtime.error(
+			danger(
+				`Missing Twilio env: ${missing.join(", ") || "auth token or api key/secret"}. Set them in .env before using provider=twilio.`,
+			),
+		);
+		runtime.exit(1);
+	}
+}
+
+async function pickProvider(pref: Provider | "auto"): Promise<Provider> {
+	if (pref !== "auto") return pref;
+	const hasWeb = await webAuthExists();
+	if (hasWeb) return "web";
+	return "twilio";
+}
+
+async function monitorTwilio(
+	intervalSeconds: number,
+	lookbackMinutes: number,
+	clientOverride?: ReturnType<typeof createClient>,
+	maxIterations = Infinity,
+) {
 	// Poll Twilio for inbound messages and stream them with de-dupe.
 	const env = readEnv();
-	const client = createClient(env);
+	const client = clientOverride ?? createClient(env);
 	const from = withWhatsAppPrefix(env.whatsappFrom);
 
 	let since = new Date(Date.now() - lookbackMinutes * 60_000);
@@ -1397,7 +1549,8 @@ async function monitor(intervalSeconds: number, lookbackMinutes: number) {
 		console.log("\n👋 Stopping monitor");
 	});
 
-	while (keepRunning) {
+	let iterations = 0;
+	while (keepRunning && iterations < maxIterations) {
 		try {
 			const messages = await client.messages.list({
 				to: from,
@@ -1427,12 +1580,18 @@ async function monitor(intervalSeconds: number, lookbackMinutes: number) {
 		}
 
 		await sleep(intervalSeconds * 1000);
+		iterations += 1;
 	}
 }
 
-async function monitorWebProvider(verbose: boolean) {
+async function monitorWebProvider(
+	verbose: boolean,
+	listenerFactory = monitorWebInbox,
+	keepAlive = true,
+	replyResolver: typeof getReplyFromConfig = getReplyFromConfig,
+) {
 	// Listen for inbound personal WhatsApp Web messages and auto-reply if configured.
-	const listener = await monitorWebInbox({
+	const listener = await listenerFactory({
 		verbose,
 		onMessage: async (msg) => {
 			const ts = msg.timestamp
@@ -1440,7 +1599,7 @@ async function monitorWebProvider(verbose: boolean) {
 				: new Date().toISOString();
 			console.log(`\n[${ts}] ${msg.from} -> ${msg.to}: ${msg.body}`);
 
-			const replyText = await getReplyFromConfig(
+			const replyText = await replyResolver(
 				{
 					Body: msg.body,
 					From: msg.from,
@@ -1473,11 +1632,161 @@ async function monitorWebProvider(verbose: boolean) {
 	process.on("SIGINT", () => {
 		void listener.close().finally(() => {
 			console.log("\n👋 Web monitor stopped");
-			process.exit(0);
+			defaultRuntime.exit(0);
 		});
 	});
 
-	await waitForever();
+	if (keepAlive) {
+		await waitForever();
+	}
+}
+
+async function performSend(
+	opts: {
+		to: string;
+		message: string;
+		wait: string;
+		poll: string;
+		provider: Provider;
+	},
+	deps: CliDeps,
+	exitFn: (code: number) => never = defaultRuntime.exit,
+	runtime: RuntimeEnv = defaultRuntime,
+) {
+	deps.assertProvider(opts.provider);
+	const waitSeconds = Number.parseInt(opts.wait, 10);
+	const pollSeconds = Number.parseInt(opts.poll, 10);
+
+	if (Number.isNaN(waitSeconds) || waitSeconds < 0) {
+		throw new Error("Wait must be >= 0 seconds");
+	}
+	if (Number.isNaN(pollSeconds) || pollSeconds <= 0) {
+		throw new Error("Poll must be > 0 seconds");
+	}
+
+	if (opts.provider === "web") {
+		if (waitSeconds !== 0) {
+			console.log(info("Wait/poll are Twilio-only; ignored for provider=web."));
+		}
+		await deps.sendMessageWeb(opts.to, opts.message, { verbose: isVerbose() });
+		return;
+	}
+
+	const result = await deps.sendMessage(opts.to, opts.message, runtime);
+	if (!result) return;
+	if (waitSeconds === 0) return;
+	await deps.waitForFinalStatus(
+		result.client,
+		result.sid,
+		waitSeconds,
+		pollSeconds,
+	);
+}
+
+async function performStatus(
+	opts: { limit: string; lookback: string; json?: boolean },
+	deps: CliDeps,
+	exitFn: (code: number) => never = defaultRuntime.exit,
+	runtime: RuntimeEnv = defaultRuntime,
+) {
+	const limit = Number.parseInt(opts.limit, 10);
+	const lookbackMinutes = Number.parseInt(opts.lookback, 10);
+	if (Number.isNaN(limit) || limit <= 0 || limit > 200) {
+		throw new Error("limit must be between 1 and 200");
+	}
+	if (Number.isNaN(lookbackMinutes) || lookbackMinutes <= 0) {
+		throw new Error("lookback must be > 0 minutes");
+	}
+
+	const messages = await deps.listRecentMessages(lookbackMinutes, limit);
+	if (opts.json) {
+		console.log(JSON.stringify(messages, null, 2));
+		return;
+	}
+	if (messages.length === 0) {
+		console.log("No messages found in the requested window.");
+		return;
+	}
+	for (const m of messages) {
+		console.log(formatMessageLine(m));
+	}
+}
+
+async function performWebhookSetup(
+	opts: {
+		port: string;
+		path: string;
+		reply?: string;
+		verbose?: boolean;
+	},
+	deps: CliDeps,
+	exitFn: (code: number) => never = defaultRuntime.exit,
+	runtime: RuntimeEnv = defaultRuntime,
+) {
+	const port = Number.parseInt(opts.port, 10);
+	if (Number.isNaN(port) || port <= 0 || port >= 65536) {
+		throw new Error("Port must be between 1 and 65535");
+	}
+	await deps.ensurePortAvailable(port);
+
+	const server = await deps.startWebhook(
+		port,
+		opts.path,
+		opts.reply,
+		Boolean(opts.verbose),
+	);
+	return server;
+}
+
+async function performUp(
+	opts: {
+		port: string;
+		path: string;
+		verbose?: boolean;
+		yes?: boolean;
+	},
+	deps: CliDeps,
+	exitFn: (code: number) => never = defaultRuntime.exit,
+	runtime: RuntimeEnv = defaultRuntime,
+) {
+	const port = Number.parseInt(opts.port, 10);
+	if (Number.isNaN(port) || port <= 0 || port >= 65536) {
+		throw new Error("Port must be between 1 and 65535");
+	}
+
+	await deps.ensurePortAvailable(port);
+
+	// Validate env and binaries
+	const env = deps.readEnv(runtime);
+	await deps.ensureBinary("tailscale", runExec, runtime);
+
+	// Enable Funnel first so we don't keep a webhook running on failure
+	await deps.ensureFunnel(port, runExec, runtime, promptYesNo);
+	const host = await deps.getTailnetHostname(runExec);
+	const publicUrl = `https://${host}${opts.path}`;
+	console.log(`🌐 Public webhook URL (via Funnel): ${publicUrl}`);
+
+	// Start webhook locally (after funnel success)
+	const server = await deps.startWebhook(
+		port,
+		opts.path,
+		undefined,
+		Boolean(opts.verbose),
+	);
+
+	// Configure Twilio sender webhook
+	const client = createClient(env);
+	const senderSid = await deps.findWhatsappSenderSid(
+		client,
+		env.whatsappFrom,
+		env.whatsappSenderSid,
+	);
+	await deps.updateWebhook(client, senderSid, publicUrl, "POST", runtime);
+
+	console.log(
+		"\nSetup complete. Leave this process running to keep the webhook online. Ctrl+C to stop.",
+	);
+	return { server, publicUrl, senderSid };
 }
 
 type ListedMessage = {
@@ -1584,8 +1893,8 @@ program
 		try {
 			await loginWeb(Boolean(opts.verbose));
 		} catch (err) {
-			console.error(danger(`Web login failed: ${String(err)}`));
-			process.exit(1);
+			defaultRuntime.error(danger(`Web login failed: ${String(err)}`));
+			defaultRuntime.exit(1);
 		}
 	});
 
@@ -1609,83 +1918,70 @@ Examples:
   warelay send --to +15551234567 --message "Hi" --wait 60 --poll 3`,
 	)
 	.action(async (opts) => {
-		assertProvider(opts.provider);
-		const waitSeconds = Number.parseInt(opts.wait, 10);
-		const pollSeconds = Number.parseInt(opts.poll, 10);
-
-		if (Number.isNaN(waitSeconds) || waitSeconds < 0) {
-			console.error("Wait must be >= 0 seconds");
-			process.exit(1);
+		const deps = createDefaultDeps();
+		try {
+			await sendCommand(opts, deps, defaultRuntime);
+		} catch (err) {
+			defaultRuntime.error(String(err));
+			defaultRuntime.exit(1);
 		}
-		if (Number.isNaN(pollSeconds) || pollSeconds <= 0) {
-			console.error("Poll must be > 0 seconds");
-			process.exit(1);
-		}
-
-		if (opts.provider === "web") {
-			if (waitSeconds !== 0) {
-				console.log(
-					info("Wait/poll are Twilio-only; ignored for provider=web."),
-				);
-			}
-			await sendMessageWeb(opts.to, opts.message, { verbose: isVerbose() });
-			return;
-		}
-
-		const result = await sendMessage(opts.to, opts.message);
-		if (!result) return;
-		if (waitSeconds === 0) return;
-		await waitForFinalStatus(
-			result.client,
-			result.sid,
-			waitSeconds,
-			pollSeconds,
-		);
 	});
 
 program
-	.command("monitor")
-	.description("Poll Twilio for inbound WhatsApp messages")
-	.option("-i, --interval <seconds>", "Polling interval in seconds", "5")
-	.option("-l, --lookback <minutes>", "Initial lookback window in minutes", "5")
-	.addHelpText(
-		"after",
-		`
-Examples:
-  warelay monitor                         # poll every 5s, look back 5 minutes
-  warelay monitor --interval 2 --lookback 30`,
-	)
-	.action(async (opts) => {
-		const intervalSeconds = Number.parseInt(opts.interval, 10);
-		const lookbackMinutes = Number.parseInt(opts.lookback, 10);
-
-		if (Number.isNaN(intervalSeconds) || intervalSeconds <= 0) {
-			console.error("Interval must be a positive integer");
-			process.exit(1);
-		}
-		if (Number.isNaN(lookbackMinutes) || lookbackMinutes < 0) {
-			console.error("Lookback must be >= 0 minutes");
-			process.exit(1);
-		}
-
-		await monitor(intervalSeconds, lookbackMinutes);
-	});
-
-program
-	.command("web:monitor")
-	.description("Listen for inbound messages via personal WhatsApp Web and auto-reply")
+	.command("relay")
+	.description("Auto-reply to inbound messages (auto-selects web or twilio)")
+	.option("--provider <provider>", "auto | web | twilio", "auto")
+	.option("-i, --interval <seconds>", "Polling interval for twilio mode", "5")
+	.option("-l, --lookback <minutes>", "Initial lookback window for twilio mode", "5")
 	.option("--verbose", "Verbose logging", false)
 	.addHelpText(
 		"after",
 		`
 Examples:
-  warelay web:monitor            # start auto-replies on your linked web session
-  warelay web:monitor --verbose  # show low-level Baileys logs
+  warelay relay                     # auto: web if logged-in, else twilio poll
+  warelay relay --provider web      # force personal web session
+  warelay relay --provider twilio   # force twilio poll
+  warelay relay --provider twilio --interval 2 --lookback 30
 `,
 	)
 	.action(async (opts) => {
 		setVerbose(Boolean(opts.verbose));
-		await monitorWebProvider(Boolean(opts.verbose));
+		const providerPref = String(opts.provider ?? "auto");
+		if (!["auto", "web", "twilio"].includes(providerPref)) {
+			defaultRuntime.error("--provider must be auto, web, or twilio");
+			defaultRuntime.exit(1);
+		}
+		const intervalSeconds = Number.parseInt(opts.interval, 10);
+		const lookbackMinutes = Number.parseInt(opts.lookback, 10);
+		if (Number.isNaN(intervalSeconds) || intervalSeconds <= 0) {
+			defaultRuntime.error("Interval must be a positive integer");
+			defaultRuntime.exit(1);
+		}
+		if (Number.isNaN(lookbackMinutes) || lookbackMinutes < 0) {
+			defaultRuntime.error("Lookback must be >= 0 minutes");
+			defaultRuntime.exit(1);
+		}
+
+		const provider = await pickProvider(providerPref as Provider | "auto");
+
+		if (provider === "web") {
+			defaultRuntime.log(info("Provider: web (personal WhatsApp Web session)"));
+			try {
+				await monitorWebProvider(Boolean(opts.verbose));
+				return;
+			} catch (err) {
+				if (providerPref === "auto") {
+					defaultRuntime.error(warn("Web session unavailable; falling back to twilio."));
+				} else {
+					defaultRuntime.error(danger(`Web relay failed: ${String(err)}`));
+					defaultRuntime.exit(1);
+				}
+			}
+		}
+
+		ensureTwilioEnv();
+		defaultRuntime.log(info("Provider: twilio (polling inbound)"));
+		await monitorTwilio(intervalSeconds, lookbackMinutes);
 	});
 
 program
@@ -1703,59 +1999,13 @@ Examples:
   warelay status --json --limit 50          # machine-readable output`,
 	)
 	.action(async (opts) => {
-		const limit = Number.parseInt(opts.limit, 10);
-		const lookbackMinutes = Number.parseInt(opts.lookback, 10);
-		if (Number.isNaN(limit) || limit <= 0 || limit > 200) {
-			console.error("limit must be between 1 and 200");
-			process.exit(1);
+		const deps = createDefaultDeps();
+		try {
+			await statusCommand(opts, deps, defaultRuntime);
+		} catch (err) {
+			defaultRuntime.error(String(err));
+			defaultRuntime.exit(1);
 		}
-		if (Number.isNaN(lookbackMinutes) || lookbackMinutes <= 0) {
-			console.error("lookback must be > 0 minutes");
-			process.exit(1);
-		}
-
-		const messages = await listRecentMessages(lookbackMinutes, limit);
-		if (opts.json) {
-			console.log(JSON.stringify(messages, null, 2));
-			return;
-		}
-		if (messages.length === 0) {
-			console.log("No messages found in the requested window.");
-			return;
-		}
-		for (const m of messages) {
-			console.log(formatMessageLine(m));
-		}
-	});
-
-program
-	.command("poll")
-	.description("Poll Twilio for inbound WhatsApp messages (non-webhook mode)")
-	.option("-i, --interval <seconds>", "Polling interval in seconds", "5")
-	.option("-l, --lookback <minutes>", "Initial lookback window in minutes", "5")
-	.option("--verbose", "Verbose logging during polling", false)
-	.addHelpText(
-		"after",
-		`
-Examples:
-  warelay poll                         # poll every 5s, look back 5 minutes
-  warelay poll --interval 2 --lookback 30 --verbose`,
-	)
-	.action(async (opts) => {
-		setVerbose(Boolean(opts.verbose));
-		const intervalSeconds = Number.parseInt(opts.interval, 10);
-		const lookbackMinutes = Number.parseInt(opts.lookback, 10);
-
-		if (Number.isNaN(intervalSeconds) || intervalSeconds <= 0) {
-			console.error("Interval must be a positive integer");
-			process.exit(1);
-		}
-		if (Number.isNaN(lookbackMinutes) || lookbackMinutes < 0) {
-			console.error("Lookback must be >= 0 minutes");
-			process.exit(1);
-		}
-
-		await monitor(intervalSeconds, lookbackMinutes);
 	});
 
 program
@@ -1780,38 +2030,24 @@ With Tailscale:
   tailscale serve tcp 42873 127.0.0.1:42873
   (then set Twilio webhook URL to your tailnet IP:42873/webhook/whatsapp)`,
 	)
+	// istanbul ignore next
 	.action(async (opts) => {
 		setVerbose(Boolean(opts.verbose));
 		setYes(Boolean(opts.yes));
-		const port = Number.parseInt(opts.port, 10);
-		if (Number.isNaN(port) || port <= 0 || port >= 65536) {
-			console.error("Port must be between 1 and 65535");
-			process.exit(1);
-		}
+		const deps = createDefaultDeps();
 		try {
-			await ensurePortAvailable(port);
-		} catch (err) {
-			await handlePortError(err, port, "Starting webhook");
-		}
-
-		let server: import("http").Server;
-		try {
-			server = await startWebhook(
-				port,
-				opts.path,
-				opts.reply,
-				Boolean(opts.verbose),
-			);
-		} catch (err) {
-			await handlePortError(err, port, "Starting webhook");
-		}
-		process.on("SIGINT", () => {
-			server.close(() => {
-				console.log("\n👋 Webhook stopped");
-				process.exit(0);
+			const server = await webhookCommand(opts, deps, defaultRuntime);
+			process.on("SIGINT", () => {
+				server.close(() => {
+					console.log("\n👋 Webhook stopped");
+					defaultRuntime.exit(0);
+				});
 			});
-		});
-		await waitForever();
+			await deps.waitForever();
+		} catch (err) {
+			defaultRuntime.error(String(err));
+			defaultRuntime.exit(1);
+		}
 	});
 
 program
@@ -1823,63 +2059,24 @@ program
 	.option("--path <path>", "Webhook path", "/webhook/whatsapp")
 	.option("--verbose", "Verbose logging during setup/webhook", false)
 	.option("-y, --yes", "Auto-confirm prompts when possible", false)
+	// istanbul ignore next
 	.action(async (opts) => {
 		setVerbose(Boolean(opts.verbose));
 		setYes(Boolean(opts.yes));
-		const port = Number.parseInt(opts.port, 10);
-		if (Number.isNaN(port) || port <= 0 || port >= 65536) {
-			console.error("Port must be between 1 and 65535");
-			process.exit(1);
-		}
-
+		const deps = createDefaultDeps();
 		try {
-			await ensurePortAvailable(port);
-		} catch (err) {
-			await handlePortError(err, port, "Setup");
-		}
-
-		// Validate env and binaries
-		const env = readEnv();
-		await ensureBinary("tailscale");
-
-		// Enable Funnel first so we don't keep a webhook running on failure
-		await ensureFunnel(port);
-		const host = await getTailnetHostname();
-		const publicUrl = `https://${host}${opts.path}`;
-		console.log(`🌐 Public webhook URL (via Funnel): ${publicUrl}`);
-
-		// Start webhook locally (after funnel success)
-		let server: import("http").Server;
-		try {
-			server = await startWebhook(
-				port,
-				opts.path,
-				undefined,
-				Boolean(opts.verbose),
-			);
-		} catch (err) {
-			await handlePortError(err, port, "Starting webhook");
-		}
-		process.on("SIGINT", () => {
-			server.close(() => {
-				console.log("\n👋 Webhook stopped");
-				process.exit(0);
+			const { server } = await upCommand(opts, deps, defaultRuntime);
+			process.on("SIGINT", () => {
+				server.close(() => {
+					console.log("\n👋 Webhook stopped");
+					defaultRuntime.exit(0);
+				});
 			});
-		});
-
-		// Configure Twilio sender webhook
-		const client = createClient(env);
-		const senderSid = await findWhatsappSenderSid(
-			client,
-			env.whatsappFrom,
-			env.whatsappSenderSid,
-		);
-		await updateWebhook(client, senderSid, publicUrl, "POST");
-
-		console.log(
-			"\nSetup complete. Leave this process running to keep the webhook online. Ctrl+C to stop.",
-		);
-		await waitForever();
+			await deps.waitForever();
+		} catch (err) {
+			defaultRuntime.error(String(err));
+			defaultRuntime.exit(1);
+		}
 	});
 
 export {
@@ -1898,17 +2095,24 @@ export {
 	findMessagingServiceSid,
 	findWhatsappSenderSid,
 	formatMessageLine,
+	formatTwilioError,
 	getReplyFromConfig,
 	getTailnetHostname,
 	handlePortError,
+	logTwilioSendError,
 	listRecentMessages,
 	loadConfig,
 	loadSessionStore,
-	monitor,
+	monitorTwilio,
 	monitorWebProvider,
 	normalizeE164,
 	PortInUseError,
 	promptYesNo,
+	createDefaultDeps,
+	performSend,
+	performStatus,
+	performUp,
+	performWebhookSetup,
 	readEnv,
 	resolveStorePath,
 	runCommandWithTimeout,
@@ -1924,6 +2128,7 @@ export {
 	waitForFinalStatus,
 	waitForever,
 	toWhatsappJid,
+	program,
 };
 
 const isMain =
