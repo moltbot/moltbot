@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -182,6 +182,51 @@ async function runExec(
 		}
 		throw err;
 	}
+}
+
+type SpawnResult = {
+	stdout: string;
+	stderr: string;
+	code: number | null;
+	signal: NodeJS.Signals | null;
+	killed: boolean;
+};
+
+async function runCommandWithTimeout(
+	argv: string[],
+	timeoutMs: number,
+): Promise<SpawnResult> {
+	// Spawn with inherited stdin (TTY) so tools like `claude` don't hang.
+	return await new Promise((resolve, reject) => {
+		const child = spawn(argv[0], argv.slice(1), {
+			stdio: ["inherit", "pipe", "pipe"],
+		});
+		let stdout = "";
+		let stderr = "";
+		let settled = false;
+		const timer = setTimeout(() => {
+			child.kill("SIGKILL");
+		}, timeoutMs);
+
+		child.stdout?.on("data", (d) => {
+			stdout += d.toString();
+		});
+		child.stderr?.on("data", (d) => {
+			stderr += d.toString();
+		});
+		child.on("error", (err) => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timer);
+			reject(err);
+		});
+		child.on("close", (code, signal) => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timer);
+			resolve({ stdout, stderr, code, signal, killed: child.killed });
+		});
+	});
 }
 
 class PortInUseError extends Error {
@@ -399,15 +444,8 @@ async function getReplyFromConfig(
 		logVerbose(`Running command auto-reply: ${finalArgv.join(" ")}`);
 		const started = Date.now();
 		try {
-			const { stdout, stderr } = await execFileAsync(
-				finalArgv[0],
-				finalArgv.slice(1),
-				{
-					maxBuffer: 1024 * 1024,
-					timeout: timeoutMs,
-					killSignal: "SIGKILL",
-				},
-			);
+			const { stdout, stderr, code, signal, killed } =
+				await runCommandWithTimeout(finalArgv, timeoutMs);
 			const trimmed = stdout.trim();
 			if (stderr?.trim()) {
 				logVerbose(`Command auto-reply stderr: ${stderr.trim()}`);
@@ -416,6 +454,18 @@ async function getReplyFromConfig(
 				`Command auto-reply stdout (trimmed): ${trimmed || "<empty>"}`,
 			);
 			logVerbose(`Command auto-reply finished in ${Date.now() - started}ms`);
+			if ((code ?? 0) !== 0) {
+				console.error(
+					`Command auto-reply exited with code ${code ?? "unknown"} (signal: ${signal ?? "none"})`,
+				);
+				return undefined;
+			}
+			if (killed && !signal) {
+				console.error(
+					`Command auto-reply process killed before completion (exit code ${code ?? "unknown"})`,
+				);
+				return undefined;
+			}
 			return trimmed || undefined;
 		} catch (err) {
 			const elapsed = Date.now() - started;
