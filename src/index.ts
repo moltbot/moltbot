@@ -5,23 +5,23 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import process, { stdin as input, stdout as output } from "node:process";
-import { fileURLToPath } from "node:url";
 import readline from "node:readline/promises";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import bodyParser from "body-parser";
-import chalk from "chalk";
-import { Command } from "commander";
-import dotenv from "dotenv";
-import express, { type Request, type Response } from "express";
-import JSON5 from "json5";
+import type { ConnectionState } from "baileys";
 import {
 	DisconnectReason,
 	fetchLatestBaileysVersion,
 	makeCacheableSignalKeyStore,
 	makeWASocket,
 	useMultiFileAuthState,
-} from "@whiskeysockets/baileys";
-import type { ConnectionState } from "@whiskeysockets/baileys";
+} from "baileys";
+import bodyParser from "body-parser";
+import chalk from "chalk";
+import { Command } from "commander";
+import dotenv from "dotenv";
+import express, { type Request, type Response } from "express";
+import JSON5 from "json5";
 import pino from "pino";
 import qrcode from "qrcode-terminal";
 import Twilio from "twilio";
@@ -729,10 +729,13 @@ async function createWaSocket(printQr: boolean, verbose: boolean) {
 			qrcode.generate(qr, { small: true });
 		}
 		if (connection === "close") {
-			const code = (lastDisconnect?.error as { output?: { statusCode?: number } })
-				?.output?.statusCode;
+			const code = (
+				lastDisconnect?.error as { output?: { statusCode?: number } }
+			)?.output?.statusCode;
 			if (code === DisconnectReason.loggedOut) {
-				console.error(danger("WhatsApp session logged out. Run: warelay web:login"));
+				console.error(
+					danger("WhatsApp session logged out. Run: warelay web:login"),
+				);
 			}
 		}
 		if (connection === "open" && verbose) {
@@ -745,22 +748,23 @@ async function createWaSocket(printQr: boolean, verbose: boolean) {
 
 async function waitForWaConnection(sock: ReturnType<typeof makeWASocket>) {
 	return new Promise<void>((resolve, reject) => {
-		const handler = (update: Partial<ConnectionState>) => {
+		type OffCapable = {
+			off?: (event: string, listener: (...args: unknown[]) => void) => void;
+		};
+		const evWithOff = sock.ev as unknown as OffCapable;
+
+		const handler = (...args: unknown[]) => {
+			const update = (args[0] ?? {}) as Partial<ConnectionState>;
 			if (update.connection === "open") {
-				(sock.ev as unknown as { off?: Function }).off?.(
-					"connection.update",
-					handler,
-				);
+				evWithOff.off?.("connection.update", handler);
 				resolve();
 			}
 			if (update.connection === "close") {
-				(sock.ev as unknown as { off?: Function }).off?.(
-					"connection.update",
-					handler,
-				);
+				evWithOff.off?.("connection.update", handler);
 				reject(update.lastDisconnect ?? new Error("Connection closed"));
 			}
 		};
+
 		sock.ev.on("connection.update", handler);
 	});
 }
@@ -778,9 +782,7 @@ async function sendMessageWeb(to: string, body: string) {
 		const result = await sock.sendMessage(jid, { text: body });
 		const messageId = result?.key?.id ?? "unknown";
 		console.log(
-			success(
-				`✅ Sent via web session. Message ID: ${messageId} -> ${jid}`,
-			),
+			success(`✅ Sent via web session. Message ID: ${messageId} -> ${jid}`),
 		);
 	} finally {
 		try {
@@ -1579,7 +1581,9 @@ Examples:
 
 		if (opts.provider === "web") {
 			if (waitSeconds !== 0) {
-				console.log(info("Wait/poll are Twilio-only; ignored for provider=web."));
+				console.log(
+					info("Wait/poll are Twilio-only; ignored for provider=web."),
+				);
 			}
 			await sendMessageWeb(opts.to, opts.message);
 			return;

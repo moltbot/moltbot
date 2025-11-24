@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeE164, toWhatsappJid, assertProvider } from "./index.js";
+import { assertProvider, normalizeE164, toWhatsappJid } from "./index.js";
 
 describe("normalizeE164", () => {
 	it("strips whatsapp: prefix and whitespace", () => {

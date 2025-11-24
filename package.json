@@ -38,8 +38,8 @@
     "json5": "^2.2.3",
     "qrcode-terminal": "^0.12.0",
     "twilio": "^5.10.6",
-    "@whiskeysockets/baileys": "^6.7.7",
-    "pino": "^9.4.0"
+    "pino": "^10.1.0",
+    "baileys": "^7.0.0-rc.9"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.7",
@@ -49,6 +49,11 @@
     "@types/node": "^24.10.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^2.1.4"
+    "vitest": "^4.0.13"
+  },
+  "vitest": {
+    "exclude": [
+      "dist/**"
+    ]
   }
 }
