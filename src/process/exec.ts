@@ -1,6 +1,7 @@
 import { execFile, spawn } from "node:child_process";
 
 import { danger, isVerbose } from "../globals.js";
+import { logDebug, logError } from "../logger.js";
 
 // Simple promise-wrapped execFile with optional verbosity logging.
 export async function runExec(
@@ -13,13 +14,13 @@ export async function runExec(
 			timeout: timeoutMs,
 		});
 		if (isVerbose()) {
-			if (stdout.trim()) console.log(stdout.trim());
-			if (stderr.trim()) console.error(stderr.trim());
+			if (stdout.trim()) logDebug(stdout.trim());
+			if (stderr.trim()) logError(stderr.trim());
 		}
 		return { stdout, stderr };
 	} catch (err) {
 		if (isVerbose()) {
-			console.error(danger(`Command failed: ${command} ${args.join(" ")}`));
+			logError(danger(`Command failed: ${command} ${args.join(" ")}`));
 		}
 		throw err;
 	}
