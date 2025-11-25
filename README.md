@@ -75,7 +75,7 @@ Install from npm (global): `npm install -g warelay` (Node 22+). Then choose **on
     }
   }
   ```
-- Works for Web and Twilio providers; verbose mode logs when transcription runs. If transcription fails, the original Body is used.
+- Works for Web and Twilio providers; verbose mode logs when transcription runs. The command prompt includes the original media path plus a `Transcript:` block so models see both. If transcription fails, the original Body is used.
 
 ## Providers
 - **Twilio (default):** needs `.env` creds + WhatsApp-enabled number; supports delivery tracking, polling, webhooks, and auto-reply typing indicators.
