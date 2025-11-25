@@ -171,6 +171,9 @@ describe("provider-web", () => {
 		expect(onMessage).toHaveBeenCalledWith(
 			expect.objectContaining({ body: "ping", from: "+999", to: "+123" }),
 		);
+		expect(sock.readMessages).toHaveBeenCalledWith([
+			{ remoteJid: "999@s.whatsapp.net", id: "abc", participant: undefined, fromMe: false },
+		]);
 		expect(sock.sendPresenceUpdate).toHaveBeenCalledWith(
 			"composing",
 			"999@s.whatsapp.net",
@@ -207,6 +210,47 @@ describe("provider-web", () => {
 				mediaType: "image/jpeg",
 			}),
 		);
+		expect(sock.readMessages).toHaveBeenCalledWith([
+			{
+				remoteJid: "888@s.whatsapp.net",
+				id: "med1",
+				participant: undefined,
+				fromMe: false,
+			},
+		]);
+		await listener.close();
+	});
+
+	it("monitorWebInbox includes participant when marking group messages read", async () => {
+		const onMessage = vi.fn();
+		const listener = await monitorWebInbox({ verbose: false, onMessage });
+		const sock = getLastSocket();
+		const upsert = {
+			type: "notify",
+			messages: [
+				{
+					key: {
+						id: "grp1",
+						fromMe: false,
+						remoteJid: "12345-67890@g.us",
+						participant: "111@s.whatsapp.net",
+					},
+					message: { conversation: "group ping" },
+				},
+			],
+		};
+
+		sock.ev.emit("messages.upsert", upsert);
+		await new Promise((resolve) => setImmediate(resolve));
+
+		expect(sock.readMessages).toHaveBeenCalledWith([
+			{
+				remoteJid: "12345-67890@g.us",
+				id: "grp1",
+				participant: "111@s.whatsapp.net",
+				fromMe: false,
+			},
+		]);
 		await listener.close();
 	});
 
