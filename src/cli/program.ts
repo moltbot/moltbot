@@ -121,7 +121,9 @@ Examples:
 			const provider = await pickProvider(providerPref as Provider | "auto");
 
 			if (provider === "web") {
-				defaultRuntime.log(infoFmt("Provider: web (personal WhatsApp Web session)"));
+				defaultRuntime.log(
+					info("Provider: web (personal WhatsApp Web session)"),
+				);
 				logWebSelfId();
 				try {
 					await monitorWebProvider(Boolean(opts.verbose));
