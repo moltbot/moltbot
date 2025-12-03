@@ -311,7 +311,7 @@ Examples:
     .option("--web-retry-max <ms>", "Max reconnect backoff for web relay (ms)")
     .option(
       "--heartbeat-now",
-      "Run a heartbeat immediately when relay starts (web provider)",
+      "Run a heartbeat immediately when relay starts (web or twilio provider)",
       false,
     )
     .option("--verbose", "Verbose logging", false)
@@ -451,7 +451,15 @@ Examples:
 
       ensureTwilioEnv();
       logTwilioFrom();
-      await monitorTwilio(intervalSeconds, lookbackMinutes);
+      await monitorTwilio(
+        intervalSeconds,
+        lookbackMinutes,
+        undefined,
+        Infinity,
+        {
+          heartbeatNow,
+        },
+      );
     });
 
   program
