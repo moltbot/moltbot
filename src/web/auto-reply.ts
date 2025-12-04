@@ -84,13 +84,15 @@ function buildMentionConfig(cfg: ReturnType<typeof loadConfig>): MentionConfig {
   const gc = cfg.inbound?.groupChat;
   const requireMention = gc?.requireMention !== false; // default true
   const mentionRegexes =
-    gc?.mentionPatterns?.map((p) => {
-      try {
-        return new RegExp(p, "i");
-      } catch {
-        return null;
-      }
-    }).filter((r): r is RegExp => Boolean(r)) ?? [];
+    gc?.mentionPatterns
+      ?.map((p) => {
+        try {
+          return new RegExp(p, "i");
+        } catch {
+          return null;
+        }
+      })
+      .filter((r): r is RegExp => Boolean(r)) ?? [];
   return { requireMention, mentionRegexes };
 }
 
@@ -728,7 +730,7 @@ export async function monitorWebProvider(
         const senderLabel =
           latest.senderName && latest.senderE164
             ? `${latest.senderName} (${latest.senderE164})`
-            : latest.senderName ?? latest.senderE164 ?? "Unknown";
+            : (latest.senderName ?? latest.senderE164 ?? "Unknown");
         combinedBody = `${combinedBody}\\n[from: ${senderLabel}]`;
         // Clear stored history after using it
         groupHistories.set(conversationId, []);
@@ -834,7 +836,7 @@ export async function monitorWebProvider(
           const fromDisplay =
             latest.chatType === "group"
               ? conversationId
-              : latest.from ?? "unknown";
+              : (latest.from ?? "unknown");
           if (isVerbose()) {
             console.log(
               success(
@@ -850,24 +852,26 @@ export async function monitorWebProvider(
           }
         } catch (err) {
           console.error(
-            danger(`Failed sending web auto-reply to ${latest.from ?? conversationId}: ${String(err)}`),
+            danger(
+              `Failed sending web auto-reply to ${latest.from ?? conversationId}: ${String(err)}`,
+            ),
           );
         }
       }
-      };
+    };
 
-      const enqueueBatch = async (msg: WebInboundMsg) => {
-        const key = msg.conversationId ?? msg.from;
-        const bucket = pendingBatches.get(key) ?? { messages: [] };
-        bucket.messages.push(msg);
-        pendingBatches.set(key, bucket);
-        if (getQueueSize() === 0) {
-          await processBatch(key);
-        } else {
-          bucket.timer =
-            bucket.timer ?? setTimeout(() => void processBatch(key), 150);
-        }
-      };
+    const enqueueBatch = async (msg: WebInboundMsg) => {
+      const key = msg.conversationId ?? msg.from;
+      const bucket = pendingBatches.get(key) ?? { messages: [] };
+      bucket.messages.push(msg);
+      pendingBatches.set(key, bucket);
+      if (getQueueSize() === 0) {
+        await processBatch(key);
+      } else {
+        bucket.timer =
+          bucket.timer ?? setTimeout(() => void processBatch(key), 150);
+      }
+    };
 
     const listener = await (listenerFactory ?? monitorWebInbox)({
       verbose,

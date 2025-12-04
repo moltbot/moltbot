@@ -678,7 +678,7 @@ describe("config and templating", () => {
       },
     };
 
-    const ack = await index.getReplyFromConfig(
+    const _ack = await index.getReplyFromConfig(
       { Body: "/v:on", From: "+1", To: "+2" },
       undefined,
       cfg,
@@ -979,7 +979,7 @@ describe("config and templating", () => {
     const batchBody =
       "[Current message - respond to this]\nPeter: @Clawd UK /thinking medium /v on";
 
-    const ack = await index.getReplyFromConfig(
+    const _ack = await index.getReplyFromConfig(
       {
         Body: batchBody,
         From: "group:456@g.us",
@@ -1000,7 +1000,7 @@ describe("config and templating", () => {
     const persisted = JSON.parse(
       await fs.promises.readFile(storePath, "utf-8"),
     ) as Record<string, { thinkingLevel?: string; verboseLevel?: string }>;
-    const entry = Object.values(persisted)[0] as {
+    const _entry = Object.values(persisted)[0] as {
       thinkingLevel?: string;
       verboseLevel?: string;
     };

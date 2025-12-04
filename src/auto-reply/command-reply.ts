@@ -16,8 +16,8 @@ import {
   formatToolAggregate,
   shortenMeta,
   shortenPath,
-  TOOL_RESULT_FLUSH_COUNT,
   TOOL_RESULT_DEBOUNCE_MS,
+  TOOL_RESULT_FLUSH_COUNT,
 } from "./tool-meta.js";
 import type { ReplyPayload } from "./types.js";
 
@@ -345,7 +345,11 @@ export async function runCommandReply(
 
     // Tau (pi agent) needs --continue to reload prior messages when resuming.
     // Without it, pi starts from a blank state even though we pass the session file path.
-    if (agentKind === "pi" && !isNewSession && !sessionArgList.includes("--continue")) {
+    if (
+      agentKind === "pi" &&
+      !isNewSession &&
+      !sessionArgList.includes("--continue")
+    ) {
       sessionArgList.push("--continue");
     }
 
@@ -433,10 +437,7 @@ export async function runCommandReply(
       }
     };
     let lastStreamedAssistant: string | undefined;
-    const streamAssistant = (msg?: {
-      role?: string;
-      content?: unknown[];
-    }) => {
+    const streamAssistant = (msg?: { role?: string; content?: unknown[] }) => {
       if (!onPartialReply || msg?.role !== "assistant") return;
       const textBlocks = Array.isArray(msg.content)
         ? (msg.content as Array<{ type?: string; text?: string }>)
@@ -478,68 +479,37 @@ export async function runCommandReply(
           cwd: reply.cwd,
           prompt: body,
           timeoutMs,
-          onEvent:
-            onPartialReply
-              ? (line: string) => {
-                  try {
-                    const ev = JSON.parse(line) as {
-                      type?: string;
-                      message?: {
-                        role?: string;
-                        content?: unknown[];
-                        details?: Record<string, unknown>;
-                        arguments?: Record<string, unknown>;
-                        toolCallId?: string;
-                        tool_call_id?: string;
-                        toolName?: string;
-                        name?: string;
-                      };
+          onEvent: onPartialReply
+            ? (line: string) => {
+                try {
+                  const ev = JSON.parse(line) as {
+                    type?: string;
+                    message?: {
+                      role?: string;
+                      content?: unknown[];
+                      details?: Record<string, unknown>;
+                      arguments?: Record<string, unknown>;
                       toolCallId?: string;
+                      tool_call_id?: string;
                       toolName?: string;
-                      args?: Record<string, unknown>;
+                      name?: string;
                     };
-                    // Capture metadata as soon as the tool starts (from args).
-                    if (ev.type === "tool_execution_start") {
-                      const toolName = ev.toolName;
-                      const meta = inferToolMeta({
-                        toolName,
-                        name: ev.toolName,
-                        arguments: ev.args,
-                      });
-                      if (ev.toolCallId) {
-                        toolMetaById.set(ev.toolCallId, meta);
-                      }
-                      if (meta) {
-                        if (pendingToolName && toolName && toolName !== pendingToolName) {
-                          flushPendingTool();
-                        }
-                        if (!pendingToolName) pendingToolName = toolName;
-                        pendingMetas.push(meta);
-                        if (
-                          TOOL_RESULT_FLUSH_COUNT > 0 &&
-                          pendingMetas.length >= TOOL_RESULT_FLUSH_COUNT
-                        ) {
-                          flushPendingTool();
-                        } else {
-                          if (pendingTimer) clearTimeout(pendingTimer);
-                          pendingTimer = setTimeout(
-                            flushPendingTool,
-                            TOOL_RESULT_DEBOUNCE_MS,
-                          );
-                        }
-                      }
+                    toolCallId?: string;
+                    toolName?: string;
+                    args?: Record<string, unknown>;
+                  };
+                  // Capture metadata as soon as the tool starts (from args).
+                  if (ev.type === "tool_execution_start") {
+                    const toolName = ev.toolName;
+                    const meta = inferToolMeta({
+                      toolName,
+                      name: ev.toolName,
+                      arguments: ev.args,
+                    });
+                    if (ev.toolCallId) {
+                      toolMetaById.set(ev.toolCallId, meta);
                     }
-                    if (
-                      (ev.type === "message" || ev.type === "message_end") &&
-                      ev.message?.role === "tool_result" &&
-                      Array.isArray(ev.message.content)
-                    ) {
-                      const toolName = inferToolName(ev.message);
-                      const toolCallId =
-                        ev.message.toolCallId ?? ev.message.tool_call_id;
-                      const meta =
-                        inferToolMeta(ev.message) ??
-                        (toolCallId ? toolMetaById.get(toolCallId) : undefined);
+                    if (meta) {
                       if (
                         pendingToolName &&
                         toolName &&
@@ -548,32 +518,66 @@ export async function runCommandReply(
                         flushPendingTool();
                       }
                       if (!pendingToolName) pendingToolName = toolName;
-                      if (meta) pendingMetas.push(meta);
+                      pendingMetas.push(meta);
                       if (
                         TOOL_RESULT_FLUSH_COUNT > 0 &&
                         pendingMetas.length >= TOOL_RESULT_FLUSH_COUNT
                       ) {
                         flushPendingTool();
-                        return;
+                      } else {
+                        if (pendingTimer) clearTimeout(pendingTimer);
+                        pendingTimer = setTimeout(
+                          flushPendingTool,
+                          TOOL_RESULT_DEBOUNCE_MS,
+                        );
                       }
-                      if (pendingTimer) clearTimeout(pendingTimer);
-                      pendingTimer = setTimeout(
-                        flushPendingTool,
-                        TOOL_RESULT_DEBOUNCE_MS,
-                      );
                     }
-                    if (
-                      ev.type === "message_end" ||
-                      ev.type === "message_update" ||
-                      ev.type === "message"
-                    ) {
-                      streamAssistant(ev.message);
-                    }
-                  } catch {
-                    // ignore malformed lines
                   }
+                  if (
+                    (ev.type === "message" || ev.type === "message_end") &&
+                    ev.message?.role === "tool_result" &&
+                    Array.isArray(ev.message.content)
+                  ) {
+                    const toolName = inferToolName(ev.message);
+                    const toolCallId =
+                      ev.message.toolCallId ?? ev.message.tool_call_id;
+                    const meta =
+                      inferToolMeta(ev.message) ??
+                      (toolCallId ? toolMetaById.get(toolCallId) : undefined);
+                    if (
+                      pendingToolName &&
+                      toolName &&
+                      toolName !== pendingToolName
+                    ) {
+                      flushPendingTool();
+                    }
+                    if (!pendingToolName) pendingToolName = toolName;
+                    if (meta) pendingMetas.push(meta);
+                    if (
+                      TOOL_RESULT_FLUSH_COUNT > 0 &&
+                      pendingMetas.length >= TOOL_RESULT_FLUSH_COUNT
+                    ) {
+                      flushPendingTool();
+                      return;
+                    }
+                    if (pendingTimer) clearTimeout(pendingTimer);
+                    pendingTimer = setTimeout(
+                      flushPendingTool,
+                      TOOL_RESULT_DEBOUNCE_MS,
+                    );
+                  }
+                  if (
+                    ev.type === "message_end" ||
+                    ev.type === "message_update" ||
+                    ev.type === "message"
+                  ) {
+                    streamAssistant(ev.message);
+                  }
+                } catch {
+                  // ignore malformed lines
                 }
-              : undefined,
+              }
+            : undefined,
         });
         flushPendingTool();
         return rpcResult;
@@ -610,10 +614,10 @@ export async function runCommandReply(
     type ReplyItem = { text: string; media?: string[] };
     const replyItems: ReplyItem[] = [];
 
-  const includeToolResultsInline =
+    const includeToolResultsInline =
       verboseLevel === "on" && !onPartialReply && parsedToolResults.length > 0;
 
-  if (includeToolResultsInline) {
+    if (includeToolResultsInline) {
       const aggregated = parsedToolResults.reduce<
         { toolName?: string; metas: string[]; previews: string[] }[]
       >((acc, tr) => {
@@ -647,7 +651,8 @@ export async function runCommandReply(
       const formatPreview = (texts: string[]) => {
         const joined = texts.join(" ").trim();
         if (!joined) return "";
-        const clipped = joined.length > 120 ? `${joined.slice(0, 117)}…` : joined;
+        const clipped =
+          joined.length > 120 ? `${joined.slice(0, 117)}…` : joined;
         return ` — “${clipped}”`;
       };
 
@@ -662,7 +667,7 @@ export async function runCommandReply(
           media: mediaFound?.length ? mediaFound : undefined,
         });
       }
-  }
+    }
 
     for (const t of parsedTexts) {
       const { text: cleanedText, mediaUrls: mediaFound } =

@@ -339,7 +339,9 @@ export async function monitorWebInbox(options: {
   } as const;
 }
 
-function unwrapMessage(message: proto.IMessage | undefined): proto.IMessage | undefined {
+function unwrapMessage(
+  message: proto.IMessage | undefined,
+): proto.IMessage | undefined {
   if (!message) return undefined;
   if (message.ephemeralMessage?.message) {
     return unwrapMessage(message.ephemeralMessage.message as proto.IMessage);

@@ -7,7 +7,6 @@ import {
   autoReplyIfConfigured,
   getReplyFromConfig,
 } from "./auto-reply/reply.js";
-import { enableConsoleCapture } from "./logging.js";
 import { applyTemplate } from "./auto-reply/templating.js";
 import { createDefaultDeps, monitorTwilio } from "./cli/deps.js";
 import { promptYesNo } from "./cli/prompt.js";
@@ -33,6 +32,7 @@ import {
   ensureTailscaledInstalled,
   getTailnetHostname,
 } from "./infra/tailscale.js";
+import { enableConsoleCapture } from "./logging.js";
 import { runCommandWithTimeout, runExec } from "./process/exec.js";
 import { monitorWebProvider } from "./provider-web.js";
 import { createClient } from "./twilio/client.js";

@@ -11,12 +11,12 @@ import {
   saveSessionStore,
 } from "../config/sessions.js";
 import { info, isVerbose, logVerbose } from "../globals.js";
+import { triggerWarelayRestart } from "../infra/restart.js";
 import { ensureMediaHosted } from "../media/host.js";
 import { runCommandWithTimeout } from "../process/exec.js";
 import { defaultRuntime, type RuntimeEnv } from "../runtime.js";
 import type { TwilioRequester } from "../twilio/types.js";
 import { sendTypingIndicator } from "../twilio/typing.js";
-import { triggerWarelayRestart } from "../infra/restart.js";
 import { chunkText } from "./chunk.js";
 import { runCommandReply } from "./command-reply.js";
 import {
@@ -358,7 +358,13 @@ export async function getReplyFromConfig(
       await saveSessionStore(storePath, sessionStore);
     }
     // If verbose directive is also present, persist it too.
-    if (hasVerboseDirective && inlineVerbose && sessionEntry && sessionStore && sessionKey) {
+    if (
+      hasVerboseDirective &&
+      inlineVerbose &&
+      sessionEntry &&
+      sessionStore &&
+      sessionKey
+    ) {
       if (inlineVerbose === "off") {
         delete sessionEntry.verboseLevel;
       } else {
@@ -431,9 +437,7 @@ export async function getReplyFromConfig(
   const to = (ctx.To ?? "").replace(/^whatsapp:/, "");
   const isSamePhone = from && to && from === to;
   const abortKey = sessionKey ?? (from || undefined) ?? (to || undefined);
-  const rawBodyNormalized = (
-    sessionCtx.BodyStripped ?? sessionCtx.Body ?? ""
-  )
+  const rawBodyNormalized = (sessionCtx.BodyStripped ?? sessionCtx.Body ?? "")
     .trim()
     .toLowerCase();
 
