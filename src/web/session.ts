@@ -227,3 +227,84 @@ export async function pickProvider(pref: Provider | "auto"): Promise<Provider> {
 
   return "twilio";
 }
+
+/**
+ * Select providers for multi-provider relay.
+ * Validates authentication and filters out unavailable providers.
+ */
+export async function selectProviders(
+	prefs: (Provider | "auto")[],
+): Promise<Provider[]> {
+	const skipped: string[] = [];
+
+	// If 'auto' in list, expand to all authenticated providers
+	if (prefs.includes("auto")) {
+		const available: Provider[] = [];
+
+		// Check web
+		if (await webAuthExists()) {
+			available.push("web");
+		} else {
+			skipped.push(
+				"web (not authenticated - run: warelay login --provider web)",
+			);
+		}
+
+		// Check telegram
+		if (await telegramAuthExists()) {
+			available.push("telegram");
+		} else {
+			skipped.push(
+				"telegram (not authenticated - run: warelay login --provider telegram)",
+			);
+		}
+
+		// Note: twilio not heavily used in this branch
+
+		if (available.length > 0 && skipped.length > 0) {
+			console.log(
+				`ℹ️  Auto-selected ${available.length} provider(s), skipped ${skipped.length}:`,
+			);
+			for (const skip of skipped) {
+				console.log(`   • ${skip}`);
+			}
+		}
+
+		return available;
+	}
+
+	// Explicit provider list - validate each one
+	const available: Provider[] = [];
+	for (const pref of prefs) {
+		if (pref === "auto") continue; // Already handled above
+
+		if (pref === "web") {
+			if (await webAuthExists()) {
+				available.push("web");
+			} else {
+				skipped.push(
+					"web (not authenticated - run: warelay login --provider web)",
+				);
+			}
+		} else if (pref === "telegram") {
+			if (await telegramAuthExists()) {
+				available.push("telegram");
+			} else {
+				skipped.push(
+					"telegram (not authenticated - run: warelay login --provider telegram)",
+				);
+			}
+		} else if (pref === "twilio") {
+			skipped.push("twilio (not heavily used in this branch)");
+		}
+	}
+
+	if (skipped.length > 0) {
+		console.log(`ℹ️  Skipped ${skipped.length} provider(s):`);
+		for (const skip of skipped) {
+			console.log(`   • ${skip}`);
+		}
+	}
+
+	return available;
+}

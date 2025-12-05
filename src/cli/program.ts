@@ -426,58 +426,7 @@ Examples:
       const { file: logFile, level: logLevel } = getResolvedLoggerSettings();
       defaultRuntime.log(info(`logs: ${logFile} (level ${logLevel})`));
 
-      // Handle --providers for multiple simultaneous relays
-      if (opts.providers) {
-        const providers = String(opts.providers).split(',').map(p => p.trim());
-        const validProviders = ['web', 'telegram', 'twilio'];
-        const invalid = providers.filter(p => !validProviders.includes(p));
-        if (invalid.length > 0) {
-          defaultRuntime.error(`Invalid providers: ${invalid.join(', ')}. Must be: web, telegram, twilio`);
-          defaultRuntime.exit(1);
-        }
-
-        defaultRuntime.log(info(`Starting relay for providers: ${providers.join(', ')}`));
-
-        // Start all providers concurrently
-        const promises = providers.map(async (provider) => {
-          try {
-            if (provider === 'telegram') {
-              await monitorTelegramProvider(Boolean(opts.verbose), defaultRuntime);
-            } else if (provider === 'web') {
-              const cfg = loadConfig();
-              const webTuning: WebMonitorTuning = {};
-              if (opts.webHeartbeat) webTuning.heartbeatSeconds = Number.parseInt(String(opts.webHeartbeat), 10);
-              if (opts.heartbeatNow) webTuning.replyHeartbeatNow = true;
-              const reconnect: WebMonitorTuning["reconnect"] = {};
-              if (opts.webRetries) reconnect.maxAttempts = Number.parseInt(String(opts.webRetries), 10);
-              if (opts.webRetryInitial) reconnect.initialMs = Number.parseInt(String(opts.webRetryInitial), 10);
-              if (opts.webRetryMax) reconnect.maxMs = Number.parseInt(String(opts.webRetryMax), 10);
-              if (Object.keys(reconnect).length > 0) webTuning.reconnect = reconnect;
-
-              logWebSelfId(defaultRuntime, true);
-              await monitorWebProvider(Boolean(opts.verbose), undefined, true, undefined, defaultRuntime, undefined, webTuning);
-            } else if (provider === 'twilio') {
-              ensureTwilioEnv();
-              logTwilioFrom();
-              const intervalSeconds = Number.parseInt(opts.interval || "5", 10);
-              const lookbackMinutes = Number.parseInt(opts.lookback || "5", 10);
-              await monitorTwilio(intervalSeconds, lookbackMinutes);
-            }
-          } catch (err) {
-            defaultRuntime.error(danger(`${provider} relay failed: ${String(err)}`));
-          }
-        });
-
-        await Promise.all(promises);
-        return;
-      }
-
-      // Original single-provider logic
-      const providerPref = String(opts.provider ?? "auto");
-      if (!["auto", "web", "twilio", "telegram"].includes(providerPref)) {
-        defaultRuntime.error("--provider must be auto, web, twilio, or telegram");
-        defaultRuntime.exit(1);
-      }
+      // Parse parameters that are common to single/multi-provider modes
       const intervalSeconds = Number.parseInt(opts.interval, 10);
       const lookbackMinutes = Number.parseInt(opts.lookback, 10);
       const webHeartbeat =
@@ -551,6 +500,46 @@ Examples:
       if (webRetryMax !== undefined) reconnect.maxMs = webRetryMax;
       if (Object.keys(reconnect).length > 0) {
         webTuning.reconnect = reconnect;
+      }
+
+      // Handle --providers for multiple simultaneous relays
+      if (opts.providers) {
+        const providerList = String(opts.providers)
+          .split(",")
+          .map((p) => p.trim())
+          .map((p) => (p === "auto" ? "auto" : p)) as (Provider | "auto")[];
+
+        // Import selectProviders and runMultiProviderRelay
+        const { selectProviders } = await import("../web/session.js");
+        const { runMultiProviderRelay } = await import("./multi-relay.js");
+
+        const providers = await selectProviders(providerList);
+
+        if (providers.length === 0) {
+          defaultRuntime.error(
+            "No authenticated providers found. Use --provider or authenticate providers first.",
+          );
+          defaultRuntime.exit(1);
+        }
+
+        const cfg = loadConfig();
+        const deps = createDefaultDeps();
+
+        await runMultiProviderRelay(providers, cfg, deps, {
+          verbose: Boolean(opts.verbose),
+          webTuning,
+          twilioInterval: intervalSeconds,
+          twilioLookback: lookbackMinutes,
+          runtime: defaultRuntime,
+        });
+        return;
+      }
+
+      // Single-provider relay logic
+      const providerPref = String(opts.provider ?? "auto");
+      if (!["auto", "web", "twilio", "telegram"].includes(providerPref)) {
+        defaultRuntime.error("--provider must be auto, web, twilio, or telegram");
+        defaultRuntime.exit(1);
       }
 
       // Handle telegram explicitly (not in auto picker)
