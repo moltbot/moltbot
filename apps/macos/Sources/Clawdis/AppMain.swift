@@ -702,7 +702,8 @@ struct GeneralSettings: View {
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                Toggle(isOn: $state.isPaused) { Text("Pause Clawdis (disables notifications & privileged actions)") }
+                Toggle(isOn: activeBinding) { Text(activeBinding.wrappedValue ? "Clawdis Active" : "Clawdis Paused") }
+                    .help("Disable to stop Clawdis background helpers and notifications")
                 Toggle(isOn: $state.launchAtLogin) { Text("Launch at login") }
                 #if DEBUG
                 Toggle(isOn: $state.debugPaneEnabled) { Text("Enable debug tools") }
@@ -736,6 +737,13 @@ struct GeneralSettings: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var activeBinding: Binding<Bool> {
+        Binding(
+            get: { !state.isPaused },
+            set: { state.isPaused = !$0 }
+        )
     }
 
     private var cliInstaller: some View {
@@ -784,11 +792,14 @@ struct PermissionsSettings: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Allow these so Clawdis can notify and capture when needed.")
-                .padding(.bottom, 2)
+                .padding(.top, 4)
+
             PermissionStatusList(status: status, refresh: refresh)
                 .padding(14)
                 .background(RoundedRectangle(cornerRadius: 12).fill(Color(NSColor.controlBackgroundColor)))
+
             Button("Show onboarding") { showOnboarding() }
+                .buttonStyle(.bordered)
             Spacer()
         }
     }
@@ -921,13 +932,11 @@ struct PermissionStatusList: View {
     let refresh: () async -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            row(label: "Notifications", cap: .notifications, action: requestNotifications)
-            row(label: "Accessibility", cap: .accessibility) {
-                openSettings("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
-            }
-            row(label: "Screen Recording", cap: .screenRecording) {
-                openSettings("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenRecording")
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Capability.allCases, id: \.self) { cap in
+                PermissionRow(capability: cap, status: status[cap] ?? false) {
+                    Task { await handle(cap) }
+                }
             }
             Button("Refresh status") { Task { await refresh() } }
                 .font(.footnote)
@@ -935,23 +944,18 @@ struct PermissionStatusList: View {
         }
     }
 
-    private func row(label: String, cap: Capability, action: @escaping () -> Void) -> some View {
-        let ok = status[cap] ?? false
-        return HStack {
-            Circle()
-                .fill(ok ? Color.green : Color.red)
-                .frame(width: 10, height: 10)
-            Text(label)
-            Spacer()
-            Button(ok ? "Granted" : "Open Settings", action: action)
-                .disabled(ok)
-        }
-    }
-
-    private func requestNotifications() {
+    @MainActor
+    private func handle(_ cap: Capability) async {
         Task {
-            let center = UNUserNotificationCenter.current()
-            _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
+            switch cap {
+            case .notifications:
+                let center = UNUserNotificationCenter.current()
+                _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
+            case .accessibility:
+                openSettings("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+            case .screenRecording:
+                openSettings("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenRecording")
+            }
             await refresh()
         }
     }
