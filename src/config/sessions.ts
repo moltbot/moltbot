@@ -5,6 +5,7 @@ import path from "node:path";
 import JSON5 from "json5";
 import type { MsgContext } from "../auto-reply/templating.js";
 import { CONFIG_DIR, normalizeE164 } from "../utils.js";
+import { normalizeSessionId } from "../identity/normalize.js";
 
 export type SessionScope = "per-sender" | "global";
 
@@ -55,16 +56,59 @@ export async function saveSessionStore(
   );
 }
 
+/**
+ * Detect provider from message context.
+ */
+function detectProvider(from: string): "whatsapp" | "telegram" | "twilio" {
+  // Telegram format: "telegram:123456789" or "@username"
+  if (from.startsWith("telegram:") || from.startsWith("@")) {
+    return "telegram";
+  }
+  // WhatsApp/Twilio use E.164 phone numbers
+  // Default to whatsapp for phone numbers
+  return "whatsapp";
+}
+
+/**
+ * Extract raw ID from message context based on provider.
+ */
+function extractRawId(from: string, provider: "whatsapp" | "telegram" | "twilio"): string {
+  if (provider === "telegram") {
+    if (from.startsWith("telegram:")) {
+      return from.slice("telegram:".length);
+    }
+    if (from.startsWith("@")) {
+      return from; // Keep @ for usernames
+    }
+    return from;
+  }
+  // WhatsApp/Twilio: use normalized E.164
+  return normalizeE164(from);
+}
+
 // Decide which session bucket to use (per-sender vs global).
-export function deriveSessionKey(scope: SessionScope, ctx: MsgContext) {
+// Now supports identity mapping for cross-provider session sharing.
+export async function deriveSessionKey(scope: SessionScope, ctx: MsgContext): Promise<string> {
   if (scope === "global") return "global";
-  const from = ctx.From ? normalizeE164(ctx.From) : "";
-  // Preserve group conversations as distinct buckets
+  const from = ctx.From ? ctx.From : "";
+
+  // Preserve group conversations as distinct buckets (no identity mapping for groups)
   if (typeof ctx.From === "string" && ctx.From.includes("@g.us")) {
     return `group:${ctx.From}`;
   }
   if (typeof ctx.From === "string" && ctx.From.startsWith("group:")) {
     return ctx.From;
   }
-  return from || "unknown";
+
+  if (!from) return "unknown";
+
+  // Detect provider and extract raw ID
+  const provider = detectProvider(from);
+  const rawId = extractRawId(from, provider);
+
+  if (!rawId) return "unknown";
+
+  // Use identity normalization to get shared session ID if mapped
+  const normalizedId = await normalizeSessionId(provider, rawId);
+  return normalizedId;
 }

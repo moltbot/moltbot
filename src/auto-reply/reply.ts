@@ -232,7 +232,7 @@ export async function getReplyFromConfig(
       }
     }
 
-    sessionKey = deriveSessionKey(sessionScope, ctx);
+    sessionKey = await deriveSessionKey(sessionScope, ctx);
     sessionStore = loadSessionStore(storePath);
     const entry = sessionStore[sessionKey];
     const idleMs = idleMinutes * 60_000;

@@ -217,7 +217,7 @@ export async function runWebHeartbeatOnce(opts: {
     };
     await saveSessionStore(storePath, store);
   }
-  const sessionSnapshot = getSessionSnapshot(cfg, to, true);
+  const sessionSnapshot = await getSessionSnapshot(cfg, to, true);
   if (verbose) {
     heartbeatLogger.info(
       {
@@ -416,14 +416,14 @@ export function resolveHeartbeatRecipients(
   return { recipients: allowFrom, source: "allowFrom" as const };
 }
 
-function getSessionSnapshot(
+async function getSessionSnapshot(
   cfg: ReturnType<typeof loadConfig>,
   from: string,
   isHeartbeat = false,
 ) {
   const sessionCfg = cfg.inbound?.reply?.session;
   const scope = sessionCfg?.scope ?? "per-sender";
-  const key = deriveSessionKey(scope, { From: from, To: "", Body: "" });
+  const key = await deriveSessionKey(scope, { From: from, To: "", Body: "" });
   const store = loadSessionStore(resolveStorePath(sessionCfg?.store));
   const entry = store[key];
   const idleMinutes = Math.max(
@@ -1071,7 +1071,7 @@ export async function monitorWebProvider(
           console.log(success("heartbeat: skipped (no recent inbound)"));
           return;
         }
-        const snapshot = getSessionSnapshot(cfg, fallbackTo, true);
+        const snapshot = await getSessionSnapshot(cfg, fallbackTo, true);
         if (!snapshot.entry) {
           heartbeatLogger.info(
             { connectionId, to: fallbackTo, reason: "no-session-for-fallback" },
@@ -1113,7 +1113,7 @@ export async function monitorWebProvider(
       }
 
       try {
-        const snapshot = getSessionSnapshot(cfg, lastInboundMsg.from);
+        const snapshot = await getSessionSnapshot(cfg, lastInboundMsg.from);
         if (isVerbose()) {
           heartbeatLogger.info(
             {

@@ -1,6 +1,12 @@
 import chalk from "chalk";
 import { Command } from "commander";
 import { agentCommand } from "../commands/agent.js";
+import {
+  identityLinkCommand,
+  identityListCommand,
+  identityShowCommand,
+  identityUnlinkCommand,
+} from "../commands/identity.js";
 import { sendCommand } from "../commands/send.js";
 import { statusCommand } from "../commands/status.js";
 import { webhookCommand } from "../commands/webhook.js";
@@ -377,6 +383,7 @@ Examples:
     .command("relay")
     .description("Auto-reply to inbound messages (auto-selects web or twilio)")
     .option("--provider <provider>", "auto | web | twilio | telegram", "auto")
+    .option("--providers <providers>", "Comma-separated list: web,telegram,twilio")
     .option("-i, --interval <seconds>", "Polling interval for twilio mode", "5")
     .option(
       "-l, --lookback <minutes>",
@@ -406,9 +413,10 @@ Examples:
       "after",
       `
 Examples:
-  warelay relay                     # auto: web if logged-in, else twilio poll
-  warelay relay --provider web      # force personal web session
-  warelay relay --provider twilio   # force twilio poll
+  warelay relay                              # auto: web if logged-in, else twilio poll
+  warelay relay --provider web               # force personal web session
+  warelay relay --provider telegram          # force telegram only
+  warelay relay --providers web,telegram     # monitor both simultaneously
   warelay relay --provider twilio --interval 2 --lookback 30
   # Troubleshooting: docs/refactor/web-relay-troubleshooting.md
 `,
@@ -417,6 +425,54 @@ Examples:
       setVerbose(Boolean(opts.verbose));
       const { file: logFile, level: logLevel } = getResolvedLoggerSettings();
       defaultRuntime.log(info(`logs: ${logFile} (level ${logLevel})`));
+
+      // Handle --providers for multiple simultaneous relays
+      if (opts.providers) {
+        const providers = String(opts.providers).split(',').map(p => p.trim());
+        const validProviders = ['web', 'telegram', 'twilio'];
+        const invalid = providers.filter(p => !validProviders.includes(p));
+        if (invalid.length > 0) {
+          defaultRuntime.error(`Invalid providers: ${invalid.join(', ')}. Must be: web, telegram, twilio`);
+          defaultRuntime.exit(1);
+        }
+
+        defaultRuntime.log(info(`Starting relay for providers: ${providers.join(', ')}`));
+
+        // Start all providers concurrently
+        const promises = providers.map(async (provider) => {
+          try {
+            if (provider === 'telegram') {
+              await monitorTelegramProvider(Boolean(opts.verbose), defaultRuntime);
+            } else if (provider === 'web') {
+              const cfg = loadConfig();
+              const webTuning: WebMonitorTuning = {};
+              if (opts.webHeartbeat) webTuning.heartbeatSeconds = Number.parseInt(String(opts.webHeartbeat), 10);
+              if (opts.heartbeatNow) webTuning.replyHeartbeatNow = true;
+              const reconnect: WebMonitorTuning["reconnect"] = {};
+              if (opts.webRetries) reconnect.maxAttempts = Number.parseInt(String(opts.webRetries), 10);
+              if (opts.webRetryInitial) reconnect.initialMs = Number.parseInt(String(opts.webRetryInitial), 10);
+              if (opts.webRetryMax) reconnect.maxMs = Number.parseInt(String(opts.webRetryMax), 10);
+              if (Object.keys(reconnect).length > 0) webTuning.reconnect = reconnect;
+
+              logWebSelfId(defaultRuntime, true);
+              await monitorWebProvider(Boolean(opts.verbose), undefined, true, undefined, defaultRuntime, undefined, webTuning);
+            } else if (provider === 'twilio') {
+              ensureTwilioEnv();
+              logTwilioFrom();
+              const intervalSeconds = Number.parseInt(opts.interval || "5", 10);
+              const lookbackMinutes = Number.parseInt(opts.lookback || "5", 10);
+              await monitorTwilio(intervalSeconds, lookbackMinutes);
+            }
+          } catch (err) {
+            defaultRuntime.error(danger(`${provider} relay failed: ${String(err)}`));
+          }
+        });
+
+        await Promise.all(promises);
+        return;
+      }
+
+      // Original single-provider logic
       const providerPref = String(opts.provider ?? "auto");
       if (!["auto", "web", "twilio", "telegram"].includes(providerPref)) {
         defaultRuntime.error("--provider must be auto, web, twilio, or telegram");
@@ -768,6 +824,93 @@ Examples:
             `Failed to start relay tmux session with heartbeat: ${String(err)}`,
           ),
         );
+        defaultRuntime.exit(1);
+      }
+    });
+
+  // Identity management commands
+  const identity = program
+    .command("identity")
+    .description("Manage cross-provider identity mappings for shared Claude sessions");
+
+  identity
+    .command("link")
+    .description("Link provider identities to share a Claude session")
+    .option("--whatsapp <phone>", "WhatsApp phone number (E.164 format)")
+    .option("--telegram <user>", "Telegram username (@username) or user ID")
+    .option("--twilio <phone>", "Twilio phone number (E.164 format)")
+    .option("--name <name>", "Optional display name for this identity mapping")
+    .addHelpText(
+      "after",
+      `
+Examples:
+  warelay identity link --whatsapp +1234567890 --telegram @john --name "John Doe"
+  warelay identity link --whatsapp +1234567890 --twilio +1987654321
+  warelay identity link --telegram 123456789 --whatsapp +1234567890`,
+    )
+    .action(async (opts) => {
+      try {
+        await identityLinkCommand(opts, defaultRuntime);
+      } catch (err) {
+        defaultRuntime.error(String(err));
+        defaultRuntime.exit(1);
+      }
+    });
+
+  identity
+    .command("list")
+    .description("List all identity mappings")
+    .option("--json", "Output as JSON", false)
+    .addHelpText(
+      "after",
+      `
+Examples:
+  warelay identity list
+  warelay identity list --json`,
+    )
+    .action(async (opts) => {
+      try {
+        await identityListCommand(opts, defaultRuntime);
+      } catch (err) {
+        defaultRuntime.error(String(err));
+        defaultRuntime.exit(1);
+      }
+    });
+
+  identity
+    .command("show <id>")
+    .description("Show details of a specific identity mapping")
+    .option("--json", "Output as JSON", false)
+    .addHelpText(
+      "after",
+      `
+Examples:
+  warelay identity show shared-abc-123
+  warelay identity show shared-abc-123 --json`,
+    )
+    .action(async (id, opts) => {
+      try {
+        await identityShowCommand({ id, ...opts }, defaultRuntime);
+      } catch (err) {
+        defaultRuntime.error(String(err));
+        defaultRuntime.exit(1);
+      }
+    });
+
+  identity
+    .command("unlink <id>")
+    .description("Unlink an identity mapping (providers will have separate sessions)")
+    .addHelpText(
+      "after",
+      `
+Examples:
+  warelay identity unlink shared-abc-123`,
+    )
+    .action(async (id) => {
+      try {
+        await identityUnlinkCommand({ id }, defaultRuntime);
+      } catch (err) {
+        defaultRuntime.error(String(err));
         defaultRuntime.exit(1);
       }
     });

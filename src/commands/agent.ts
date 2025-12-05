@@ -65,11 +65,11 @@ function assertCommandConfig(cfg: WarelayConfig) {
   > & { mode: "command"; command: string[] };
 }
 
-function resolveSession(opts: {
+async function resolveSession(opts: {
   to?: string;
   sessionId?: string;
   replyCfg: NonNullable<NonNullable<WarelayConfig["inbound"]>["reply"]>;
-}): SessionResolution {
+}): Promise<SessionResolution> {
   const sessionCfg = opts.replyCfg?.session;
   const scope = sessionCfg?.scope ?? "per-sender";
   const idleMinutes = Math.max(
@@ -83,7 +83,7 @@ function resolveSession(opts: {
 
   let sessionKey: string | undefined =
     sessionStore && opts.to
-      ? deriveSessionKey(scope, { From: opts.to } as MsgContext)
+      ? await deriveSessionKey(scope, { From: opts.to } as MsgContext)
       : undefined;
   let sessionEntry =
     sessionKey && sessionStore ? sessionStore[sessionKey] : undefined;
@@ -195,7 +195,7 @@ export async function agentCommand(
   }
   const timeoutMs = timeoutSeconds * 1000;
 
-  const sessionResolution = resolveSession({
+  const sessionResolution = await resolveSession({
     to: opts.to,
     sessionId: opts.sessionId,
     replyCfg,
