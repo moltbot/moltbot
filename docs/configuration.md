@@ -27,7 +27,9 @@ CLAWDIS uses a JSON configuration file at `~/.clawdis/clawdis.json`.
   "inbound": {
     "allowFrom": [
       "+436769770569",
-      "+447511247203"
+      "+447511247203",
+      "telegram:@username",
+      "telegram:+436769770569"
     ],
     "groupChat": {
       "requireMention": true,
@@ -75,11 +77,24 @@ CLAWDIS uses a JSON configuration file at `~/.clawdis/clawdis.json`.
 
 ### `inbound.allowFrom`
 
-Array of E.164 phone numbers allowed to trigger the AI. Use `["*"]` to allow everyone (dangerous!).
+Array of identifiers allowed to trigger the AI. Use `["*"]` to allow everyone (dangerous!).
+
+Supports multiple identifier formats:
+- E.164 phone numbers for WhatsApp: `"+436769770569"`
+- Telegram usernames: `"telegram:@username"`
+- Telegram phone numbers: `"telegram:+436769770569"`
+- Telegram numeric IDs: `"telegram:123456789"`
 
 ```json
-"allowFrom": ["+436769770569", "+447511247203"]
+"allowFrom": [
+  "+436769770569",
+  "+447511247203",
+  "telegram:@username",
+  "telegram:+436769770569"
+]
 ```
+
+**Note:** The `telegram:` prefix is automatically added by the system when receiving messages. You must include it in your allowFrom list for Telegram users.
 
 ### `inbound.groupChat`
 
