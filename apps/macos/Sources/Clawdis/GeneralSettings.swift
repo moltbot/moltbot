@@ -61,17 +61,7 @@ var body: some View {
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Health")
-                        .font(.callout.weight(.semibold))
-                    self.healthCard
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("CLI helper")
-                        .font(.callout.weight(.semibold))
-                    self.cliInstaller
-                }
+                self.healthRow
 
                 Spacer(minLength: 12)
                 HStack {
@@ -317,6 +307,16 @@ private enum RemoteStatus: Equatable {
 }
 
 extension GeneralSettings {
+    private var healthRow: some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(self.healthStore.state.tint)
+                .frame(width: 10, height: 10)
+            Text(self.healthStore.summaryLine)
+                .font(.callout)
+        }
+    }
+
     @MainActor
     fileprivate func testRemote() async {
         self.remoteStatus = .checking

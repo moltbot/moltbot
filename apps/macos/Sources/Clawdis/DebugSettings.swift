@@ -9,6 +9,7 @@ struct DebugSettings: View {
     @State private var modelsLoading = false
     @State private var modelsError: String?
     @ObservedObject private var relayManager = RelayProcessManager.shared
+    @ObservedObject private var healthStore = HealthStore.shared
     @State private var relayRootInput: String = RelayProcessManager.shared.projectRootPath()
     @State private var sessionStorePath: String = SessionLoader.defaultStorePath
     @State private var sessionStoreSaveError: String?
@@ -19,6 +20,18 @@ struct DebugSettings: View {
     var body: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 10) {
+                LabeledContent("Health") {
+                    HStack(spacing: 8) {
+                        Circle().fill(self.healthStore.state.tint).frame(width: 10, height: 10)
+                        Text(self.healthStore.summaryLine)
+                    }
+                }
+                LabeledContent("CLI helper") {
+                    let loc = CLIInstaller.installedLocation()
+                    Text(loc ?? "missing")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(loc == nil ? Color.red : Color.secondary)
+                }
                 LabeledContent("PID") { Text("\(ProcessInfo.processInfo.processIdentifier)") }
                 LabeledContent("Log file") {
                     Button("Open pino log") { self.openLog() }
