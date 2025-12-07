@@ -10,77 +10,79 @@ struct GeneralSettings: View {
     @State private var cliInstallLocation: String?
     @State private var remoteStatus: RemoteStatus = .idle
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            self.connectionSection
+var body: some View {
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 18) {
+                self.connectionSection
 
-            if !self.state.onboardingSeen {
-                Text("Complete onboarding to finish setup")
-                    .font(.callout.weight(.semibold))
-                    .foregroundColor(.accentColor)
-                    .padding(.bottom, 2)
-            }
+                if !self.state.onboardingSeen {
+                    Text("Complete onboarding to finish setup")
+                        .font(.callout.weight(.semibold))
+                        .foregroundColor(.accentColor)
+                        .padding(.bottom, 2)
+                }
 
-            VStack(alignment: .leading, spacing: 12) {
-                SettingsToggleRow(
-                    title: "Clawdis active",
-                    subtitle: "Pause to stop Clawdis background helpers and notifications.",
-                    binding: self.activeBinding)
+                VStack(alignment: .leading, spacing: 12) {
+                    SettingsToggleRow(
+                        title: "Clawdis active",
+                        subtitle: "Pause to stop Clawdis background helpers and notifications.",
+                        binding: self.activeBinding)
 
-                SettingsToggleRow(
-                    title: "Launch at login",
-                    subtitle: "Automatically start Clawdis after you sign in.",
-                    binding: self.$state.launchAtLogin)
+                    SettingsToggleRow(
+                        title: "Launch at login",
+                        subtitle: "Automatically start Clawdis after you sign in.",
+                        binding: self.$state.launchAtLogin)
 
-                SettingsToggleRow(
-                    title: "Show Dock icon",
-                    subtitle: "Keep Clawdis visible in the Dock instead of menu-bar-only mode.",
-                    binding: self.$state.showDockIcon)
+                    SettingsToggleRow(
+                        title: "Show Dock icon",
+                        subtitle: "Keep Clawdis visible in the Dock instead of menu-bar-only mode.",
+                        binding: self.$state.showDockIcon)
 
-                SettingsToggleRow(
-                    title: "Play menu bar icon animations",
-                    subtitle: "Enable idle blinks and wiggles on the status icon.",
-                    binding: self.$state.iconAnimationsEnabled)
+                    SettingsToggleRow(
+                        title: "Play menu bar icon animations",
+                        subtitle: "Enable idle blinks and wiggles on the status icon.",
+                        binding: self.$state.iconAnimationsEnabled)
 
-                SettingsToggleRow(
-                    title: "Enable debug tools",
-                    subtitle: "Show the Debug tab with development utilities.",
-                    binding: self.$state.debugPaneEnabled)
+                    SettingsToggleRow(
+                        title: "Enable debug tools",
+                        subtitle: "Show the Debug tab with development utilities.",
+                        binding: self.$state.debugPaneEnabled)
 
-                LabeledContent("Default sound") {
-                    Picker("Sound", selection: self.$state.defaultSound) {
-                        Text("None").tag("")
-                        Text("Glass").tag("Glass")
-                        Text("Basso").tag("Basso")
-                        Text("Ping").tag("Ping")
+                    LabeledContent("Default sound") {
+                        Picker("Sound", selection: self.$state.defaultSound) {
+                            Text("None").tag("")
+                            Text("Glass").tag("Glass")
+                            Text("Basso").tag("Basso")
+                            Text("Ping").tag("Ping")
+                        }
+                        .labelsHidden()
+                        .frame(width: 140)
                     }
-                    .labelsHidden()
-                    .frame(width: 140)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Health")
+                        .font(.callout.weight(.semibold))
+                    self.healthCard
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("CLI helper")
+                        .font(.callout.weight(.semibold))
+                    self.cliInstaller
+                }
+
+                Spacer(minLength: 12)
+                HStack {
+                    Spacer()
+                    Button("Quit Clawdis") { NSApp.terminate(nil) }
+                        .buttonStyle(.borderedProminent)
                 }
             }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Health")
-                    .font(.callout.weight(.semibold))
-                self.healthCard
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("CLI helper")
-                    .font(.callout.weight(.semibold))
-                self.cliInstaller
-            }
-
-            Spacer()
-            HStack {
-                Spacer()
-                Button("Quit Clawdis") { NSApp.terminate(nil) }
-                    .buttonStyle(.borderedProminent)
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 22)
+            .padding(.bottom, 16)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 22)
-        .padding(.bottom, 16)
         .onAppear { self.refreshCLIStatus() }
     }
 
