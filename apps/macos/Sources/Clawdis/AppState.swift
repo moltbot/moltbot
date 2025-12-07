@@ -26,7 +26,10 @@ final class AppState: ObservableObject {
     }
 
     @Published var swabbleEnabled: Bool {
-        didSet { UserDefaults.standard.set(self.swabbleEnabled, forKey: swabbleEnabledKey) }
+        didSet {
+            UserDefaults.standard.set(self.swabbleEnabled, forKey: swabbleEnabledKey)
+            Task { await VoiceWakeRuntime.shared.refresh(state: self) }
+        }
     }
 
     @Published var swabbleTriggerWords: [String] {
@@ -36,6 +39,10 @@ final class AppState: ObservableObject {
             UserDefaults.standard.set(cleaned, forKey: swabbleTriggersKey)
             if cleaned.count != self.swabbleTriggerWords.count {
                 self.swabbleTriggerWords = cleaned
+                return
+            }
+            if self.swabbleEnabled {
+                Task { await VoiceWakeRuntime.shared.refresh(state: self) }
             }
         }
     }
@@ -52,11 +59,21 @@ final class AppState: ObservableObject {
     }
 
     @Published var voiceWakeMicID: String {
-        didSet { UserDefaults.standard.set(self.voiceWakeMicID, forKey: voiceWakeMicKey) }
+        didSet {
+            UserDefaults.standard.set(self.voiceWakeMicID, forKey: voiceWakeMicKey)
+            if self.swabbleEnabled {
+                Task { await VoiceWakeRuntime.shared.refresh(state: self) }
+            }
+        }
     }
 
     @Published var voiceWakeLocaleID: String {
-        didSet { UserDefaults.standard.set(self.voiceWakeLocaleID, forKey: voiceWakeLocaleKey) }
+        didSet {
+            UserDefaults.standard.set(self.voiceWakeLocaleID, forKey: voiceWakeLocaleKey)
+            if self.swabbleEnabled {
+                Task { await VoiceWakeRuntime.shared.refresh(state: self) }
+            }
+        }
     }
 
     @Published var voiceWakeAdditionalLocaleIDs: [String] {
@@ -116,6 +133,8 @@ final class AppState: ObservableObject {
         if self.swabbleEnabled && !PermissionManager.voiceWakePermissionsGranted() {
             self.swabbleEnabled = false
         }
+
+        Task { await VoiceWakeRuntime.shared.refresh(state: self) }
     }
 
     func triggerVoiceEars(ttl: TimeInterval = 5) {
@@ -135,16 +154,19 @@ final class AppState: ObservableObject {
 
         if !enabled {
             self.swabbleEnabled = false
+            Task { await VoiceWakeRuntime.shared.refresh(state: self) }
             return
         }
 
         if PermissionManager.voiceWakePermissionsGranted() {
             self.swabbleEnabled = true
+            Task { await VoiceWakeRuntime.shared.refresh(state: self) }
             return
         }
 
         let granted = await PermissionManager.ensureVoiceWakePermissions(interactive: true)
         self.swabbleEnabled = granted
+        Task { await VoiceWakeRuntime.shared.refresh(state: self) }
     }
 
     func setWorking(_ working: Bool) {
