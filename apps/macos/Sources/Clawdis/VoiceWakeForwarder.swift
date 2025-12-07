@@ -138,7 +138,9 @@ enum VoiceWakeForwarder {
         }
         args.append(userHost)
 
-        let escaped = Self.shellEscape(transcript) // single-quoted literal, safe for sh/zsh
+        // Avoid stdin and globbing entirely: marshal the transcript as a single-quoted literal.
+        // `shellEscape` keeps it POSIX-safe for /bin/sh even when the text has quotes/parentheses.
+        let escaped = Self.shellEscape(transcript)
         let templated: String = config.commandTemplate.contains("${text}")
             ? config.commandTemplate.replacingOccurrences(of: "${text}", with: "$CLAW_TEXT")
             : Self.renderedCommand(template: config.commandTemplate, transcript: transcript)
@@ -320,7 +322,7 @@ enum VoiceWakeForwarder {
         return (user: user?.trimmingCharacters(in: .whitespacesAndNewlines), host: host, port: port)
     }
 
-    private static func sanitizedTarget(_ raw: String) -> String {
+    static func sanitizedTarget(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix("ssh ") {
             return trimmed.replacingOccurrences(of: "ssh ", with: "").trimmingCharacters(in: .whitespacesAndNewlines)

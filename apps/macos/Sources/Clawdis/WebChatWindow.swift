@@ -215,10 +215,15 @@ final class WebChatWindowController: NSWindowController, WKScriptMessageHandler,
         let data: Data
         do {
             data = try await Task.detached(priority: .utility) { () -> Data in
+                let command = CommandResolver.clawdisCommand(
+                    subcommand: "agent",
+                    extraArgs: ["--to", sessionKey, "--message", text, "--json"])
                 let process = Process()
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-                process.arguments = ["pnpm", "clawdis", "agent", "--to", sessionKey, "--message", text, "--json"]
-                process.currentDirectoryURL = URL(fileURLWithPath: "/Users/steipete/Projects/clawdis")
+                process.executableURL = URL(fileURLWithPath: command.first ?? "/usr/bin/env")
+                process.arguments = Array(command.dropFirst())
+                if command.first != "/usr/bin/ssh" {
+                    process.currentDirectoryURL = URL(fileURLWithPath: CommandResolver.projectRootPath())
+                }
 
                 let pipe = Pipe()
                 process.standardOutput = pipe

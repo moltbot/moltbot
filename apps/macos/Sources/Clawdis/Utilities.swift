@@ -178,7 +178,26 @@ enum CommandResolver {
     private static let projectRootDefaultsKey = "clawdis.relayProjectRootPath"
     private static let helperName = "clawdis"
 
+    private static func bundledRelayRoot() -> URL? {
+        guard let resource = Bundle.main.resourceURL else { return nil }
+        let relay = resource.appendingPathComponent("Relay")
+        return FileManager.default.fileExists(atPath: relay.path) ? relay : nil
+    }
+
+    private static func bundledRelayCommand(subcommand: String, extraArgs: [String]) -> [String]? {
+        guard let relay = self.bundledRelayRoot() else { return nil }
+        let bunPath = relay.appendingPathComponent("bun").path
+        let entry = relay.appendingPathComponent("dist/index.js").path
+        guard FileManager.default.isExecutableFile(atPath: bunPath),
+              FileManager.default.isReadableFile(atPath: entry)
+        else { return nil }
+        return [bunPath, entry, subcommand] + extraArgs
+    }
+
     static func projectRoot() -> URL {
+        if let bundled = self.bundledRelayRoot() {
+            return bundled
+        }
         if let stored = UserDefaults.standard.string(forKey: self.projectRootDefaultsKey),
            let url = self.expandPath(stored)
         {
@@ -203,7 +222,7 @@ enum CommandResolver {
     static func preferredPaths() -> [String] {
         let current = ProcessInfo.processInfo.environment["PATH"]?
             .split(separator: ":").map(String.init) ?? []
-        let extras = [
+        var extras = [
             self.projectRoot().appendingPathComponent("node_modules/.bin").path,
             FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/pnpm").path,
             "/opt/homebrew/bin",
@@ -211,6 +230,9 @@ enum CommandResolver {
             "/usr/bin",
             "/bin",
         ]
+        if let relay = self.bundledRelayRoot() {
+            extras.insert(relay.appendingPathComponent("node_modules/.bin").path, at: 0)
+        }
         var seen = Set<String>()
         return (extras + current).filter { seen.insert($0).inserted }
     }
@@ -242,6 +264,13 @@ enum CommandResolver {
     }
 
     static func clawdisCommand(subcommand: String, extraArgs: [String] = []) -> [String] {
+        let settings = self.connectionSettings()
+        if settings.mode == .remote, let ssh = self.sshCommand(subcommand: subcommand, extraArgs: extraArgs, settings: settings) {
+            return ssh
+        }
+        if let bundled = self.bundledRelayCommand(subcommand: subcommand, extraArgs: extraArgs) {
+            return bundled
+        }
         if let clawdisPath = self.clawdisExecutable() {
             return [clawdisPath, subcommand] + extraArgs
         }
@@ -255,6 +284,53 @@ enum CommandResolver {
             return [pnpm, "--silent", "clawdis", subcommand] + extraArgs
         }
         return ["clawdis", subcommand] + extraArgs
+    }
+
+    private static func sshCommand(subcommand: String, extraArgs: [String], settings: RemoteSettings) -> [String]? {
+        guard !settings.target.isEmpty else { return nil }
+        let parsed = VoiceWakeForwarder.parse(target: settings.target)
+        guard let parsed else { return nil }
+
+        var args: [String] = ["-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes"]
+        if parsed.port > 0 { args.append(contentsOf: ["-p", String(parsed.port)]) }
+        if !settings.identity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            args.append(contentsOf: ["-i", settings.identity])
+        }
+        let userHost = parsed.user.map { "\($0)@\(parsed.host)" } ?? parsed.host
+        args.append(userHost)
+
+        let quotedArgs = (["clawdis", subcommand] + extraArgs).map(self.shellQuote).joined(separator: " ")
+        let cdPrefix = settings.projectRoot.isEmpty ? "" : "cd \(self.shellQuote(settings.projectRoot)) && "
+        let scriptBody = "\(cdPrefix)\(quotedArgs)"
+        let wrapped = VoiceWakeForwarder.commandWithCliPath(scriptBody, target: settings.target)
+        args.append(contentsOf: ["/bin/sh", "-c", wrapped])
+        return ["/usr/bin/ssh"] + args
+    }
+
+    private struct RemoteSettings {
+        let mode: AppState.ConnectionMode
+        let target: String
+        let identity: String
+        let projectRoot: String
+    }
+
+    private static func connectionSettings() -> RemoteSettings {
+        let modeRaw = UserDefaults.standard.string(forKey: connectionModeKey) ?? "local"
+        let mode = AppState.ConnectionMode(rawValue: modeRaw) ?? .local
+        let target = UserDefaults.standard.string(forKey: remoteTargetKey) ?? ""
+        let identity = UserDefaults.standard.string(forKey: remoteIdentityKey) ?? ""
+        let projectRoot = UserDefaults.standard.string(forKey: remoteProjectRootKey) ?? ""
+        return RemoteSettings(mode: mode, target: self.sanitizedTarget(target), identity: identity, projectRoot: projectRoot)
+    }
+
+    private static func sanitizedTarget(_ raw: String) -> String {
+        VoiceWakeForwarder.sanitizedTarget(raw)
+    }
+
+    private static func shellQuote(_ text: String) -> String {
+        if text.isEmpty { return "''" }
+        let escaped = text.replacingOccurrences(of: "'", with: "'\\''")
+        return "'\(escaped)'"
     }
 
     private static func expandPath(_ path: String) -> URL? {

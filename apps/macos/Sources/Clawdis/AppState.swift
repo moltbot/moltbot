@@ -5,6 +5,11 @@ import SwiftUI
 
 @MainActor
 final class AppState: ObservableObject {
+    enum ConnectionMode: String {
+        case local
+        case remote
+    }
+
     @Published var isPaused: Bool {
         didSet { UserDefaults.standard.set(self.isPaused, forKey: pauseDefaultsKey) }
     }
@@ -105,6 +110,22 @@ final class AppState: ObservableObject {
         }
     }
 
+    @Published var connectionMode: ConnectionMode {
+        didSet { UserDefaults.standard.set(self.connectionMode.rawValue, forKey: connectionModeKey) }
+    }
+
+    @Published var remoteTarget: String {
+        didSet { UserDefaults.standard.set(self.remoteTarget, forKey: remoteTargetKey) }
+    }
+
+    @Published var remoteIdentity: String {
+        didSet { UserDefaults.standard.set(self.remoteIdentity, forKey: remoteIdentityKey) }
+    }
+
+    @Published var remoteProjectRoot: String {
+        didSet { UserDefaults.standard.set(self.remoteProjectRoot, forKey: remoteProjectRootKey) }
+    }
+
     private var earBoostTask: Task<Void, Never>?
 
     init() {
@@ -133,14 +154,26 @@ final class AppState: ObservableObject {
         self.voiceWakeForwardTarget = UserDefaults.standard
             .string(forKey: voiceWakeForwardTargetKey) ?? legacyTarget
         self.voiceWakeForwardIdentity = UserDefaults.standard.string(forKey: voiceWakeForwardIdentityKey) ?? ""
-        self.voiceWakeForwardCommand = UserDefaults.standard
+
+        var storedForwardCommand = UserDefaults.standard
             .string(forKey: voiceWakeForwardCommandKey) ?? defaultVoiceWakeForwardCommand
+        if !storedForwardCommand.contains("--deliver") || !storedForwardCommand.contains("--session") {
+            storedForwardCommand = defaultVoiceWakeForwardCommand
+            UserDefaults.standard.set(storedForwardCommand, forKey: voiceWakeForwardCommandKey)
+        }
+        self.voiceWakeForwardCommand = storedForwardCommand
         if let storedHeartbeats = UserDefaults.standard.object(forKey: heartbeatsEnabledKey) as? Bool {
             self.heartbeatsEnabled = storedHeartbeats
         } else {
             self.heartbeatsEnabled = true
             UserDefaults.standard.set(true, forKey: heartbeatsEnabledKey)
         }
+
+        let storedMode = UserDefaults.standard.string(forKey: connectionModeKey)
+        self.connectionMode = ConnectionMode(rawValue: storedMode ?? "local") ?? .local
+        self.remoteTarget = UserDefaults.standard.string(forKey: remoteTargetKey) ?? ""
+        self.remoteIdentity = UserDefaults.standard.string(forKey: remoteIdentityKey) ?? ""
+        self.remoteProjectRoot = UserDefaults.standard.string(forKey: remoteProjectRootKey) ?? ""
 
         if self.swabbleEnabled, !PermissionManager.voiceWakePermissionsGranted() {
             self.swabbleEnabled = false

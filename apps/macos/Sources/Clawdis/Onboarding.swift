@@ -64,10 +64,10 @@ struct OnboardingView: View {
             GeometryReader { _ in
                 HStack(spacing: 0) {
                     self.welcomePage().frame(width: self.pageWidth)
-                    self.focusPage().frame(width: self.pageWidth)
+                    self.connectionPage().frame(width: self.pageWidth)
                     self.permissionsPage().frame(width: self.pageWidth)
                     self.cliPage().frame(width: self.pageWidth)
-                    self.launchPage().frame(width: self.pageWidth)
+                    self.whatsappPage().frame(width: self.pageWidth)
                     self.readyPage().frame(width: self.pageWidth)
                 }
                 .offset(x: CGFloat(-self.currentPage) * self.pageWidth)
@@ -113,25 +113,48 @@ struct OnboardingView: View {
         }
     }
 
-    private func focusPage() -> some View {
+    private func connectionPage() -> some View {
         self.onboardingPage {
-            Text("What Clawdis handles")
+            Text("Where Clawdis runs")
                 .font(.largeTitle.weight(.semibold))
+            Text("Pick local or remote. Remote uses SSH; we recommend Tailscale for reliable reachability.")
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 520)
+                .fixedSize(horizontal: false, vertical: true)
+
             self.onboardingCard {
-                self.featureRow(
-                    title: "Owns the TCC prompts",
-                    subtitle: "Requests Notifications, Accessibility, and Screen Recording "
-                        + "so your agents stay unblocked.",
-                    systemImage: "lock.shield")
-                self.featureRow(
-                    title: "Native notifications",
-                    subtitle: "Shows desktop toasts for agent events with your preferred sound.",
-                    systemImage: "bell.and.waveform")
-                self.featureRow(
-                    title: "Privileged helpers",
-                    subtitle: "Runs screenshots or shell actions from the `clawdis-mac` CLI "
-                        + "with the right permissions.",
-                    systemImage: "terminal")
+                Picker("Mode", selection: self.$state.connectionMode) {
+                    Text("Local (this Mac)").tag(AppState.ConnectionMode.local)
+                    Text("Remote over SSH").tag(AppState.ConnectionMode.remote)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 320)
+
+                if self.state.connectionMode == .remote {
+                    VStack(alignment: .leading, spacing: 10) {
+                        LabeledContent("SSH target") {
+                            TextField("user@host[:22]", text: self.$state.remoteTarget)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 280)
+                        }
+                        LabeledContent("Identity file") {
+                            TextField("/Users/you/.ssh/id_ed25519", text: self.$state.remoteIdentity)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 280)
+                        }
+                        LabeledContent("Project root") {
+                            TextField("/home/you/Projects/clawdis", text: self.$state.remoteProjectRoot)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 320)
+                        }
+                        Text("Tip: keep a Tailscale IP here so the agent stays reachable off-LAN.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
         }
     }
@@ -212,11 +235,11 @@ struct OnboardingView: View {
         }
     }
 
-    private func launchPage() -> some View {
+    private func whatsappPage() -> some View {
         self.onboardingPage {
-            Text("Keep it running")
+            Text("Link WhatsApp")
                 .font(.largeTitle.weight(.semibold))
-            Text("Let Clawdis launch with macOS so permissions and notifications are ready when automations start.")
+            Text("Run `clawdis login` where the relay runs (local if local mode, remote if remote). Scan the QR to pair your account.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -224,21 +247,18 @@ struct OnboardingView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             self.onboardingCard {
-                HStack {
-                    Spacer()
-                    Toggle("Launch at login", isOn: self.$state.launchAtLogin)
-                        .toggleStyle(.switch)
-                        .onChange(of: self.state.launchAtLogin) { _, newValue in
-                            AppStateStore.updateLaunchAtLogin(enabled: newValue)
-                        }
-                    Spacer()
-                }
-                Text(
-                    "You can pause from the menu bar anytime. Settings keeps a \"Show onboarding\" "
-                        + "button if you need to revisit.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
+                self.featureRow(
+                    title: "Open a terminal",
+                    subtitle: "Use the same host selected above. If remote, SSH in first.",
+                    systemImage: "terminal")
+                self.featureRow(
+                    title: "Run `clawdis login --verbose`",
+                    subtitle: "Scan the QR code with WhatsApp on your phone. We only use your personal session; no cloud relay involved.",
+                    systemImage: "qrcode.viewfinder")
+                self.featureRow(
+                    title: "Re-link after timeouts",
+                    subtitle: "If Baileys auth expires, re-run login on that host. Settings → General shows remote/local mode so you know where to run it.",
+                    systemImage: "clock.arrow.circlepath")
             }
         }
     }
@@ -257,6 +277,10 @@ struct OnboardingView: View {
                     title: "Test a notification",
                     subtitle: "Send a quick notify via the menu bar to confirm sounds and permissions.",
                     systemImage: "bell.badge")
+                Toggle("Launch at login", isOn: self.$state.launchAtLogin)
+                    .onChange(of: self.state.launchAtLogin) { _, newValue in
+                        AppStateStore.updateLaunchAtLogin(enabled: newValue)
+                    }
             }
             Text("Finish to save this version of onboarding. We'll reshow automatically when steps change.")
                 .font(.footnote)

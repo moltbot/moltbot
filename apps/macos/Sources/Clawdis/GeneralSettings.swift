@@ -8,9 +8,12 @@ struct GeneralSettings: View {
     @State private var cliStatus: String?
     @State private var cliInstalled = false
     @State private var cliInstallLocation: String?
+    @State private var remoteStatus: RemoteStatus = .idle
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
+            self.connectionSection
+
             if !self.state.onboardingSeen {
                 Text("Complete onboarding to finish setup")
                     .font(.callout.weight(.semibold))
@@ -85,6 +88,80 @@ struct GeneralSettings: View {
         Binding(
             get: { !self.state.isPaused },
             set: { self.state.isPaused = !$0 })
+    }
+
+    private var connectionSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Clawdis runs")
+                .font(.callout.weight(.semibold))
+
+            Picker("Mode", selection: self.$state.connectionMode) {
+                Text("Local (this Mac)").tag(AppState.ConnectionMode.local)
+                Text("Remote over SSH").tag(AppState.ConnectionMode.remote)
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 320)
+
+            if self.state.connectionMode == .remote {
+                VStack(alignment: .leading, spacing: 10) {
+                    LabeledContent("SSH target") {
+                        TextField("user@host[:22]", text: self.$state.remoteTarget)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 260)
+                    }
+
+                    LabeledContent("Identity file") {
+                        TextField("/Users/you/.ssh/id_ed25519", text: self.$state.remoteIdentity)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 260)
+                    }
+
+                    LabeledContent("Project root") {
+                        TextField("/home/you/Projects/clawdis", text: self.$state.remoteProjectRoot)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 320)
+                    }
+
+                    HStack(spacing: 10) {
+                        Button {
+                            Task { await self.testRemote() }
+                        } label: {
+                            if self.remoteStatus == .checking {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Text("Test remote")
+                            }
+                        }
+                        .disabled(self.remoteStatus == .checking || self.state.remoteTarget.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                        switch self.remoteStatus {
+                        case .idle:
+                            EmptyView()
+                        case .checking:
+                            Text("Checking…").font(.caption).foregroundStyle(.secondary)
+                        case .ok:
+                            Label("Ready", systemImage: "checkmark.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+                        case let .failed(message):
+                            Text(message)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                    }
+
+                    Text("Tip: use Tailscale for stable remote access; we recommend enabling it when you pick a remote Clawdis.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(12)
+                .background(Color.gray.opacity(0.08))
+                .cornerRadius(10)
+                .transition(.opacity)
+            }
+        }
     }
 
     private var cliInstaller: some View {
@@ -217,7 +294,27 @@ struct GeneralSettings: View {
     }
 }
 
+private enum RemoteStatus: Equatable {
+    case idle
+    case checking
+    case ok
+    case failed(String)
+}
+
 extension GeneralSettings {
+    @MainActor
+    fileprivate func testRemote() async {
+        self.remoteStatus = .checking
+        let command = CommandResolver.clawdisCommand(subcommand: "status", extraArgs: ["--json"])
+        let response = await ShellRunner.run(command: command, cwd: nil, env: nil, timeout: 10)
+        if response.ok {
+            self.remoteStatus = .ok
+        } else {
+            let msg = response.message ?? "test failed"
+            self.remoteStatus = .failed(msg)
+        }
+    }
+
     private func revealLogs() {
         let path = URL(fileURLWithPath: "/tmp/clawdis/clawdis.log")
         if FileManager.default.fileExists(atPath: path.path) {
