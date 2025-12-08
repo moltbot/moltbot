@@ -139,6 +139,7 @@ final class VoiceWakeOverlayController: ObservableObject {
                 window.orderOut(nil)
                 self.model.isVisible = false
                 self.model.level = 0
+                AppStateStore.shared.stopVoiceEars()
             }
         }
     }
@@ -160,6 +161,7 @@ final class VoiceWakeOverlayController: ObservableObject {
         guard let window else { return }
         if !self.model.isVisible {
             self.model.isVisible = true
+            AppStateStore.shared.triggerVoiceEars(ttl: nil)
             let start = target.offsetBy(dx: 0, dy: -6)
             window.setFrame(start, display: true)
             window.alphaValue = 0
