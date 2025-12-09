@@ -206,7 +206,7 @@ struct DebugSettings: View {
                 HStack {
                     Button("Restart app") { self.relaunch() }
                     Button("Reveal app in Finder") { self.revealApp() }
-                    Button("Restart relay") { self.restartRelay() }
+                    Button("Restart Gateway") { self.restartRelay() }
                 }
                 .buttonStyle(.bordered)
                 Spacer(minLength: 8)
