@@ -223,12 +223,7 @@ struct ToolsSettings: View {
     }
 
     private var packageManager: NodePackageManager {
-        if let parsed = NodePackageManager(rawValue: self.packageManagerRaw) {
-            return parsed
-        }
-        // Backward compatibility: map legacy "yarn" selection to Bun.
-        if self.packageManagerRaw == "yarn" { return .bun }
-        return .npm
+        NodePackageManager(rawValue: self.packageManagerRaw) ?? .npm
     }
 
     private var packageManagerPicker: some View {
