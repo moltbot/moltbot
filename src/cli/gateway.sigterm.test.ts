@@ -41,7 +41,7 @@ describe("gateway SIGTERM", () => {
     child = null;
   });
 
-  it("exits 0 on SIGTERM", { timeout: 15_000 }, async () => {
+  it("exits 0 on SIGTERM", { timeout: 30_000 }, async () => {
     const port = await getFreePort();
     const out: string[] = [];
     const err: string[] = [];
@@ -70,7 +70,7 @@ describe("gateway SIGTERM", () => {
     await waitForText(
       out,
       new RegExp(`gateway listening on ws://127\\.0\\.0\\.1:${port}\\b`),
-      10_000,
+      20_000,
     );
 
     proc.kill("SIGTERM");

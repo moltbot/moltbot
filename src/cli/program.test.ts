@@ -4,6 +4,7 @@ const sendCommand = vi.fn();
 const statusCommand = vi.fn();
 const loginWeb = vi.fn();
 const startWebChatServer = vi.fn(async () => ({ port: 18788 }));
+const callGateway = vi.fn();
 
 const runtime = {
   log: vi.fn(),
@@ -18,6 +19,9 @@ vi.mock("../commands/status.js", () => ({ statusCommand }));
 vi.mock("../runtime.js", () => ({ defaultRuntime: runtime }));
 vi.mock("../provider-web.js", () => ({
   loginWeb,
+}));
+vi.mock("../gateway/call.js", () => ({
+  callGateway,
 }));
 vi.mock("../webchat/server.js", () => ({
   startWebChatServer,
@@ -56,5 +60,35 @@ describe("cli program", () => {
     expect(runtime.log).toHaveBeenCalledWith(
       JSON.stringify({ port: 18788, basePath: "/", host: "127.0.0.1" }),
     );
+  });
+
+  it("runs nodes list and calls node.pair.list", async () => {
+    callGateway.mockResolvedValue({ pending: [], paired: [] });
+    const program = buildProgram();
+    runtime.log.mockClear();
+    await program.parseAsync(["nodes", "list"], { from: "user" });
+    expect(callGateway).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "node.pair.list",
+      }),
+    );
+    expect(runtime.log).toHaveBeenCalledWith("Pending: 0 · Paired: 0");
+  });
+
+  it("runs nodes approve and calls node.pair.approve", async () => {
+    callGateway.mockResolvedValue({
+      requestId: "r1",
+      node: { nodeId: "n1", token: "t1" },
+    });
+    const program = buildProgram();
+    runtime.log.mockClear();
+    await program.parseAsync(["nodes", "approve", "r1"], { from: "user" });
+    expect(callGateway).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "node.pair.approve",
+        params: { requestId: "r1" },
+      }),
+    );
+    expect(runtime.log).toHaveBeenCalled();
   });
 });

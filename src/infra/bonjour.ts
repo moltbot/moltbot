@@ -1,7 +1,5 @@
 import os from "node:os";
 
-import { type CiaoService, getResponder, Protocol } from "@homebridge/ciao";
-
 export type GatewayBonjourAdvertiser = {
   stop: () => Promise<void>;
 };
@@ -26,6 +24,11 @@ function safeServiceName(name: string) {
   return trimmed.length > 0 ? trimmed : "Clawdis";
 }
 
+type BonjourService = {
+  advertise: () => Promise<void>;
+  destroy: () => Promise<void>;
+};
+
 export async function startGatewayBonjourAdvertiser(
   opts: GatewayBonjourAdvertiseOpts,
 ): Promise<GatewayBonjourAdvertiser> {
@@ -33,6 +36,7 @@ export async function startGatewayBonjourAdvertiser(
     return { stop: async () => {} };
   }
 
+  const { getResponder, Protocol } = await import("@homebridge/ciao");
   const responder = getResponder();
 
   const hostname = os.hostname().replace(/\.local$/i, "");
@@ -53,7 +57,7 @@ export async function startGatewayBonjourAdvertiser(
     txtBase.tailnetDns = opts.tailnetDns.trim();
   }
 
-  const services: CiaoService[] = [];
+  const services: BonjourService[] = [];
 
   // Master beacon: used for discovery (auto-fill SSH/direct targets).
   // We advertise a TCP service so clients can resolve the host; the port itself is informational.

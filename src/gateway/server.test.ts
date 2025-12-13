@@ -181,6 +181,149 @@ async function connectOk(
 }
 
 describe("gateway server", () => {
+  test("supports gateway-owned node pairing methods and events", async () => {
+    const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawdis-home-"));
+    const prevHome = process.env.HOME;
+    process.env.HOME = homeDir;
+
+    const { server, ws } = await startServerWithClient();
+    await connectOk(ws);
+
+    const requestedP = onceMessage<{
+      type: "event";
+      event: string;
+      payload?: unknown;
+    }>(ws, (o) => o.type === "event" && o.event === "node.pair.requested");
+
+    ws.send(
+      JSON.stringify({
+        type: "req",
+        id: "pair-req-1",
+        method: "node.pair.request",
+        params: { nodeId: "n1", displayName: "Iris" },
+      }),
+    );
+    const res1 = await onceMessage<{
+      type: "res";
+      ok: boolean;
+      payload?: unknown;
+    }>(ws, (o) => o.type === "res" && o.id === "pair-req-1");
+    expect(res1.ok).toBe(true);
+    const req1 = (res1.payload as { request?: { requestId?: unknown } } | null)
+      ?.request;
+    const requestId = String(req1?.requestId ?? "");
+    expect(requestId.length).toBeGreaterThan(0);
+
+    const evt1 = await requestedP;
+    expect(evt1.event).toBe("node.pair.requested");
+    expect((evt1.payload as { requestId?: unknown } | null)?.requestId).toBe(
+      requestId,
+    );
+
+    // Second request for same node should return the existing pending request
+    // without emitting a second requested event.
+    ws.send(
+      JSON.stringify({
+        type: "req",
+        id: "pair-req-2",
+        method: "node.pair.request",
+        params: { nodeId: "n1", displayName: "Iris" },
+      }),
+    );
+    const res2 = await onceMessage<{
+      type: "res";
+      ok: boolean;
+      payload?: unknown;
+    }>(ws, (o) => o.type === "res" && o.id === "pair-req-2");
+    expect(res2.ok).toBe(true);
+    await expect(
+      onceMessage(
+        ws,
+        (o) => o.type === "event" && o.event === "node.pair.requested",
+        200,
+      ),
+    ).rejects.toThrow();
+
+    const resolvedP = onceMessage<{
+      type: "event";
+      event: string;
+      payload?: unknown;
+    }>(ws, (o) => o.type === "event" && o.event === "node.pair.resolved");
+
+    ws.send(
+      JSON.stringify({
+        type: "req",
+        id: "pair-approve-1",
+        method: "node.pair.approve",
+        params: { requestId },
+      }),
+    );
+    const approveRes = await onceMessage<{
+      type: "res";
+      ok: boolean;
+      payload?: unknown;
+    }>(ws, (o) => o.type === "res" && o.id === "pair-approve-1");
+    expect(approveRes.ok).toBe(true);
+    const token = String(
+      (approveRes.payload as { node?: { token?: unknown } } | null)?.node
+        ?.token ?? "",
+    );
+    expect(token.length).toBeGreaterThan(0);
+
+    const evt2 = await resolvedP;
+    expect((evt2.payload as { requestId?: unknown } | null)?.requestId).toBe(
+      requestId,
+    );
+    expect((evt2.payload as { decision?: unknown } | null)?.decision).toBe(
+      "approved",
+    );
+
+    ws.send(
+      JSON.stringify({
+        type: "req",
+        id: "pair-verify-1",
+        method: "node.pair.verify",
+        params: { nodeId: "n1", token },
+      }),
+    );
+    const verifyRes = await onceMessage<{
+      type: "res";
+      ok: boolean;
+      payload?: unknown;
+    }>(ws, (o) => o.type === "res" && o.id === "pair-verify-1");
+    expect(verifyRes.ok).toBe(true);
+    expect((verifyRes.payload as { ok?: unknown } | null)?.ok).toBe(true);
+
+    ws.send(
+      JSON.stringify({
+        type: "req",
+        id: "pair-list-1",
+        method: "node.pair.list",
+        params: {},
+      }),
+    );
+    const listRes = await onceMessage<{
+      type: "res";
+      ok: boolean;
+      payload?: unknown;
+    }>(ws, (o) => o.type === "res" && o.id === "pair-list-1");
+    expect(listRes.ok).toBe(true);
+    const paired = (listRes.payload as { paired?: unknown } | null)?.paired;
+    expect(Array.isArray(paired)).toBe(true);
+    expect(
+      (paired as Array<{ nodeId?: unknown }>).some((n) => n.nodeId === "n1"),
+    ).toBe(true);
+
+    ws.close();
+    await server.close();
+    await fs.rm(homeDir, { recursive: true, force: true });
+    if (prevHome === undefined) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = prevHome;
+    }
+  });
+
   test("supports cron.add and cron.list", async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "clawdis-gw-cron-"));
     testCronStorePath = path.join(dir, "cron.json");
