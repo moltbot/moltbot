@@ -26,6 +26,7 @@ import {
   DEFAULT_BROWSER_SCREENSHOT_MAX_SIDE,
   normalizeBrowserScreenshot,
 } from "./screenshot.js";
+import { resolveTargetIdFromTabs } from "./target-id.js";
 
 export type BrowserTab = {
   targetId: string;
@@ -270,7 +271,15 @@ export async function startBrowserControlServerFromConfig(
     const reachable = await isChromeReachable(state.cdpPort, 300);
     if (!reachable) return jsonError(res, 409, "browser not running");
     try {
-      await activateTab(state.cdpPort, targetId);
+      const tabs = await listTabs(state.cdpPort);
+      const resolved = resolveTargetIdFromTabs(targetId, tabs);
+      if (!resolved.ok) {
+        if (resolved.reason === "ambiguous") {
+          return jsonError(res, 409, "ambiguous target id prefix");
+        }
+        return jsonError(res, 404, "tab not found");
+      }
+      await activateTab(state.cdpPort, resolved.targetId);
       res.json({ ok: true });
     } catch (err) {
       jsonError(res, 500, String(err));
@@ -284,7 +293,15 @@ export async function startBrowserControlServerFromConfig(
     const reachable = await isChromeReachable(state.cdpPort, 300);
     if (!reachable) return jsonError(res, 409, "browser not running");
     try {
-      await closeTab(state.cdpPort, targetId);
+      const tabs = await listTabs(state.cdpPort);
+      const resolved = resolveTargetIdFromTabs(targetId, tabs);
+      if (!resolved.ok) {
+        if (resolved.reason === "ambiguous") {
+          return jsonError(res, 409, "ambiguous target id prefix");
+        }
+        return jsonError(res, 404, "tab not found");
+      }
+      await closeTab(state.cdpPort, resolved.targetId);
       res.json({ ok: true });
     } catch (err) {
       jsonError(res, 500, String(err));
@@ -304,8 +321,20 @@ export async function startBrowserControlServerFromConfig(
     try {
       const tabs = await listTabs(state.cdpPort);
       const chosen = targetId
-        ? tabs.find((t) => t.targetId === targetId)
-        : tabs.at(0);
+        ? (() => {
+            const resolved = resolveTargetIdFromTabs(targetId, tabs);
+            if (!resolved.ok) {
+              if (resolved.reason === "ambiguous") {
+                return "AMBIGUOUS" as const;
+              }
+              return null;
+            }
+            return tabs.find((t) => t.targetId === resolved.targetId) ?? null;
+          })()
+        : (tabs.at(0) ?? null);
+      if (chosen === "AMBIGUOUS") {
+        return jsonError(res, 409, "ambiguous target id prefix");
+      }
       if (!chosen?.wsUrl) return jsonError(res, 404, "tab not found");
 
       let shot: Buffer<ArrayBufferLike> = Buffer.alloc(0);
