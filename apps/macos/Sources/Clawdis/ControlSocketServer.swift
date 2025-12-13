@@ -225,12 +225,30 @@ final actor ControlSocketServer {
         let r = getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &pid, &pidSize)
         guard r == 0, pid > 0 else { return false }
 
-        // Same-user quick check
-        if let callerUID = self.uid(for: pid), callerUID == getuid() {
+        // Always require a valid code signature match (TeamID).
+        // This prevents any same-UID process from driving the app's privileged surface.
+        if self.teamIDMatches(pid: pid, allowedTeamIDs: allowedTeamIDs) {
             return true
         }
 
-        return self.teamIDMatches(pid: pid, allowedTeamIDs: allowedTeamIDs)
+        #if DEBUG
+        // Debug-only escape hatch: allow unsigned/same-UID clients when explicitly opted in.
+        // This keeps local development workable (e.g. a SwiftPM-built `clawdis-mac` binary).
+        let env = ProcessInfo.processInfo.environment["CLAWDIS_ALLOW_UNSIGNED_SOCKET_CLIENTS"]
+        if env == "1", let callerUID = self.uid(for: pid), callerUID == getuid() {
+            self.logger.warning(
+                "allowing unsigned same-UID socket client pid=\(pid, privacy: .public) due to CLAWDIS_ALLOW_UNSIGNED_SOCKET_CLIENTS=1")
+            return true
+        }
+        #endif
+
+        if let callerUID = self.uid(for: pid) {
+            self.logger.error(
+                "socket client rejected pid=\(pid, privacy: .public) uid=\(callerUID, privacy: .public)")
+        } else {
+            self.logger.error("socket client rejected pid=\(pid, privacy: .public) (uid unknown)")
+        }
+        return false
     }
 
     private nonisolated static func uid(for pid: pid_t) -> uid_t? {

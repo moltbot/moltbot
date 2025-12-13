@@ -9,7 +9,7 @@ read_when:
 - Single GUI app instance that owns all TCC-facing work (notifications, screen recording, mic, speech, AppleScript).
 - A small surface for automation: the `clawdis-mac` CLI and the Node gateway talk to the app via a local XPC channel.
 - Predictable permissions: always the same signed bundle ID, launched by launchd, so TCC grants stick.
-- Limit who can connect: only signed clients from our team (with a same-UID fallback for development).
+- Limit who can connect: only signed clients from our team (with an explicit DEBUG-only escape hatch for development).
 
 ## How it works
 - The app registers a Mach service named `com.steipete.clawdis.xpc` via a user LaunchAgent at `~/Library/LaunchAgents/com.steipete.clawdis.plist`.
@@ -17,8 +17,8 @@ read_when:
 - The app hosts the XPC listener (`NSXPCListener(machServiceName:)`) and exports `ClawdisXPCService`.
 - The CLI (`clawdis-mac`) connects with `NSXPCConnection(machServiceName:)`; the Node gateway shells out to the CLI.
 - Security: on incoming connections we read the audit token (or PID) and allow only:
-  - Code-signed clients with team ID `Y5PE65HELJ`; or
-  - Same-UID processes (fallback to avoid blocking local dev).
+  - Code-signed clients with team ID `Y5PE65HELJ`.
+  - In `DEBUG` builds only, you can opt into allowing same-UID clients by setting `CLAWDIS_ALLOW_UNSIGNED_SOCKET_CLIENTS=1`.
 
 ## Operational flows
 - Restart/rebuild: `SIGN_IDENTITY="Apple Development: Peter Steinberger (2ZAC4GM7GD)" scripts/restart-mac.sh`
