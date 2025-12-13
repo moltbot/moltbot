@@ -16,8 +16,13 @@ struct MenuContent: View {
     @State private var availableMics: [AudioInputDevice] = []
     @State private var loadingMics = false
     @State private var sessionMenu: [SessionRow] = []
-    @State private var mainSessionRow: SessionRow?
-    @State private var mainSessionContextWidth: CGFloat = 0
+    @State private var contextSessions: [SessionRow] = []
+    @State private var contextActiveCount: Int = 0
+    @State private var contextCardWidth: CGFloat = 0
+
+    private let activeSessionWindowSeconds: TimeInterval = 24 * 60 * 60
+    private let contextCardPadding: CGFloat = 10
+    private let contextPillHeight: CGFloat = 16
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -26,7 +31,7 @@ struct MenuContent: View {
                 Text(label)
             }
             self.statusRow
-            self.mainSessionContextRow
+            self.contextCardRow
             Toggle(isOn: self.heartbeatsBinding) { Text("Send Heartbeats") }
             self.heartbeatStatusRow
             Toggle(isOn: self.voiceWakeBinding) { Text("Voice Wake") }
@@ -185,7 +190,7 @@ struct MenuContent: View {
         }
         .task {
             await self.reloadSessionMenu()
-            await self.reloadMainSessionRow()
+            await self.reloadContextSessions()
         }
         .task {
             VoicePushToTalkHotkey.shared.setEnabled(voiceWakeSupported && self.state.voicePushToTalkEnabled)
@@ -252,41 +257,118 @@ struct MenuContent: View {
     }
 
     @ViewBuilder
-    private var mainSessionContextRow: some View {
-        if let row = self.mainSessionRow {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Text("Context (\(row.key))")
+    private var contextCardRow: some View {
+        Button(action: {}, label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Context")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(row.tokens.contextSummaryShort)
-                        .font(.caption.monospacedDigit())
+                    Spacer(minLength: 10)
+                    Text(self.contextSubtitle)
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                ContextUsageBar(
-                    usedTokens: row.tokens.total,
-                    contextTokens: row.tokens.contextTokens,
-                    width: self.mainSessionContextWidth > 0 ? self.mainSessionContextWidth : nil)
-            }
-            .padding(.vertical, 2)
-            .onWidthChange { width in
-                let next = max(120, width)
-                if abs(next - self.mainSessionContextWidth) > 1 {
-                    self.mainSessionContextWidth = next
+
+                VStack(alignment: .leading, spacing: 6) {
+                    if self.contextSessions.isEmpty {
+                        Text("No sessions yet")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(self.contextSessions) { row in
+                            self.contextSessionPill(row)
+                        }
+                    }
                 }
             }
-        } else {
-            HStack(spacing: 8) {
-                Text("Context (main)")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("—")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+            .padding(self.contextCardPadding)
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.white.opacity(0.04))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+                    }
             }
-            .padding(.vertical, 2)
+            .onWidthChange { width in
+                // Keep a stable width; menu measurement can be noisy across opens.
+                let next = max(0, width)
+                if abs(next - self.contextCardWidth) > 1 {
+                    self.contextCardWidth = next
+                }
+            }
+        })
+        .buttonStyle(.plain)
+        .disabled(true)
+    }
+
+    private var contextSubtitle: String {
+        let count = self.contextActiveCount
+        if count == 0 { return "Main session" }
+        if count == 1 { return "1 active session" }
+        return "\(count) active sessions"
+    }
+
+    private var contextPillWidth: CGFloat? {
+        let width = self.contextCardWidth
+        guard width > 0 else { return nil }
+        return max(1, width - (self.contextCardPadding * 2))
+    }
+
+    @ViewBuilder
+    private func contextSessionPill(_ row: SessionRow) -> some View {
+        let label = row.key
+        let summary = row.tokens.contextSummaryShort
+
+        Group {
+            if let width = self.contextPillWidth {
+                ZStack(alignment: .center) {
+                    ContextUsageBar(
+                        usedTokens: row.tokens.total,
+                        contextTokens: row.tokens.contextTokens,
+                        width: width,
+                        height: self.contextPillHeight)
+
+                    HStack(spacing: 8) {
+                        Text(label)
+                            .font(.caption.weight(row.key == "main" ? .semibold : .regular))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .layoutPriority(1)
+                        Spacer(minLength: 8)
+                        Text(summary)
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 1)
+                }
+                .frame(width: width, height: self.contextPillHeight)
+            } else {
+                ZStack(alignment: .center) {
+                    ContextUsageBar(
+                        usedTokens: row.tokens.total,
+                        contextTokens: row.tokens.contextTokens,
+                        width: nil,
+                        height: self.contextPillHeight)
+
+                    HStack(spacing: 8) {
+                        Text(label)
+                            .font(.caption.weight(row.key == "main" ? .semibold : .regular))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .layoutPriority(1)
+                        Spacer(minLength: 8)
+                        Text(summary)
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 1)
+                }
+                .frame(height: self.contextPillHeight)
+            }
         }
     }
 
@@ -441,7 +523,7 @@ struct MenuContent: View {
         var id: String { self.uid }
     }
 
-    private func reloadMainSessionRow() async {
+    private func reloadContextSessions() async {
         let hints = SessionLoader.configHints()
         let store = SessionLoader.resolveStorePath(override: hints.storePath)
         let defaults = SessionDefaults(
@@ -449,13 +531,31 @@ struct MenuContent: View {
             contextTokens: hints.contextTokens ?? SessionLoader.fallbackContextTokens)
 
         guard let rows = try? await SessionLoader.loadRows(at: store, defaults: defaults) else {
-            self.mainSessionRow = nil
+            self.contextSessions = []
             return
         }
-        let preferred = WebChatManager.shared.preferredSessionKey()
-        self.mainSessionRow =
-            rows.first(where: { $0.key == "main" }) ??
-            rows.first(where: { $0.key == preferred }) ??
-            rows.first
+
+        let now = Date()
+        let active = rows.filter { row in
+            guard let updatedAt = row.updatedAt else { return false }
+            return now.timeIntervalSince(updatedAt) <= self.activeSessionWindowSeconds
+        }
+
+        let activeCount = active.count
+        let main = rows.first(where: { $0.key == "main" })
+        var merged = active
+        if let main, !merged.contains(where: { $0.key == "main" }) {
+            merged.insert(main, at: 0)
+        }
+
+        // Keep stable ordering: main first, then most recent.
+        let sorted = merged.sorted { lhs, rhs in
+            if lhs.key == "main" { return true }
+            if rhs.key == "main" { return false }
+            return (lhs.updatedAt ?? .distantPast) > (rhs.updatedAt ?? .distantPast)
+        }
+
+        self.contextSessions = sorted
+        self.contextActiveCount = activeCount
     }
 }
