@@ -116,6 +116,7 @@ Example:
 - Start here:
   - [Configuration](./configuration.md)
   - [Clawd personal assistant setup](./clawd.md)
+  - [AGENTS.md template (default)](./AGENTS.default.md)
   - [Gateway runbook](./gateway.md)
   - [Discovery + transports](./discovery.md)
   - [Remote access](./remote.md)

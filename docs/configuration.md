@@ -81,6 +81,9 @@ Example command-mode config:
       mode: "command",
       // Example: run the bundled agent (Pi) in RPC mode
       command: ["pi", "--mode", "rpc", "{{BodyStripped}}"],
+      // Optional: run the agent from a specific working directory (supports ~).
+      // Useful when you keep an AGENTS.md + memory files in a dedicated workspace.
+      cwd: "~/clawd",
       timeoutSeconds: 1800,
       heartbeatMinutes: 30,
       // Optional: override the command used for heartbeat runs
@@ -102,6 +105,10 @@ Example command-mode config:
   }
 }
 ```
+
+Notes:
+- `inbound.reply.cwd` sets the working directory for the reply command (and Pi RPC). It supports `~` and is resolved to an absolute path.
+- If you don’t set it, the agent runs from the Gateway’s current directory (often not what you want for a “personal assistant” workspace).
 
 ### `browser` (clawd-managed Chrome)
 

@@ -88,6 +88,29 @@ clawdis webchat
 
 Now message the assistant number from your allowlisted phone.
 
+## Give the agent a workspace (AGENTS.md)
+
+Pi (the bundled coding agent) will read operating instructions and “memory” from the current working directory. For a good first-run experience, create a dedicated workspace and drop an `AGENTS.md` there.
+
+From the CLAWDIS repo:
+
+```bash
+mkdir -p ~/clawd
+cp docs/AGENTS.default.md ~/clawd/AGENTS.md
+```
+
+Then set `inbound.reply.cwd` to that directory (supports `~`):
+
+```json5
+{
+  inbound: {
+    reply: {
+      cwd: "~/clawd"
+    }
+  }
+}
+```
+
 ## The config that turns it into “an assistant”
 
 CLAWDIS defaults to a good Pi setup even without `inbound.reply`, but you’ll usually want to tune:
@@ -110,6 +133,8 @@ Example:
       mode: "command",
       // Pi is bundled; CLAWDIS forces --mode rpc for Pi runs.
       command: ["pi", "--mode", "rpc", "{{BodyStripped}}"],
+      // Run the agent from your dedicated workspace (AGENTS.md, memory files, etc).
+      cwd: "~/clawd",
       timeoutSeconds: 1800,
       bodyPrefix: "/think:high ",
       session: {

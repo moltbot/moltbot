@@ -6,6 +6,37 @@ read_when:
 ---
 # AGENTS.md — Clawdis Personal Assistant (default)
 
+## First run (recommended)
+
+1) Create a dedicated workspace for your assistant (where it can read/write files):
+
+```bash
+mkdir -p ~/clawd
+```
+
+2) Copy this template to your workspace root as `AGENTS.md`:
+
+```bash
+cp docs/AGENTS.default.md ~/clawd/AGENTS.md
+```
+
+3) Point CLAWDIS at that workspace so Pi runs with the right context:
+
+```json5
+{
+  inbound: {
+    reply: {
+      cwd: "~/clawd"
+    }
+  }
+}
+```
+
+## Safety defaults
+- Don’t dump directories or secrets into chat.
+- Don’t run destructive commands unless explicitly asked.
+- Don’t send partial/streaming replies to external messaging surfaces (only final replies).
+
 ## What Clawdis Does
 - Runs WhatsApp gateway + Pi coding agent so the assistant can read/write chats, fetch context, and run tools via the host Mac.
 - macOS app manages permissions (screen recording, notifications, microphone) and exposes a CLI helper `clawdis-mac` for scripts.

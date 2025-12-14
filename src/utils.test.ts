@@ -9,6 +9,7 @@ import {
   jidToE164,
   normalizeE164,
   normalizePath,
+  resolveUserPath,
   sleep,
   toWhatsappJid,
   withWhatsAppPrefix,
@@ -83,5 +84,21 @@ describe("jidToE164", () => {
       });
     expect(jidToE164("123@lid")).toBe("+5551234");
     spy.mockRestore();
+  });
+});
+
+describe("resolveUserPath", () => {
+  it("expands ~ to home dir", () => {
+    expect(resolveUserPath("~")).toBe(path.resolve(os.homedir()));
+  });
+
+  it("expands ~/ to home dir", () => {
+    expect(resolveUserPath("~/clawd")).toBe(
+      path.resolve(os.homedir(), "clawd"),
+    );
+  });
+
+  it("resolves relative paths", () => {
+    expect(resolveUserPath("tmp/dir")).toBe(path.resolve("tmp/dir"));
   });
 });

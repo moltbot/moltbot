@@ -16,6 +16,7 @@ import { getChildLogger } from "../logging.js";
 import { splitMediaFromOutput } from "../media/parse.js";
 import { enqueueCommand } from "../process/command-queue.js";
 import { runPiRpc } from "../process/tau-rpc.js";
+import { resolveUserPath } from "../utils.js";
 import { applyTemplate, type TemplateContext } from "./templating.js";
 import {
   formatToolAggregate,
@@ -357,6 +358,11 @@ export async function runCommandReply(
     onPartialReply,
   } = params;
 
+  const resolvedCwd =
+    typeof reply.cwd === "string" && reply.cwd.trim()
+      ? resolveUserPath(reply.cwd)
+      : undefined;
+
   if (!reply.command?.length) {
     throw new Error("reply.command is required for mode=command");
   }
@@ -499,14 +505,14 @@ export async function runCommandReply(
   }
 
   logVerbose(
-    `Running command auto-reply: ${rpcArgv.join(" ")}${reply.cwd ? ` (cwd: ${reply.cwd})` : ""}`,
+    `Running command auto-reply: ${rpcArgv.join(" ")}${resolvedCwd ? ` (cwd: ${resolvedCwd})` : ""}`,
   );
   logger.info(
     {
       agent: agentKind,
       sessionId: templatingCtx.SessionId,
       newSession: isNewSession,
-      cwd: reply.cwd,
+      cwd: resolvedCwd,
       command: rpcArgv.slice(0, -1), // omit body to reduce noise
     },
     "command auto-reply start",
@@ -593,7 +599,7 @@ export async function runCommandReply(
 
       const rpcResult = await runPiRpc({
         argv: rpcArgvForRun,
-        cwd: reply.cwd,
+        cwd: resolvedCwd,
         prompt: body,
         timeoutMs,
         onEvent: (line: string) => {
@@ -758,7 +764,7 @@ export async function runCommandReply(
           signal: signalUsed,
           killed: killedUsed,
           argv: finalArgv,
-          cwd: reply.cwd,
+          cwd: resolvedCwd,
           stdout: truncate(rawStdout),
           stderr: truncate(stderrUsed),
         },
@@ -888,7 +894,7 @@ export async function runCommandReply(
     const elapsed = Date.now() - started;
     verboseLog(`Command auto-reply finished in ${elapsed}ms`);
     logger.info(
-      { durationMs: elapsed, agent: agentKind, cwd: reply.cwd },
+      { durationMs: elapsed, agent: agentKind, cwd: resolvedCwd },
       "command auto-reply finished",
     );
     if ((codeUsed ?? 0) !== 0) {
@@ -995,7 +1001,7 @@ export async function runCommandReply(
   } catch (err) {
     const elapsed = Date.now() - started;
     logger.info(
-      { durationMs: elapsed, agent: agentKind, cwd: reply.cwd },
+      { durationMs: elapsed, agent: agentKind, cwd: resolvedCwd },
       "command auto-reply failed",
     );
     const anyErr = err as { killed?: boolean; signal?: string };
@@ -1010,7 +1016,7 @@ export async function runCommandReply(
       );
       const baseMsg =
         "Command timed out after " +
-        `${timeoutSeconds}s${reply.cwd ? ` (cwd: ${reply.cwd})` : ""}. Try a shorter prompt or split the request.`;
+        `${timeoutSeconds}s${resolvedCwd ? ` (cwd: ${resolvedCwd})` : ""}. Try a shorter prompt or split the request.`;
       const partial =
         extractRpcAssistantText(errorObj.stdout ?? "") ||
         extractAssistantTextLoosely(errorObj.stdout ?? "") ||

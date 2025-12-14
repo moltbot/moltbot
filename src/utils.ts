@@ -71,5 +71,14 @@ export function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export function resolveUserPath(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return trimmed;
+  if (trimmed.startsWith("~")) {
+    return path.resolve(trimmed.replace("~", os.homedir()));
+  }
+  return path.resolve(trimmed);
+}
+
 // Fixed configuration root; legacy ~/.clawdis is no longer used.
 export const CONFIG_DIR = path.join(os.homedir(), ".clawdis");
