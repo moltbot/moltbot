@@ -10,6 +10,8 @@ describe("pi agent helpers", () => {
       bodyIndex: 1,
       isNewSession: true,
       sessionId: "sess",
+      provider: "anthropic",
+      model: "claude-opus-4-5",
       sendSystemOnce: false,
       systemSent: false,
       identityPrefix: "IDENT",
@@ -18,6 +20,10 @@ describe("pi agent helpers", () => {
     expect(built).toContain("-p");
     expect(built).toContain("--mode");
     expect(built).toContain("json");
+    expect(built).toContain("--provider");
+    expect(built).toContain("anthropic");
+    expect(built).toContain("--model");
+    expect(built).toContain("claude-opus-4-5");
     expect(built.at(-1)).toContain("IDENT");
 
     const builtNoIdentity = piSpec.buildArgs({
@@ -25,12 +31,58 @@ describe("pi agent helpers", () => {
       bodyIndex: 1,
       isNewSession: false,
       sessionId: "sess",
+      provider: "anthropic",
+      model: "claude-opus-4-5",
       sendSystemOnce: true,
       systemSent: true,
       identityPrefix: "IDENT",
       format: "json",
     });
     expect(builtNoIdentity.at(-1)).toBe("hi");
+  });
+
+  it("injects provider/model for pi invocations only and avoids duplicates", () => {
+    const base = piSpec.buildArgs({
+      argv: ["pi", "hello"],
+      bodyIndex: 1,
+      isNewSession: true,
+      sendSystemOnce: false,
+      systemSent: false,
+      format: "json",
+    });
+    expect(base.filter((a) => a === "--provider").length).toBe(1);
+    expect(base).toContain("anthropic");
+    expect(base.filter((a) => a === "--model").length).toBe(1);
+    expect(base).toContain("claude-opus-4-5");
+
+    const already = piSpec.buildArgs({
+      argv: [
+        "pi",
+        "--provider",
+        "anthropic",
+        "--model",
+        "claude-opus-4-5",
+        "hi",
+      ],
+      bodyIndex: 5,
+      isNewSession: true,
+      sendSystemOnce: false,
+      systemSent: false,
+      format: "json",
+    });
+    expect(already.filter((a) => a === "--provider").length).toBe(1);
+    expect(already.filter((a) => a === "--model").length).toBe(1);
+
+    const nonPi = piSpec.buildArgs({
+      argv: ["echo", "hi"],
+      bodyIndex: 1,
+      isNewSession: true,
+      sendSystemOnce: false,
+      systemSent: false,
+      format: "json",
+    });
+    expect(nonPi).not.toContain("--provider");
+    expect(nonPi).not.toContain("--model");
   });
 
   it("parses final assistant message and preserves usage meta", () => {
