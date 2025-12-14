@@ -15,10 +15,6 @@ targets:
     platform: iOS
     sources:
       - path: Sources
-        excludes:
-          - Assets.xcassets
-    resources:
-      - path: Sources/Assets.xcassets
     dependencies:
       - package: ClawdisKit
       - package: ClawdisKit
@@ -50,6 +46,7 @@ targets:
       path: Sources/Info.plist
       properties:
         CFBundleDisplayName: Clawdis
+        CFBundleIconName: AppIcon
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
