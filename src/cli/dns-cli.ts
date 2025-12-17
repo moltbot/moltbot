@@ -186,11 +186,23 @@ export function registerDnsCli(program: Command) {
       // Ensure the gateway can write its zone file path.
       await fs.promises.mkdir(path.dirname(zonePath), { recursive: true });
       if (!fs.existsSync(zonePath)) {
-        fs.writeFileSync(
-          zonePath,
-          `; created by clawdis dns setup\n$ORIGIN ${WIDE_AREA_DISCOVERY_DOMAIN}\n$TTL 60\n`,
-          "utf-8",
-        );
+        const y = new Date().getUTCFullYear();
+        const m = String(new Date().getUTCMonth() + 1).padStart(2, "0");
+        const d = String(new Date().getUTCDate()).padStart(2, "0");
+        const serial = `${y}${m}${d}01`;
+
+        const zoneLines = [
+          `; created by clawdis dns setup (will be overwritten by the gateway when wide-area discovery is enabled)`,
+          `$ORIGIN ${WIDE_AREA_DISCOVERY_DOMAIN}`,
+          `$TTL 60`,
+          `@ IN SOA ns1 hostmaster ${serial} 7200 3600 1209600 60`,
+          `@ IN NS ns1`,
+          tailnetIPv4 ? `ns1 IN A ${tailnetIPv4}` : null,
+          tailnetIPv6 ? `ns1 IN AAAA ${tailnetIPv6}` : null,
+          ``,
+        ].filter((line): line is string => Boolean(line));
+
+        fs.writeFileSync(zonePath, zoneLines.join("\n"), "utf-8");
       }
 
       console.log("");
