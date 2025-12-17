@@ -24,6 +24,7 @@
     - `VoicePushToTalkHotkey`’s NSEvent monitor could call `@MainActor` code off-main, triggering executor checks / EXC_BAD_ACCESS on macOS 26.2.
     - Now it hops back to the main actor before mutating state.
   - Preserve in-page state when closing Canvas (hide the window instead of closing the `WKWebView`).
+  - Fix another “Canvas looks hung” source: node pairing approval used `NSAlert.runModal()` on the main actor, which stalls Canvas/IPC while the alert is open.
 
 ## Follow-ups
 - Add a small “action sent / failed” debug overlay in the A2UI shell (dev-only) to make failures obvious.
