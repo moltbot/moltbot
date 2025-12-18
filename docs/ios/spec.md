@@ -123,6 +123,9 @@ These are values for `node.invoke.command`:
 - `screen.snapshot` with `{ maxWidth?, quality?, format? }`
 - `screen.setMode` with `{ mode: "canvas" | "web" }`
 
+Alias:
+- `canvas.*` is accepted as a synonym for `screen.*` (e.g. `canvas.eval` → `screen.eval`).
+
 Result pattern:
 - Request is a standard `req/res` with `ok` / `error`.
 - Long operations (loads, streaming drawing, etc.) may also emit `node.event` progress.
