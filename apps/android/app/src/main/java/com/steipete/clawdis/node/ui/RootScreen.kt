@@ -131,8 +131,8 @@ private fun OverlayIconButton(
     modifier = Modifier.size(44.dp),
     colors =
       IconButtonDefaults.filledTonalIconButtonColors(
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        containerColor = overlayContainerColor(),
+        contentColor = overlayIconColor(),
       ),
   ) {
     icon()

@@ -35,7 +35,7 @@ fun StatusPill(
     onClick = onClick,
     modifier = modifier,
     shape = RoundedCornerShape(14.dp),
-    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    color = overlayContainerColor(),
     tonalElevation = 3.dp,
     shadowElevation = 0.dp,
   ) {
@@ -59,7 +59,7 @@ fun StatusPill(
 
       VerticalDivider(
         modifier = Modifier.height(14.dp).alpha(0.35f),
-        color = MaterialTheme.colorScheme.onSurface,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
 
       Icon(
@@ -67,7 +67,7 @@ fun StatusPill(
         contentDescription = if (voiceEnabled) "Voice enabled" else "Voice disabled",
         tint =
           if (voiceEnabled) {
-            MaterialTheme.colorScheme.onSurface
+            overlayIconColor()
           } else {
             MaterialTheme.colorScheme.onSurfaceVariant
           },
