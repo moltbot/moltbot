@@ -154,6 +154,30 @@ Defaults:
 }
 ```
 
+### `canvasHost` (LAN/tailnet Canvas file server + live reload)
+
+The Gateway can optionally serve a directory of HTML/CSS/JS over HTTP so iOS/Android nodes can simply `canvas.navigate` to it.
+
+Default root: `~/clawd/canvas`  
+Default port: `18793` (chosen to avoid the clawd browser CDP port `18792`)  
+Default bind: `lan` (`0.0.0.0`, reachable on LAN and on Tailscale when present)
+
+When enabled, the server:
+- serves files under `canvasHost.root`
+- injects a tiny live-reload client into served HTML
+- watches the directory and broadcasts reloads over a WebSocket endpoint at `/__clawdis/ws`
+
+```json5
+{
+  canvasHost: {
+    enabled: true,
+    root: "~/clawd/canvas",
+    port: 18793,
+    bind: "lan"
+  }
+}
+```
+
 ### `bridge` (Iris/node bridge server)
 
 The Gateway can expose a simple TCP bridge for nodes (iOS/Android “Iris”), typically on port `18790`.
