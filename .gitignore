@@ -7,6 +7,9 @@ coverage
 .worktrees/
 .DS_Store
 **/.DS_Store
+
+# Bun build artifacts
+*.bun-build
 apps/macos/.build/
 apps/shared/ClawdisKit/.build/
 bin/clawdis-mac
