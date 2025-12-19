@@ -102,7 +102,7 @@ export type CanvasHostConfig = {
 };
 
 export type GatewayControlUiConfig = {
-  /** If false, the Gateway will not serve the Control UI (/, /ui/). Default: true. */
+  /** If false, the Gateway will not serve the Control UI (/). Default: true. */
   enabled?: boolean;
 };
 

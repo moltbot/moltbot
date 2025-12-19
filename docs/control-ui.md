@@ -8,8 +8,7 @@ read_when:
 
 The Control UI is a small **Vite + Lit** single-page app served by the Gateway under:
 
-- `http://<host>:18789/` (preferred)
-- `http://<host>:18789/ui/` (legacy alias)
+- `http://<host>:18789/`
 
 It speaks **directly to the Gateway WebSocket** on the same port.
 

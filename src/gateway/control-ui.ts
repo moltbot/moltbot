@@ -87,10 +87,8 @@ export function handleControlUiHttpRequest(
 
   const url = new URL(urlRaw, "http://localhost");
 
-  if (url.pathname === "/ui") {
-    res.statusCode = 302;
-    res.setHeader("Location", "/");
-    res.end();
+  if (url.pathname === "/ui" || url.pathname.startsWith("/ui/")) {
+    respondNotFound(res);
     return true;
   }
 
@@ -106,7 +104,6 @@ export function handleControlUiHttpRequest(
 
   const rel = (() => {
     if (url.pathname === ROOT_PREFIX) return "";
-    if (url.pathname.startsWith(UI_PREFIX)) return url.pathname.slice(UI_PREFIX.length);
     if (url.pathname.startsWith("/assets/")) return url.pathname.slice(1);
     return url.pathname.slice(1);
   })();
