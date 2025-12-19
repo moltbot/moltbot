@@ -4,7 +4,7 @@ object BonjourEscapes {
   fun decode(input: String): String {
     if (input.isEmpty()) return input
 
-    val out = StringBuilder(input.length)
+    val bytes = mutableListOf<Byte>()
     var i = 0
     while (i < input.length) {
       if (input[i] == '\\' && i + 3 < input.length) {
@@ -14,17 +14,22 @@ object BonjourEscapes {
         if (d0.isDigit() && d1.isDigit() && d2.isDigit()) {
           val value =
             ((d0.code - '0'.code) * 100) + ((d1.code - '0'.code) * 10) + (d2.code - '0'.code)
-          if (value in 0..0x10FFFF) {
-            out.appendCodePoint(value)
+          if (value in 0..255) {
+            bytes.add(value.toByte())
             i += 4
             continue
           }
         }
       }
 
-      out.append(input[i])
-      i += 1
+      val codePoint = Character.codePointAt(input, i)
+      val charBytes = String(Character.toChars(codePoint)).toByteArray(Charsets.UTF_8)
+      for (b in charBytes) {
+        bytes.add(b)
+      }
+      i += Character.charCount(codePoint)
     }
-    return out.toString()
+
+    return String(bytes.toByteArray(), Charsets.UTF_8)
   }
 }
