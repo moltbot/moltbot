@@ -137,6 +137,24 @@ Minimal `~/.clawdis/clawdis.json`:
 }
 ```
 
+### WhatsApp
+
+- Link the device: `pnpm clawdis login` (stores creds in `~/.clawdis/credentials`).
+- Allowlist who can talk to the assistant via `inbound.allowFrom`.
+
+### Telegram
+
+- Set `TELEGRAM_BOT_TOKEN` or `telegram.botToken` (env wins).
+- Optional: set `telegram.requireMention`, `telegram.allowFrom`, or `telegram.webhookUrl` as needed.
+
+```json5
+{
+  telegram: {
+    botToken: "123456:ABCDEF"
+  }
+}
+```
+
 Browser control (optional):
 
 ```json5
