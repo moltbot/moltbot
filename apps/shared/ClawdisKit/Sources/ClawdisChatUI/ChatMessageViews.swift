@@ -77,6 +77,7 @@ private struct ChatMessageBody: View {
         .background(self.bubbleBackground)
         .overlay(self.bubbleBorder)
         .clipShape(RoundedRectangle(cornerRadius: ChatUIConstants.bubbleCorner, style: .continuous))
+        .shadow(color: self.bubbleShadowColor, radius: self.bubbleShadowRadius, y: self.bubbleShadowYOffset)
     }
 
     private var primaryText: String {
@@ -101,10 +102,33 @@ private struct ChatMessageBody: View {
     }
 
     private var bubbleBorder: some View {
-        RoundedRectangle(cornerRadius: ChatUIConstants.bubbleCorner, style: .continuous)
-            .strokeBorder(
-                self.isUser ? Color.white.opacity(0.12) : Color.black.opacity(0.08),
-                lineWidth: self.isUser ? 0.5 : 1)
+        let borderColor: Color
+        let lineWidth: CGFloat
+        if self.isUser {
+            borderColor = Color.white.opacity(0.12)
+            lineWidth = 0.5
+        } else if self.style == .onboarding {
+            borderColor = ClawdisChatTheme.onboardingAssistantBorder
+            lineWidth = 0.8
+        } else {
+            borderColor = Color.black.opacity(0.08)
+            lineWidth = 1
+        }
+
+        return RoundedRectangle(cornerRadius: ChatUIConstants.bubbleCorner, style: .continuous)
+            .strokeBorder(borderColor, lineWidth: lineWidth)
+    }
+
+    private var bubbleShadowColor: Color {
+        self.style == .onboarding && !self.isUser ? Color.black.opacity(0.28) : .clear
+    }
+
+    private var bubbleShadowRadius: CGFloat {
+        self.style == .onboarding && !self.isUser ? 6 : 0
+    }
+
+    private var bubbleShadowYOffset: CGFloat {
+        self.style == .onboarding && !self.isUser ? 2 : 0
     }
 }
 
@@ -243,7 +267,9 @@ private struct MarkdownTextView: View {
             of: "(?<!\\n)\\n(?!\\n)",
             with: " \\n",
             options: .regularExpression)
-        if let attributed = try? AttributedString(markdown: normalized) {
+        let options = AttributedString.MarkdownParsingOptions(
+            interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        if let attributed = try? AttributedString(markdown: normalized, options: options) {
             Text(attributed)
                 .font(.system(size: 14))
                 .foregroundStyle(self.textColor)

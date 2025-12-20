@@ -49,9 +49,19 @@ enum ClawdisChatTheme {
 
     static var onboardingAssistantBubble: Color {
         #if os(macOS)
-        Color(nsColor: .controlBackgroundColor).opacity(0.92)
+        let base = NSColor.controlBackgroundColor
+        let blended = base.blended(withFraction: 0.22, of: .white) ?? base
+        return Color(nsColor: blended)
         #else
         Color(uiColor: .secondarySystemBackground)
+        #endif
+    }
+
+    static var onboardingAssistantBorder: Color {
+        #if os(macOS)
+        Color.white.opacity(0.12)
+        #else
+        Color.white.opacity(0.12)
         #endif
     }
 

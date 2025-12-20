@@ -41,7 +41,7 @@ struct ClawdisChatComposer: View {
                     .lineLimit(2)
             }
         }
-        .padding(8)
+        .padding(self.composerPadding)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(ClawdisChatTheme.composerBackground)
@@ -144,9 +144,9 @@ struct ClawdisChatComposer: View {
                         self.sendButton
                     }
                 }
-                .padding(8)
+            .padding(self.editorPadding)
             }
-            .frame(minHeight: 44, idealHeight: 44, maxHeight: 96)
+            .frame(minHeight: self.editorMinHeight, idealHeight: self.editorMinHeight, maxHeight: self.editorMaxHeight)
     }
 
     private var connectionPill: some View {
@@ -179,7 +179,7 @@ struct ClawdisChatComposer: View {
             ChatComposerTextView(text: self.$viewModel.input) {
                 self.viewModel.send()
             }
-            .frame(minHeight: 32, idealHeight: 32, maxHeight: 72)
+            .frame(minHeight: self.textMinHeight, idealHeight: self.textMinHeight, maxHeight: self.textMaxHeight)
             .padding(.horizontal, 6)
             .padding(.vertical, 4)
             #else
@@ -252,6 +252,30 @@ struct ClawdisChatComposer: View {
 
     private var showsConnectionPill: Bool {
         self.style == .standard
+    }
+
+    private var composerPadding: CGFloat {
+        self.style == .onboarding ? 6 : 8
+    }
+
+    private var editorPadding: CGFloat {
+        self.style == .onboarding ? 6 : 8
+    }
+
+    private var editorMinHeight: CGFloat {
+        self.style == .onboarding ? 38 : 44
+    }
+
+    private var editorMaxHeight: CGFloat {
+        self.style == .onboarding ? 72 : 96
+    }
+
+    private var textMinHeight: CGFloat {
+        self.style == .onboarding ? 28 : 32
+    }
+
+    private var textMaxHeight: CGFloat {
+        self.style == .onboarding ? 60 : 72
     }
 
     #if os(macOS)
