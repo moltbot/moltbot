@@ -132,7 +132,8 @@ export function registerCronCli(program: Command) {
     cron
       .command("add")
       .description("Add a cron job")
-      .option("--name <name>", "Optional name")
+      .requiredOption("--name <name>", "Job name")
+      .option("--description <text>", "Optional description")
       .option("--disabled", "Create job disabled", false)
       .option("--session <target>", "Session target (main|isolated)", "main")
       .option(
@@ -278,11 +279,17 @@ export function registerCronCli(program: Command) {
                 }
               : undefined;
 
+          const name = String(opts.name ?? "").trim();
+          if (!name) throw new Error("--name is required");
+
+          const description =
+            typeof opts.description === "string" && opts.description.trim()
+              ? opts.description.trim()
+              : undefined;
+
           const params = {
-            name:
-              typeof opts.name === "string" && opts.name.trim()
-                ? opts.name.trim()
-                : undefined,
+            name,
+            description,
             enabled: !opts.disabled,
             schedule,
             sessionTarget,
@@ -388,6 +395,7 @@ export function registerCronCli(program: Command) {
       .description("Edit a cron job (patch fields)")
       .argument("<id>", "Job id")
       .option("--name <name>", "Set name")
+      .option("--description <text>", "Set description")
       .option("--enable", "Enable job", false)
       .option("--disable", "Disable job", false)
       .option("--session <target>", "Session target (main|isolated)")
@@ -430,6 +438,8 @@ export function registerCronCli(program: Command) {
 
           const patch: Record<string, unknown> = {};
           if (typeof opts.name === "string") patch.name = opts.name;
+          if (typeof opts.description === "string")
+            patch.description = opts.description;
           if (opts.enable && opts.disable)
             throw new Error("Choose --enable or --disable, not both");
           if (opts.enable) patch.enabled = true;

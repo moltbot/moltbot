@@ -60,7 +60,8 @@ This RFC adds a small “cron job system” so Clawd can schedule future work an
 Each job is a JSON object with stable keys (unknown keys ignored for forward compatibility):
 
 - `id: string` (UUID)
-- `name?: string`
+- `name: string` (required)
+- `description?: string` (optional)
 - `enabled: boolean`
 - `createdAtMs: number`
 - `updatedAtMs: number`

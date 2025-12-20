@@ -45,8 +45,49 @@ export type CronServiceDeps = {
 
 const STUCK_RUN_MS = 2 * 60 * 60 * 1000;
 
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0;
+function normalizeRequiredName(raw: unknown) {
+  if (typeof raw !== "string") throw new Error("cron job name is required");
+  const name = raw.trim();
+  if (!name) throw new Error("cron job name is required");
+  return name;
+}
+
+function normalizeOptionalText(raw: unknown) {
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function truncateText(input: string, maxLen: number) {
+  if (input.length <= maxLen) return input;
+  return `${input.slice(0, Math.max(0, maxLen - 1)).trimEnd()}…`;
+}
+
+function inferLegacyName(job: {
+  schedule?: { kind?: unknown; everyMs?: unknown; expr?: unknown };
+  payload?: { kind?: unknown; text?: unknown; message?: unknown };
+}) {
+  const text =
+    job?.payload?.kind === "systemEvent" && typeof job.payload.text === "string"
+      ? job.payload.text
+      : job?.payload?.kind === "agentTurn" &&
+          typeof job.payload.message === "string"
+        ? job.payload.message
+        : "";
+  const firstLine =
+    text
+      .split("\n")
+      .map((l) => l.trim())
+      .find(Boolean) ?? "";
+  if (firstLine) return truncateText(firstLine, 60);
+
+  const kind = typeof job?.schedule?.kind === "string" ? job.schedule.kind : "";
+  if (kind === "cron" && typeof job?.schedule?.expr === "string")
+    return `Cron: ${truncateText(job.schedule.expr, 52)}`;
+  if (kind === "every" && typeof job?.schedule?.everyMs === "number")
+    return `Every: ${job.schedule.everyMs}ms`;
+  if (kind === "at") return "One-shot";
+  return "Cron job";
 }
 
 function normalizePayloadToSystemText(payload: CronPayload) {
@@ -131,7 +172,8 @@ export class CronService {
       const id = crypto.randomUUID();
       const job: CronJob = {
         id,
-        name: input.name?.trim() || undefined,
+        name: normalizeRequiredName(input.name),
+        description: normalizeOptionalText(input.description),
         enabled: input.enabled !== false,
         createdAtMs: now,
         updatedAtMs: now,
@@ -165,8 +207,9 @@ export class CronService {
       const job = this.findJobOrThrow(id);
       const now = this.deps.nowMs();
 
-      if (isNonEmptyString(patch.name)) job.name = patch.name.trim();
-      if (patch.name === null || patch.name === "") job.name = undefined;
+      if ("name" in patch) job.name = normalizeRequiredName(patch.name);
+      if ("description" in patch)
+        job.description = normalizeOptionalText(patch.description);
       if (typeof patch.enabled === "boolean") job.enabled = patch.enabled;
       if (patch.schedule) job.schedule = patch.schedule;
       if (patch.sessionTarget) job.sessionTarget = patch.sessionTarget;
@@ -251,7 +294,30 @@ export class CronService {
   private async ensureLoaded() {
     if (this.store) return;
     const loaded = await loadCronStore(this.deps.storePath);
-    this.store = { version: 1, jobs: loaded.jobs ?? [] };
+    const jobs = (loaded.jobs ?? []) as unknown as Array<
+      Record<string, unknown>
+    >;
+    let mutated = false;
+    for (const raw of jobs) {
+      const nameRaw = raw.name;
+      if (typeof nameRaw !== "string" || nameRaw.trim().length === 0) {
+        raw.name = inferLegacyName({
+          schedule: raw.schedule as never,
+          payload: raw.payload as never,
+        });
+        mutated = true;
+      } else {
+        raw.name = nameRaw.trim();
+      }
+
+      const desc = normalizeOptionalText(raw.description);
+      if (raw.description !== desc) {
+        raw.description = desc;
+        mutated = true;
+      }
+    }
+    this.store = { version: 1, jobs: jobs as unknown as CronJob[] };
+    if (mutated) await this.persist();
   }
 
   private warnIfDisabled(action: string) {

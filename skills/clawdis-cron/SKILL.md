@@ -13,6 +13,10 @@ Enable/disable
 - Disable with config `cron.enabled=false` or env `CLAWDIS_SKIP_CRON=1`.
 - Config: `cron.store`, `cron.maxConcurrentRuns`.
 
+Job fields
+- `name` is required (non-empty).
+- `description` is optional.
+
 RPC methods (Gateway WS)
 - `cron.list`, `cron.status`, `cron.add`, `cron.update`, `cron.remove`, `cron.run`, `cron.runs`
 - `wake` (enqueue system event + optionally trigger immediate heartbeat)

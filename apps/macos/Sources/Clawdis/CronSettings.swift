@@ -277,6 +277,9 @@ struct CronSettings: View {
     private func detailCard(_ job: CronJob) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             LabeledContent("Schedule") { Text(self.scheduleSummary(job.schedule)).font(.callout) }
+            if let desc = job.description, !desc.isEmpty {
+                LabeledContent("Description") { Text(desc).font(.callout) }
+            }
             LabeledContent("Session") { Text(job.sessionTarget.rawValue) }
             LabeledContent("Wake") { Text(job.wakeMode.rawValue) }
             LabeledContent("Next run") {
@@ -514,6 +517,7 @@ struct CronJobEditor: View {
         "Controls the label used when posting the completion summary back to the main session."
 
     @State private var name: String = ""
+    @State private var description: String = ""
     @State private var enabled: Bool = true
     @State private var sessionTarget: CronSessionTarget = .main
     @State private var wakeMode: CronWakeMode = .nextHeartbeat
@@ -554,7 +558,13 @@ struct CronJobEditor: View {
                         Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 14, verticalSpacing: 10) {
                             GridRow {
                                 self.gridLabel("Name")
-                                TextField("Optional label (e.g. “Daily summary”)", text: self.$name)
+                                TextField("Required (e.g. “Daily summary”)", text: self.$name)
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            GridRow {
+                                self.gridLabel("Description")
+                                TextField("Optional notes", text: self.$description)
                                     .textFieldStyle(.roundedBorder)
                                     .frame(maxWidth: .infinity)
                             }
@@ -833,7 +843,8 @@ struct CronJobEditor: View {
 
     private func hydrateFromJob() {
         guard let job else { return }
-        self.name = job.name ?? ""
+        self.name = job.name
+        self.description = job.description ?? ""
         self.enabled = job.enabled
         self.sessionTarget = job.sessionTarget
         self.wakeMode = job.wakeMode
@@ -881,6 +892,13 @@ struct CronJobEditor: View {
 
     private func buildPayload() throws -> [String: AnyCodable] {
         let name = self.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty {
+            throw NSError(
+                domain: "Cron",
+                code: 0,
+                userInfo: [NSLocalizedDescriptionKey: "Name is required."])
+        }
+        let description = self.description.trimmingCharacters(in: .whitespacesAndNewlines)
         let schedule: [String: Any]
         switch self.scheduleKind {
         case .at:
@@ -954,13 +972,14 @@ struct CronJobEditor: View {
         }
 
         var root: [String: Any] = [
+            "name": name,
             "enabled": self.enabled,
             "schedule": schedule,
             "sessionTarget": self.sessionTarget.rawValue,
             "wakeMode": self.wakeMode.rawValue,
             "payload": payload,
         ]
-        if !name.isEmpty { root["name"] = name }
+        if !description.isEmpty { root["description"] = description }
 
         if self.sessionTarget == .isolated {
             let trimmed = self.postPrefix.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1035,6 +1054,7 @@ struct CronSettings_Previews: PreviewProvider {
             CronJob(
                 id: "job-1",
                 name: "Daily summary",
+                description: nil,
                 enabled: true,
                 createdAtMs: 0,
                 updatedAtMs: 0,

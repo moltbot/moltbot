@@ -968,6 +968,7 @@ describe("gateway server", () => {
         id: "cron-add-log-1",
         method: "cron.add",
         params: {
+          name: "log test",
           enabled: true,
           schedule: { kind: "at", atMs },
           sessionTarget: "main",
@@ -1077,6 +1078,7 @@ describe("gateway server", () => {
         id: "cron-add-log-2",
         method: "cron.add",
         params: {
+          name: "log test (jobs.json)",
           enabled: true,
           schedule: { kind: "at", atMs },
           sessionTarget: "main",
@@ -1207,6 +1209,7 @@ describe("gateway server", () => {
           id: "cron-add-auto-1",
           method: "cron.add",
           params: {
+            name: "auto run test",
             enabled: true,
             schedule: { kind: "at", atMs },
             sessionTarget: "main",

@@ -412,7 +412,8 @@ export const CronJobStateSchema = Type.Object(
 export const CronJobSchema = Type.Object(
   {
     id: NonEmptyString,
-    name: Type.Optional(Type.String()),
+    name: NonEmptyString,
+    description: Type.Optional(Type.String()),
     enabled: Type.Boolean(),
     createdAtMs: Type.Integer({ minimum: 0 }),
     updatedAtMs: Type.Integer({ minimum: 0 }),
@@ -440,7 +441,8 @@ export const CronStatusParamsSchema = Type.Object(
 
 export const CronAddParamsSchema = Type.Object(
   {
-    name: Type.Optional(Type.String()),
+    name: NonEmptyString,
+    description: Type.Optional(Type.String()),
     enabled: Type.Optional(Type.Boolean()),
     schedule: CronScheduleSchema,
     sessionTarget: Type.Union([Type.Literal("main"), Type.Literal("isolated")]),

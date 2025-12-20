@@ -61,6 +61,7 @@ struct CronModelsTests {
         let base = CronJob(
             id: "x",
             name: "  hello  ",
+            description: nil,
             enabled: true,
             createdAtMs: 0,
             updatedAtMs: 0,
@@ -81,6 +82,7 @@ struct CronModelsTests {
         let job = CronJob(
             id: "x",
             name: "t",
+            description: nil,
             enabled: true,
             createdAtMs: 0,
             updatedAtMs: 0,

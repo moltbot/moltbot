@@ -34,7 +34,8 @@ export type CronJobState = {
 
 export type CronJob = {
   id: string;
-  name?: string;
+  name: string;
+  description?: string;
   enabled: boolean;
   createdAtMs: number;
   updatedAtMs: number;

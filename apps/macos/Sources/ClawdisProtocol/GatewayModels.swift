@@ -672,7 +672,8 @@ public struct SkillsUpdateParams: Codable {
 
 public struct CronJob: Codable {
     public let id: String
-    public let name: String?
+    public let name: String
+    public let description: String?
     public let enabled: Bool
     public let createdatms: Int
     public let updatedatms: Int
@@ -685,7 +686,8 @@ public struct CronJob: Codable {
 
     public init(
         id: String,
-        name: String?,
+        name: String,
+        description: String?,
         enabled: Bool,
         createdatms: Int,
         updatedatms: Int,
@@ -698,6 +700,7 @@ public struct CronJob: Codable {
     ) {
         self.id = id
         self.name = name
+        self.description = description
         self.enabled = enabled
         self.createdatms = createdatms
         self.updatedatms = updatedatms
@@ -711,6 +714,7 @@ public struct CronJob: Codable {
     private enum CodingKeys: String, CodingKey {
         case id
         case name
+        case description
         case enabled
         case createdatms = "createdAtMs"
         case updatedatms = "updatedAtMs"
@@ -740,7 +744,8 @@ public struct CronStatusParams: Codable {
 }
 
 public struct CronAddParams: Codable {
-    public let name: String?
+    public let name: String
+    public let description: String?
     public let enabled: Bool?
     public let schedule: AnyCodable
     public let sessiontarget: AnyCodable
@@ -749,7 +754,8 @@ public struct CronAddParams: Codable {
     public let isolation: [String: AnyCodable]?
 
     public init(
-        name: String?,
+        name: String,
+        description: String?,
         enabled: Bool?,
         schedule: AnyCodable,
         sessiontarget: AnyCodable,
@@ -758,6 +764,7 @@ public struct CronAddParams: Codable {
         isolation: [String: AnyCodable]?
     ) {
         self.name = name
+        self.description = description
         self.enabled = enabled
         self.schedule = schedule
         self.sessiontarget = sessiontarget
@@ -767,6 +774,7 @@ public struct CronAddParams: Codable {
     }
     private enum CodingKeys: String, CodingKey {
         case name
+        case description
         case enabled
         case schedule
         case sessiontarget = "sessionTarget"

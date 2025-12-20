@@ -145,7 +145,8 @@ struct CronJobState: Codable, Equatable {
 
 struct CronJob: Identifiable, Codable, Equatable {
     let id: String
-    var name: String?
+    var name: String
+    var description: String?
     var enabled: Bool
     let createdAtMs: Int
     let updatedAtMs: Int
@@ -157,7 +158,7 @@ struct CronJob: Identifiable, Codable, Equatable {
     let state: CronJobState
 
     var displayName: String {
-        let trimmed = (self.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = self.name.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "Untitled job" : trimmed
     }
 

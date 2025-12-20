@@ -201,7 +201,7 @@ export async function runCronIsolatedAgentTurn(params: {
   });
 
   const base =
-    `[cron:${params.job.id}${params.job.name ? ` ${params.job.name}` : ""}] ${params.message}`.trim();
+    `[cron:${params.job.id} ${params.job.name}] ${params.message}`.trim();
 
   const commandBody = base;
 

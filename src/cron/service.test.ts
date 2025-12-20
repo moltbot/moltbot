@@ -54,6 +54,7 @@ describe("CronService", () => {
     await cron.start();
     const atMs = Date.parse("2025-12-13T00:00:02.000Z");
     const job = await cron.add({
+      name: "one-shot hello",
       enabled: true,
       schedule: { kind: "at", atMs },
       sessionTarget: "main",
@@ -139,6 +140,7 @@ describe("CronService", () => {
     await cron.start();
     const atMs = Date.parse("2025-12-13T00:00:01.000Z");
     await cron.add({
+      name: "isolated error test",
       enabled: true,
       schedule: { kind: "at", atMs },
       sessionTarget: "isolated",
@@ -174,6 +176,7 @@ describe("CronService", () => {
 
     await expect(
       cron.add({
+        name: "bad combo (main/agentTurn)",
         enabled: true,
         schedule: { kind: "every", everyMs: 1000 },
         sessionTarget: "main",
@@ -184,6 +187,7 @@ describe("CronService", () => {
 
     await expect(
       cron.add({
+        name: "bad combo (isolated/systemEvent)",
         enabled: true,
         schedule: { kind: "every", everyMs: 1000 },
         sessionTarget: "isolated",
@@ -265,6 +269,7 @@ describe("CronService", () => {
     await cron.start();
     const atMs = Date.parse("2025-12-13T00:00:01.000Z");
     await cron.add({
+      name: "empty systemEvent test",
       enabled: true,
       schedule: { kind: "at", atMs },
       sessionTarget: "main",
@@ -303,6 +308,7 @@ describe("CronService", () => {
     await cron.start();
     const atMs = Date.parse("2025-12-13T00:00:01.000Z");
     await cron.add({
+      name: "disabled cron job",
       enabled: true,
       schedule: { kind: "at", atMs },
       sessionTarget: "main",
@@ -342,6 +348,7 @@ describe("CronService", () => {
     await cron.start();
     const atMs = Date.parse("2025-12-13T00:00:05.000Z");
     await cron.add({
+      name: "status next wake",
       enabled: true,
       schedule: { kind: "at", atMs },
       sessionTarget: "main",
