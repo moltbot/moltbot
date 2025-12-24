@@ -170,8 +170,16 @@ export async function getReplyFromConfig(
 
   const defaultProvider = agentCfg?.provider?.trim() || DEFAULT_PROVIDER;
   const defaultModel = agentCfg?.model?.trim() || DEFAULT_MODEL;
-  let provider = defaultProvider;
-  let model = defaultModel;
+
+  // Use heartbeat-specific model/provider if configured and this is a heartbeat
+  const isHeartbeat = opts?.isHeartbeat === true;
+  let provider = isHeartbeat
+    ? (agentCfg?.heartbeatProvider?.trim() || defaultProvider)
+    : defaultProvider;
+  let model = isHeartbeat
+    ? (agentCfg?.heartbeatModel?.trim() || defaultModel)
+    : defaultModel;
+
   let contextTokens =
     agentCfg?.contextTokens ??
     lookupContextTokens(model) ??

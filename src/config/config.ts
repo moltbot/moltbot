@@ -264,6 +264,10 @@ export type ClawdisConfig = {
     typingIntervalSeconds?: number;
     /** Periodic background heartbeat runs (minutes). 0 disables. */
     heartbeatMinutes?: number;
+    /** Provider id for heartbeat runs (defaults to main provider). */
+    heartbeatProvider?: string;
+    /** Model id for heartbeat runs (defaults to main model). */
+    heartbeatModel?: string;
   };
   routing?: RoutingConfig;
   messages?: MessagesConfig;
@@ -449,6 +453,8 @@ const ClawdisSchema = z.object({
       mediaMaxMb: z.number().positive().optional(),
       typingIntervalSeconds: z.number().int().positive().optional(),
       heartbeatMinutes: z.number().nonnegative().optional(),
+      heartbeatProvider: z.string().optional(),
+      heartbeatModel: z.string().optional(),
     })
     .optional(),
   routing: RoutingSchema,
