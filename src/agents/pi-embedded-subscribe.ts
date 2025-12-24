@@ -14,6 +14,8 @@ import {
 } from "./pi-embedded-utils.js";
 
 const THINKING_TAG_RE = /<\s*\/?\s*think(?:ing)?\s*>/gi;
+const THINKING_OPEN_RE = /<\s*think(?:ing)?\s*>/i;
+const THINKING_CLOSE_RE = /<\s*\/\s*think(?:ing)?\s*>/i;
 
 function stripThinkingSegments(text: string): string {
   if (!text || !THINKING_TAG_RE.test(text)) return text;
@@ -36,6 +38,16 @@ function stripThinkingSegments(text: string): string {
   return result;
 }
 
+function stripUnpairedThinkingTags(text: string): string {
+  if (!text) return text;
+  const hasOpen = THINKING_OPEN_RE.test(text);
+  const hasClose = THINKING_CLOSE_RE.test(text);
+  if (hasOpen && hasClose) return text;
+  if (!hasOpen) return text.replace(THINKING_CLOSE_RE, "");
+  if (!hasClose) return text.replace(THINKING_OPEN_RE, "");
+  return text;
+}
+
 export function subscribeEmbeddedPiSession(params: {
   session: AgentSession;
   runId: string;
@@ -53,12 +65,34 @@ export function subscribeEmbeddedPiSession(params: {
     stream: string;
     data: Record<string, unknown>;
   }) => void;
+  enforceFinalTag?: boolean;
 }) {
   const assistantTexts: string[] = [];
   const toolMetas: Array<{ toolName?: string; meta?: string }> = [];
   const toolMetaById = new Map<string, string | undefined>();
   let deltaBuffer = "";
   let lastStreamedAssistant: string | undefined;
+  const FINAL_START_RE = /<\s*final\s*>/i;
+  const FINAL_END_RE = /<\s*\/\s*final\s*>/i;
+  // Local providers sometimes emit malformed tags; normalize before filtering.
+  const sanitizeFinalText = (text: string): string => {
+    if (!text) return text;
+    const hasStart = FINAL_START_RE.test(text);
+    const hasEnd = FINAL_END_RE.test(text);
+    if (hasStart && !hasEnd) return text.replace(FINAL_START_RE, "");
+    if (!hasStart && hasEnd) return text.replace(FINAL_END_RE, "");
+    return text;
+  };
+  const extractFinalText = (text: string): string | undefined => {
+    const cleaned = sanitizeFinalText(text);
+    const startMatch = FINAL_START_RE.exec(cleaned);
+    if (!startMatch) return undefined;
+    const startIndex = startMatch.index + startMatch[0].length;
+    const afterStart = cleaned.slice(startIndex);
+    const endMatch = FINAL_END_RE.exec(afterStart);
+    const endIndex = endMatch ? endMatch.index : afterStart.length;
+    return afterStart.slice(0, endIndex);
+  };
 
   const toolDebouncer = createToolDebouncer((toolName, metas) => {
     if (!params.onPartialReply) return;
@@ -182,7 +216,12 @@ export function subscribeEmbeddedPiSession(params: {
                   : "";
             if (chunk) {
               deltaBuffer += chunk;
-              const next = stripThinkingSegments(deltaBuffer).trim();
+              const cleaned = params.enforceFinalTag
+                ? stripThinkingSegments(stripUnpairedThinkingTags(deltaBuffer))
+                : stripThinkingSegments(deltaBuffer);
+              const next = params.enforceFinalTag
+                ? (extractFinalText(cleaned)?.trim() ?? cleaned.trim())
+                : cleaned.trim();
               if (next && next !== lastStreamedAssistant) {
                 lastStreamedAssistant = next;
                 const { text: cleanedText, mediaUrls } =
@@ -217,9 +256,19 @@ export function subscribeEmbeddedPiSession(params: {
       if (evt.type === "message_end") {
         const msg = (evt as AgentEvent & { message: AppMessage }).message;
         if (msg?.role === "assistant") {
-          const text = stripThinkingSegments(
-            extractAssistantText(msg as AssistantMessage),
-          );
+          const cleaned = params.enforceFinalTag
+            ? stripThinkingSegments(
+                stripUnpairedThinkingTags(
+                  extractAssistantText(msg as AssistantMessage),
+                ),
+              )
+            : stripThinkingSegments(
+                extractAssistantText(msg as AssistantMessage),
+              );
+          const text =
+            params.enforceFinalTag && cleaned
+              ? (extractFinalText(cleaned)?.trim() ?? cleaned)
+              : cleaned;
           if (text) assistantTexts.push(text);
           deltaBuffer = "";
         }

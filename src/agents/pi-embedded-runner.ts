@@ -270,6 +270,7 @@ export async function runEmbeddedPiAgent(params: {
   enqueue?: typeof enqueueCommand;
   extraSystemPrompt?: string;
   ownerNumbers?: string[];
+  enforceFinalTag?: boolean;
 }): Promise<EmbeddedPiRunResult> {
   const enqueue = params.enqueue ?? enqueueCommand;
   return enqueue(async () => {
@@ -333,8 +334,7 @@ export async function runEmbeddedPiAgent(params: {
         node: process.version,
         model: `${provider}/${modelId}`,
       };
-      const reasoningTagHint =
-        provider === "lmstudio" || provider === "ollama";
+      const reasoningTagHint = provider === "lmstudio" || provider === "ollama";
       const systemPrompt = buildSystemPrompt({
         appendPrompt: buildAgentSystemPromptAppend({
           workspaceDir: resolvedWorkspace,
@@ -403,6 +403,7 @@ export async function runEmbeddedPiAgent(params: {
         onToolResult: params.onToolResult,
         onPartialReply: params.onPartialReply,
         onAgentEvent: params.onAgentEvent,
+        enforceFinalTag: params.enforceFinalTag,
       });
 
       const abortTimer = setTimeout(
