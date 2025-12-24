@@ -213,6 +213,16 @@ private struct ChatMessageBody: View {
                         isUser: self.isUser)
                 }
             }
+
+            if !self.inlineToolResults.isEmpty {
+                ForEach(self.inlineToolResults.indices, id: \.self) { idx in
+                    let toolResult = self.inlineToolResults[idx]
+                    ToolResultCard(
+                        title: toolResult.name ?? "Tool result",
+                        text: toolResult.text ?? "",
+                        isUser: self.isUser)
+                }
+            }
         }
         .textSelection(.enabled)
         .padding(.vertical, 10)
@@ -227,7 +237,11 @@ private struct ChatMessageBody: View {
     }
 
     private var primaryText: String {
-        let parts = self.message.content.compactMap(\.text)
+        let parts = self.message.content.compactMap { content -> String? in
+            let kind = (content.type ?? "text").lowercased()
+            guard kind == "text" || kind.isEmpty else { return nil }
+            return content.text
+        }
         return parts.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -249,6 +263,13 @@ private struct ChatMessageBody: View {
                 return true
             }
             return content.name != nil && content.arguments != nil
+        }
+    }
+
+    private var inlineToolResults: [ClawdisChatMessageContent] {
+        self.message.content.filter { content in
+            let kind = (content.type ?? "").lowercased()
+            return kind == "toolresult" || kind == "tool_result"
         }
     }
 

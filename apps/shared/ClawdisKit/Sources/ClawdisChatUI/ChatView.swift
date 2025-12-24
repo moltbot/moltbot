@@ -133,9 +133,96 @@ public struct ClawdisChatView: View {
     }
 
     private var visibleMessages: [ClawdisChatMessage] {
-        guard self.style == .onboarding else { return self.viewModel.messages }
-        guard let first = self.viewModel.messages.first else { return [] }
-        guard first.role.lowercased() == "user" else { return self.viewModel.messages }
-        return Array(self.viewModel.messages.dropFirst())
+        let base: [ClawdisChatMessage]
+        if self.style == .onboarding {
+            guard let first = self.viewModel.messages.first else { return [] }
+            base = first.role.lowercased() == "user" ? Array(self.viewModel.messages.dropFirst()) : self.viewModel.messages
+        } else {
+            base = self.viewModel.messages
+        }
+        return self.mergeToolResults(in: base)
+    }
+
+    private func mergeToolResults(in messages: [ClawdisChatMessage]) -> [ClawdisChatMessage] {
+        var result: [ClawdisChatMessage] = []
+        result.reserveCapacity(messages.count)
+
+        for message in messages {
+            guard self.isToolResultMessage(message) else {
+                result.append(message)
+                continue
+            }
+
+            guard let toolCallId = message.toolCallId,
+                  let last = result.last,
+                  self.toolCallIds(in: last).contains(toolCallId)
+            else {
+                result.append(message)
+                continue
+            }
+
+            let toolText = self.toolResultText(from: message)
+            if toolText.isEmpty {
+                continue
+            }
+
+            var content = last.content
+            content.append(
+                ClawdisChatMessageContent(
+                    type: "tool_result",
+                    text: toolText,
+                    thinking: nil,
+                    thinkingSignature: nil,
+                    mimeType: nil,
+                    fileName: nil,
+                    content: nil,
+                    id: toolCallId,
+                    name: message.toolName,
+                    arguments: nil))
+
+            let merged = ClawdisChatMessage(
+                id: last.id,
+                role: last.role,
+                content: content,
+                timestamp: last.timestamp,
+                toolCallId: last.toolCallId,
+                toolName: last.toolName,
+                usage: last.usage,
+                stopReason: last.stopReason)
+            result[result.count - 1] = merged
+        }
+
+        return result
+    }
+
+    private func isToolResultMessage(_ message: ClawdisChatMessage) -> Bool {
+        let role = message.role.lowercased()
+        return role == "toolresult" || role == "tool_result"
+    }
+
+    private func toolCallIds(in message: ClawdisChatMessage) -> Set<String> {
+        var ids = Set<String>()
+        for content in message.content {
+            let kind = (content.type ?? "").lowercased()
+            let isTool =
+                ["toolcall", "tool_call", "tooluse", "tool_use"].contains(kind) ||
+                (content.name != nil && content.arguments != nil)
+            if isTool, let id = content.id {
+                ids.insert(id)
+            }
+        }
+        if let toolCallId = message.toolCallId {
+            ids.insert(toolCallId)
+        }
+        return ids
+    }
+
+    private func toolResultText(from message: ClawdisChatMessage) -> String {
+        let parts = message.content.compactMap { content -> String? in
+            let kind = (content.type ?? "text").lowercased()
+            guard kind == "text" || kind.isEmpty else { return nil }
+            return content.text
+        }
+        return parts.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
