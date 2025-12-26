@@ -67,6 +67,7 @@
 - OAuth storage moved; legacy session syncing metadata removed.
 - Remote SSH tunnels now get health checks; Debug → Ports highlights unhealthy tunnels and offers Reset SSH tunnel.
 - Menu bar session/node sections no longer reflow while open, keeping hover highlights aligned.
+- Menu hover highlights now span the full width (including submenu arrows).
 
 ### Nodes & Canvas
 - Debug status overlay gated and toggleable on macOS/iOS/Android nodes.
