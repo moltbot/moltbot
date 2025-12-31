@@ -138,6 +138,7 @@ import { runExec } from "../process/exec.js";
 import { monitorWebProvider, webAuthExists } from "../providers/web/index.js";
 import { defaultRuntime } from "../runtime.js";
 import { monitorTelegramProvider } from "../telegram/monitor.js";
+import { makeProxyFetch } from "../telegram/proxy.js";
 import { probeTelegram, type TelegramProbe } from "../telegram/probe.js";
 import { sendMessageTelegram } from "../telegram/send.js";
 import { normalizeE164, resolveUserPath } from "../utils.js";
@@ -1918,13 +1919,36 @@ export async function startGatewayServer(
       return;
     }
     let telegramBotLabel = "";
+    let proxyFetchOverride: typeof fetch | null | undefined;
+    const configuredProxy = cfg.telegram?.proxy?.trim();
     try {
-      const probe = await probeTelegram(
-        telegramToken.trim(),
-        2500,
-        cfg.telegram?.proxy,
-      );
-      const username = probe.ok ? probe.bot?.username?.trim() : null;
+      let probe: TelegramProbe | null = null;
+      let useProxy = Boolean(configuredProxy);
+      if (configuredProxy) {
+        probe = await probeTelegram(
+          telegramToken.trim(),
+          2500,
+          configuredProxy,
+        );
+        if (!probe.ok) {
+          const directProbe = await probeTelegram(telegramToken.trim(), 2500);
+          if (directProbe.ok) {
+            useProxy = false;
+            probe = directProbe;
+            logTelegram.warn(
+              "telegram proxy check failed; using direct Telegram API",
+            );
+          } else {
+            logTelegram.warn(
+              "telegram proxy check failed and direct probe failed; continuing with proxy",
+            );
+          }
+        }
+        proxyFetchOverride = useProxy ? makeProxyFetch(configuredProxy) : null;
+      } else {
+        probe = await probeTelegram(telegramToken.trim(), 2500);
+      }
+      const username = probe?.ok ? probe.bot?.username?.trim() : null;
       if (username) telegramBotLabel = ` (@${username})`;
     } catch (err) {
       if (isVerbose()) {
@@ -1948,6 +1972,7 @@ export async function startGatewayServer(
       webhookUrl: cfg.telegram?.webhookUrl,
       webhookSecret: cfg.telegram?.webhookSecret,
       webhookPath: cfg.telegram?.webhookPath,
+      proxyFetch: proxyFetchOverride,
     })
       .catch((err) => {
         telegramRuntime = {
