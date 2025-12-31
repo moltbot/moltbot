@@ -1,6 +1,7 @@
 import { loadConfig } from "../config/config.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { createTelegramBot } from "./bot.js";
+import type { LivenessProbeOptions } from "./liveness-probe.js";
 import { makeProxyFetch } from "./proxy.js";
 import { startTelegramWebhook } from "./webhook.js";
 
@@ -12,9 +13,9 @@ export type MonitorTelegramOpts = {
   webhookPath?: string;
   webhookPort?: number;
   webhookSecret?: string;
-  proxyFetch?: typeof fetch;
+  proxyFetch?: typeof fetch | null;
   webhookUrl?: string;
-  livenessProbe?: boolean;
+  livenessProbe?: boolean | Omit<LivenessProbeOptions, "bot">;
 };
 
 export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
@@ -25,17 +26,47 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
     );
   }
 
+  const cfg = loadConfig();
   const proxyFetch =
-    opts.proxyFetch ??
-    (loadConfig().telegram?.proxy
-      ? makeProxyFetch(loadConfig().telegram?.proxy as string)
-      : undefined);
+    opts.proxyFetch === null
+      ? undefined
+      : opts.proxyFetch ??
+        (cfg.telegram?.proxy
+          ? makeProxyFetch(cfg.telegram?.proxy as string)
+          : undefined);
+
+  const parseNumber = (value?: string) => {
+    if (!value) return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+  const livenessFromEnv: Omit<LivenessProbeOptions, "bot"> = {};
+  const envInterval = parseNumber(process.env.TELEGRAM_LIVENESS_INTERVAL);
+  const envTimeout = parseNumber(process.env.TELEGRAM_LIVENESS_TIMEOUT);
+  const envMaxFailures = parseNumber(process.env.TELEGRAM_LIVENESS_MAX_FAILURES);
+  if (envInterval) livenessFromEnv.intervalMs = envInterval;
+  if (envTimeout) livenessFromEnv.timeoutMs = envTimeout;
+  if (envMaxFailures) {
+    livenessFromEnv.maxConsecutiveFailures = envMaxFailures;
+  }
+  const livenessEnabled =
+    typeof opts.livenessProbe === "boolean"
+      ? opts.livenessProbe
+      : !opts.useWebhook;
+  const livenessOptions =
+    typeof opts.livenessProbe === "object"
+      ? opts.livenessProbe
+      : livenessFromEnv;
+  const livenessProbe =
+    livenessEnabled && Object.keys(livenessOptions).length
+      ? livenessOptions
+      : livenessEnabled;
 
   const bot = createTelegramBot({
     token,
     runtime: opts.runtime,
     proxyFetch,
-    livenessProbe: opts.livenessProbe ?? !opts.useWebhook, // Enable liveness probe for long-polling by default
+    livenessProbe,
   });
 
   if (opts.useWebhook) {

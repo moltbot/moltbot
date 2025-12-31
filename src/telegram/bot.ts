@@ -41,7 +41,7 @@ export type TelegramBotOptions = {
   allowFrom?: Array<string | number>;
   mediaMaxMb?: number;
   proxyFetch?: typeof fetch;
-  livenessProbe?: LivenessProbeOptions | boolean;
+  livenessProbe?: Omit<LivenessProbeOptions, "bot"> | boolean;
 };
 
 export function createTelegramBot(opts: TelegramBotOptions) {
@@ -209,7 +209,8 @@ export function createTelegramBot(opts: TelegramBotOptions) {
 
   // Start liveness probe if enabled
   if (opts.livenessProbe !== false) {
-    const livenessOpts = typeof opts.livenessProbe === 'object' ? opts.livenessProbe : {};
+    const livenessOpts =
+      typeof opts.livenessProbe === "object" ? opts.livenessProbe : {};
     startLivenessProbe({ bot, ...livenessOpts });
   }
 
