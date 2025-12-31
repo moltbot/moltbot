@@ -31,6 +31,53 @@ trap "rm -f $LOCK_FILE" EXIT
 # Ensure log directory exists
 mkdir -p "$LOG_DIR"
 
+load_env() {
+    set +u
+    if [ -f "/home/almaz/zoo_flow/clawdis/.env" ]; then
+        set -a
+        source /home/almaz/zoo_flow/clawdis/.env
+        set +a
+    fi
+    if [ -f "/home/almaz/.clawdis/secrets.env" ]; then
+        set -a
+        source /home/almaz/.clawdis/secrets.env
+        set +a
+    fi
+    set -u
+}
+
+get_telegram_proxy() {
+    local proxy=""
+    if command -v python3 >/dev/null 2>&1; then
+        proxy=$(python3 - <<'PY' 2>/dev/null
+import json, os, sys
+path = os.path.expanduser("~/.clawdis/clawdis.json")
+try:
+    with open(path, "r", encoding="utf-8") as f:
+        cfg = json.load(f)
+    proxy = cfg.get("telegram", {}).get("proxy") or ""
+    if isinstance(proxy, str):
+        sys.stdout.write(proxy)
+except Exception:
+    pass
+PY
+)
+    elif command -v node >/dev/null 2>&1; then
+        proxy=$(node - <<'NODE' 2>/dev/null
+const fs = require("fs");
+const path = require("path");
+try {
+  const cfgPath = path.join(process.env.HOME || "", ".clawdis", "clawdis.json");
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
+  const proxy = (cfg.telegram && cfg.telegram.proxy) || "";
+  if (typeof proxy === "string") process.stdout.write(proxy);
+} catch {}
+NODE
+)
+    fi
+    echo "$proxy"
+}
+
 # Log rotation
 rotate_logs() {
     for logfile in "$LOG_DIR"/*.log; do
@@ -51,9 +98,16 @@ rotate_logs() {
 
 # Health check
 check_health() {
-    if "$SCRIPT_DIR/health-check.sh" > /dev/null 2>&1; then
+    local output=""
+    output=$("$SCRIPT_DIR/health-check.sh" --json 2>/dev/null || true)
+    if echo "$output" | grep -q '"healthy": true'; then
         return 0
     else
+        if [ -n "$output" ]; then
+            log "Health details: $(echo "$output" | tr '\n' ' ')"
+        else
+            log "Health details: (no output from health-check)"
+        fi
         return 1
     fi
 }
@@ -76,14 +130,21 @@ check_network() {
 
 # Check Telegram API health
 check_telegram() {
-    source /home/almaz/zoo_flow/clawdis/.env 2>/dev/null || return 1
+    load_env
 
     if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
         return 1
     fi
 
+    local proxy
+    local -a proxy_args=()
+    proxy=$(get_telegram_proxy)
+    if [ -n "$proxy" ]; then
+        proxy_args=(--proxy "$proxy")
+    fi
+
     # Check pending updates
-    pending=$(curl -s --max-time 10 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo" 2>/dev/null | grep -o '"pending_update_count":[0-9]*' | cut -d: -f2)
+    pending=$(curl -s --max-time 10 "${proxy_args[@]}" "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo" 2>/dev/null | grep -o '"pending_update_count":[0-9]*' | cut -d: -f2)
 
     if [ "${pending:-0}" -gt 10 ]; then
         log "WARNING: $pending pending Telegram updates - bot may be stuck"
