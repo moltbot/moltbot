@@ -147,6 +147,10 @@ fi
 echo "🖼  Copying app icon"
 cp "$ROOT_DIR/apps/macos/Sources/Clawdis/Resources/Clawdis.icns" "$APP_ROOT/Contents/Resources/Clawdis.icns"
 
+echo "📦 Copying device model resources"
+rm -rf "$APP_ROOT/Contents/Resources/DeviceModels"
+cp -R "$ROOT_DIR/apps/macos/Sources/Clawdis/Resources/DeviceModels" "$APP_ROOT/Contents/Resources/DeviceModels"
+
 RELAY_DIR="$APP_ROOT/Contents/Resources/Relay"
 
 if [[ "${SKIP_GATEWAY_PACKAGE:-0}" != "1" ]]; then
