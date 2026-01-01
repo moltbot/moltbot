@@ -50,7 +50,10 @@ function parseTarget(raw: string): SignalTarget {
     value = value.slice("signal:".length).trim();
   }
   if (lower.startsWith("username:")) {
-    return { type: "username", username: value.slice("username:".length).trim() };
+    return {
+      type: "username",
+      username: value.slice("username:".length).trim(),
+    };
   }
   if (lower.startsWith("u:")) {
     return { type: "username", username: value.trim() };

@@ -1,15 +1,15 @@
+import { chunkText } from "../auto-reply/chunk.js";
 import { formatAgentEnvelope } from "../auto-reply/envelope.js";
 import { getReplyFromConfig } from "../auto-reply/reply.js";
 import type { ReplyPayload } from "../auto-reply/types.js";
 import { loadConfig } from "../config/config.js";
 import { resolveStorePath, updateLastRoute } from "../config/sessions.js";
-import { chunkText } from "../auto-reply/chunk.js";
 import { danger, isVerbose, logVerbose } from "../globals.js";
 import { mediaKindFromMime } from "../media/constants.js";
 import { saveMediaBuffer } from "../media/store.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { normalizeE164 } from "../utils.js";
-import { signalRpcRequest, streamSignalEvents } from "./client.js";
+import { signalCheck, signalRpcRequest, streamSignalEvents } from "./client.js";
 import { spawnSignalDaemon } from "./daemon.js";
 import { sendMessageSignal } from "./send.js";
 
@@ -93,10 +93,7 @@ function resolveAccount(opts: MonitorSignalOpts): string | undefined {
 function resolveAllowFrom(opts: MonitorSignalOpts): string[] {
   const cfg = loadConfig();
   const raw =
-    opts.allowFrom ??
-    cfg.signal?.allowFrom ??
-    cfg.routing?.allowFrom ??
-    [];
+    opts.allowFrom ?? cfg.signal?.allowFrom ?? cfg.routing?.allowFrom ?? [];
   return raw.map((entry) => String(entry).trim()).filter(Boolean);
 }
 
@@ -108,6 +105,32 @@ function isAllowedSender(sender: string, allowFrom: string[]): boolean {
     .map((entry) => normalizeE164(entry));
   const normalizedSender = normalizeE164(sender);
   return normalizedAllow.includes(normalizedSender);
+}
+
+async function waitForSignalDaemonReady(params: {
+  baseUrl: string;
+  abortSignal?: AbortSignal;
+  timeoutMs: number;
+  runtime: RuntimeEnv;
+}): Promise<void> {
+  const started = Date.now();
+  let lastError: string | null = null;
+
+  while (Date.now() - started < params.timeoutMs) {
+    if (params.abortSignal?.aborted) return;
+    const res = await signalCheck(params.baseUrl, 1000);
+    if (res.ok) return;
+    lastError =
+      res.error ?? (res.status ? `HTTP ${res.status}` : "unreachable");
+    await new Promise((r) => setTimeout(r, 150));
+  }
+
+  params.runtime.error?.(
+    danger(
+      `signal: daemon not ready after ${params.timeoutMs}ms (${lastError ?? "unknown error"})`,
+    ),
+  );
+  throw new Error(`signal daemon not ready (${lastError ?? "unknown error"})`);
 }
 
 async function fetchAttachment(params: {
@@ -202,9 +225,7 @@ export async function monitorSignalProvider(
     opts.ignoreAttachments ?? cfg.signal?.ignoreAttachments ?? false;
 
   const autoStart =
-    opts.autoStart ??
-    cfg.signal?.autoStart ??
-    (cfg.signal?.httpUrl ? false : true);
+    opts.autoStart ?? cfg.signal?.autoStart ?? !cfg.signal?.httpUrl;
   let daemonHandle: ReturnType<typeof spawnSignalDaemon> | null = null;
 
   if (autoStart) {
@@ -220,8 +241,7 @@ export async function monitorSignalProvider(
       ignoreAttachments:
         opts.ignoreAttachments ?? cfg.signal?.ignoreAttachments,
       ignoreStories: opts.ignoreStories ?? cfg.signal?.ignoreStories,
-      sendReadReceipts:
-        opts.sendReadReceipts ?? cfg.signal?.sendReadReceipts,
+      sendReadReceipts: opts.sendReadReceipts ?? cfg.signal?.sendReadReceipts,
       runtime,
     });
   }
@@ -232,6 +252,15 @@ export async function monitorSignalProvider(
   opts.abortSignal?.addEventListener("abort", onAbort, { once: true });
 
   try {
+    if (daemonHandle) {
+      await waitForSignalDaemonReady({
+        baseUrl,
+        abortSignal: opts.abortSignal,
+        timeoutMs: 10_000,
+        runtime,
+      });
+    }
+
     const handleEvent = async (event: { event?: string; data?: string }) => {
       if (event.event !== "receive" || !event.data) return;
       let payload: SignalReceivePayload | null = null;
@@ -242,7 +271,9 @@ export async function monitorSignalProvider(
         return;
       }
       if (payload?.exception?.message) {
-        runtime.error?.(`signal: receive exception: ${payload.exception.message}`);
+        runtime.error?.(
+          `signal: receive exception: ${payload.exception.message}`,
+        );
       }
       const envelope = payload?.envelope;
       if (!envelope) return;
@@ -282,7 +313,8 @@ export async function monitorSignalProvider(
           });
           if (fetched) {
             mediaPath = fetched.path;
-            mediaType = fetched.contentType ?? firstAttachment.contentType ?? undefined;
+            mediaType =
+              fetched.contentType ?? firstAttachment.contentType ?? undefined;
           }
         } catch (err) {
           runtime.error?.(
@@ -317,7 +349,7 @@ export async function monitorSignalProvider(
         From: isGroup ? `group:${groupId}` : `signal:${sender}`,
         To: isGroup ? `group:${groupId}` : `signal:${sender}`,
         ChatType: isGroup ? "group" : "direct",
-        GroupSubject: isGroup ? groupName ?? undefined : undefined,
+        GroupSubject: isGroup ? (groupName ?? undefined) : undefined,
         SenderName: envelope.sourceName ?? sender,
         Surface: "signal" as const,
         MessageSid: envelope.timestamp ? String(envelope.timestamp) : undefined,

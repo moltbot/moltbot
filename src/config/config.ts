@@ -456,7 +456,6 @@ export type ClawdisConfig = {
   canvasHost?: CanvasHostConfig;
   talk?: TalkConfig;
   gateway?: GatewayConfig;
-  skills?: SkillsConfig;
 };
 
 /**
@@ -851,7 +850,9 @@ const ClawdisSchema = z.object({
       httpPort: z.number().int().positive().optional(),
       cliPath: z.string().optional(),
       autoStart: z.boolean().optional(),
-      receiveMode: z.union([z.literal("on-start"), z.literal("manual")]).optional(),
+      receiveMode: z
+        .union([z.literal("on-start"), z.literal("manual")])
+        .optional(),
       ignoreAttachments: z.boolean().optional(),
       ignoreStories: z.boolean().optional(),
       sendReadReceipts: z.boolean().optional(),
@@ -948,16 +949,18 @@ const ClawdisSchema = z.object({
             .optional(),
         })
         .optional(),
-      entries: z.record(
-        z.string(),
-        z
-          .object({
-            enabled: z.boolean().optional(),
-            apiKey: z.string().optional(),
-            env: z.record(z.string(), z.string()).optional(),
-          })
-          .passthrough(),
-      ).optional(),
+      entries: z
+        .record(
+          z.string(),
+          z
+            .object({
+              enabled: z.boolean().optional(),
+              apiKey: z.string().optional(),
+              env: z.record(z.string(), z.string()).optional(),
+            })
+            .passthrough(),
+        )
+        .optional(),
     })
     .optional(),
 });
