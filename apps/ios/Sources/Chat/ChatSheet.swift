@@ -17,7 +17,10 @@ struct ChatSheet: View {
 
     var body: some View {
         NavigationStack {
-            ClawdisChatView(viewModel: self.viewModel, userAccent: self.userAccent)
+            ClawdisChatView(
+                viewModel: self.viewModel,
+                showsSessionSwitcher: true,
+                userAccent: self.userAccent)
                 .navigationTitle("Chat")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {

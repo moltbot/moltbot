@@ -99,6 +99,42 @@ public final class ClawdisChatViewModel {
         Task { await self.performSwitchSession(to: sessionKey) }
     }
 
+    public var sessionChoices: [ClawdisChatSessionEntry] {
+        let now = Date().timeIntervalSince1970 * 1000
+        let cutoff = now - (24 * 60 * 60 * 1000)
+        let sorted = self.sessions.sorted { ($0.updatedAt ?? 0) > ($1.updatedAt ?? 0) }
+        var seen = Set<String>()
+        var recent: [ClawdisChatSessionEntry] = []
+        for entry in sorted {
+            guard !seen.contains(entry.key) else { continue }
+            seen.insert(entry.key)
+            guard (entry.updatedAt ?? 0) >= cutoff else { continue }
+            recent.append(entry)
+        }
+
+        let mainKey = "main"
+        var result: [ClawdisChatSessionEntry] = []
+        var included = Set<String>()
+        if let main = sorted.first(where: { $0.key == mainKey }) {
+            result.append(main)
+            included.insert(mainKey)
+        } else if self.sessionKey == mainKey {
+            result.append(self.placeholderSession(key: mainKey))
+            included.insert(mainKey)
+        }
+
+        for entry in recent where !included.contains(entry.key) {
+            result.append(entry)
+            included.insert(entry.key)
+        }
+
+        if !included.contains(self.sessionKey) {
+            result.append(self.placeholderSession(key: self.sessionKey))
+        }
+
+        return result
+    }
+
     public func addAttachments(urls: [URL]) {
         Task { await self.loadAttachments(urls: urls) }
     }
@@ -299,6 +335,23 @@ public final class ClawdisChatViewModel {
         guard next != self.sessionKey else { return }
         self.sessionKey = next
         await self.bootstrap()
+    }
+
+    private func placeholderSession(key: String) -> ClawdisChatSessionEntry {
+        ClawdisChatSessionEntry(
+            key: key,
+            kind: nil,
+            updatedAt: nil,
+            sessionId: nil,
+            systemSent: nil,
+            abortedLastRun: nil,
+            thinkingLevel: nil,
+            verboseLevel: nil,
+            inputTokens: nil,
+            outputTokens: nil,
+            totalTokens: nil,
+            model: nil,
+            contextTokens: nil)
     }
 
     private func handleTransportEvent(_ evt: ClawdisChatTransportEvent) {

@@ -363,7 +363,7 @@ export class ClawdisApp extends LitElement {
     if (this.tab === "skills") await loadSkills(this);
     if (this.tab === "nodes") await loadNodes(this);
     if (this.tab === "chat") {
-      await loadChatHistory(this);
+      await Promise.all([loadChatHistory(this), loadSessions(this)]);
       this.scheduleChatScroll();
     }
     if (this.tab === "config") await loadConfig(this);

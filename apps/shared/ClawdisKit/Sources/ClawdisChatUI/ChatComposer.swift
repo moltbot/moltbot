@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 struct ClawdisChatComposer: View {
     @Bindable var viewModel: ClawdisChatViewModel
     let style: ClawdisChatView.Style
+    let showsSessionSwitcher: Bool
 
     #if !os(macOS)
     @State private var pickerItems: [PhotosPickerItem] = []
@@ -23,6 +24,9 @@ struct ClawdisChatComposer: View {
         VStack(alignment: .leading, spacing: 4) {
             if self.showsToolbar {
                 HStack(spacing: 6) {
+                    if self.showsSessionSwitcher {
+                        self.sessionPicker
+                    }
                     self.thinkingPicker
                     Spacer()
                     self.refreshButton
@@ -89,6 +93,26 @@ struct ClawdisChatComposer: View {
         .pickerStyle(.menu)
         .controlSize(.small)
         .frame(maxWidth: 140, alignment: .leading)
+    }
+
+    private var sessionPicker: some View {
+        Picker(
+            "Session",
+            selection: Binding(
+                get: { self.viewModel.sessionKey },
+                set: { next in self.viewModel.switchSession(to: next) }))
+        {
+            ForEach(self.viewModel.sessionChoices, id: \.key) { session in
+                Text(session.key)
+                    .font(.system(.caption, design: .monospaced))
+                    .tag(session.key)
+            }
+        }
+        .labelsHidden()
+        .pickerStyle(.menu)
+        .controlSize(.small)
+        .frame(maxWidth: 160, alignment: .leading)
+        .help("Session")
     }
 
     @ViewBuilder

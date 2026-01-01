@@ -15,6 +15,7 @@
 - Nix mode: opt-in declarative config + read-only settings UI when `CLAWDIS_NIX_MODE=1` (thanks @joshp123 for the persistence — earned my trust; I'll merge these going forward).
 - Agent runtime: accept legacy `Z_AI_API_KEY` for Z.AI provider auth (maps to `ZAI_API_KEY`).
 - Signal: add `signal-cli` JSON-RPC support for send/receive via the Signal provider.
+- Chat UI: add recent-session dropdown switcher (main first) in macOS/iOS/Android + Control UI.
 - Tests: add a Z.AI live test gate for smoke validation when keys are present.
 - macOS Debug: add app log verbosity and rolling file log toggle for swift-log-backed app logs.
 - CLI: add onboarding wizard (gateway + workspace + skills) with daemon installers and Anthropic/Minimax setup paths.

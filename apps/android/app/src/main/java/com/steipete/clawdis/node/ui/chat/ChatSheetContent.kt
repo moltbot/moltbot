@@ -14,10 +14,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -40,10 +38,9 @@ fun ChatSheetContent(viewModel: MainViewModel) {
   val pendingToolCalls by viewModel.chatPendingToolCalls.collectAsState()
   val sessions by viewModel.chatSessions.collectAsState()
 
-  var showSessions by remember { mutableStateOf(false) }
-
   LaunchedEffect(Unit) {
     viewModel.loadChat("main")
+    viewModel.refreshChatSessions(limit = 200)
   }
 
   val context = LocalContext.current
@@ -87,6 +84,7 @@ fun ChatSheetContent(viewModel: MainViewModel) {
 
     ChatComposer(
       sessionKey = sessionKey,
+      sessions = sessions,
       healthOk = healthOk,
       thinkingLevel = thinkingLevel,
       pendingRunCount = pendingRunCount,
@@ -95,8 +93,11 @@ fun ChatSheetContent(viewModel: MainViewModel) {
       onPickImages = { pickImages.launch("image/*") },
       onRemoveAttachment = { id -> attachments.removeAll { it.id == id } },
       onSetThinkingLevel = { level -> viewModel.setChatThinkingLevel(level) },
-      onShowSessions = { showSessions = true },
-      onRefresh = { viewModel.refreshChat() },
+      onSelectSession = { key -> viewModel.switchChatSession(key) },
+      onRefresh = {
+        viewModel.refreshChat()
+        viewModel.refreshChatSessions(limit = 200)
+      },
       onAbort = { viewModel.abortChat() },
       onSend = { text ->
         val outgoing =
@@ -110,19 +111,6 @@ fun ChatSheetContent(viewModel: MainViewModel) {
           }
         viewModel.sendChat(message = text, thinking = thinkingLevel, attachments = outgoing)
         attachments.clear()
-      },
-    )
-  }
-
-  if (showSessions) {
-    ChatSessionsDialog(
-      currentSessionKey = sessionKey,
-      sessions = sessions,
-      onDismiss = { showSessions = false },
-      onRefresh = { viewModel.refreshChatSessions(limit = 50) },
-      onSelect = { key ->
-        viewModel.switchChatSession(key)
-        showSessions = false
       },
     )
   }

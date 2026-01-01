@@ -26,6 +26,7 @@ private func waitUntil(
 
 private actor TestChatTransportState {
     var historyCallCount: Int = 0
+    var sessionsCallCount: Int = 0
     var sentRunIds: [String] = []
     var abortedRunIds: [String] = []
 }
@@ -33,12 +34,17 @@ private actor TestChatTransportState {
 private final class TestChatTransport: @unchecked Sendable, ClawdisChatTransport {
     private let state = TestChatTransportState()
     private let historyResponses: [ClawdisChatHistoryPayload]
+    private let sessionsResponses: [ClawdisChatSessionsListResponse]
 
     private let stream: AsyncStream<ClawdisChatTransportEvent>
     private let continuation: AsyncStream<ClawdisChatTransportEvent>.Continuation
 
-    init(historyResponses: [ClawdisChatHistoryPayload]) {
+    init(
+        historyResponses: [ClawdisChatHistoryPayload],
+        sessionsResponses: [ClawdisChatSessionsListResponse] = [])
+    {
         self.historyResponses = historyResponses
+        self.sessionsResponses = sessionsResponses
         var cont: AsyncStream<ClawdisChatTransportEvent>.Continuation!
         self.stream = AsyncStream { c in
             cont = c
@@ -81,7 +87,17 @@ private final class TestChatTransport: @unchecked Sendable, ClawdisChatTransport
     }
 
     func listSessions(limit _: Int?) async throws -> ClawdisChatSessionsListResponse {
-        ClawdisChatSessionsListResponse(ts: nil, path: nil, count: 0, defaults: nil, sessions: [])
+        let idx = await self.state.sessionsCallCount
+        await self.state.setSessionsCallCount(idx + 1)
+        if idx < self.sessionsResponses.count {
+            return self.sessionsResponses[idx]
+        }
+        return self.sessionsResponses.last ?? ClawdisChatSessionsListResponse(
+            ts: nil,
+            path: nil,
+            count: 0,
+            defaults: nil,
+            sessions: [])
     }
 
     func requestHealth(timeoutMs _: Int) async throws -> Bool {
@@ -105,6 +121,10 @@ private final class TestChatTransport: @unchecked Sendable, ClawdisChatTransport
 private extension TestChatTransportState {
     func setHistoryCallCount(_ v: Int) {
         self.historyCallCount = v
+    }
+
+    func setSessionsCallCount(_ v: Int) {
+        self.sessionsCallCount = v
     }
 
     func sentRunIdsAppend(_ v: String) {
@@ -241,6 +261,132 @@ private extension TestChatTransportState {
 
         try await waitUntil("streaming cleared") { await MainActor.run { vm.streamingAssistantText == nil } }
         #expect(await MainActor.run { vm.pendingToolCalls.isEmpty })
+    }
+
+    @Test func sessionChoicesPreferMainAndRecent() async throws {
+        let now = Date().timeIntervalSince1970 * 1000
+        let recent = now - (2 * 60 * 60 * 1000)
+        let recentOlder = now - (5 * 60 * 60 * 1000)
+        let stale = now - (26 * 60 * 60 * 1000)
+        let history = ClawdisChatHistoryPayload(
+            sessionKey: "main",
+            sessionId: "sess-main",
+            messages: [],
+            thinkingLevel: "off")
+        let sessions = ClawdisChatSessionsListResponse(
+            ts: now,
+            path: nil,
+            count: 4,
+            defaults: nil,
+            sessions: [
+                ClawdisChatSessionEntry(
+                    key: "recent-1",
+                    kind: nil,
+                    updatedAt: recent,
+                    sessionId: nil,
+                    systemSent: nil,
+                    abortedLastRun: nil,
+                    thinkingLevel: nil,
+                    verboseLevel: nil,
+                    inputTokens: nil,
+                    outputTokens: nil,
+                    totalTokens: nil,
+                    model: nil,
+                    contextTokens: nil),
+                ClawdisChatSessionEntry(
+                    key: "main",
+                    kind: nil,
+                    updatedAt: stale,
+                    sessionId: nil,
+                    systemSent: nil,
+                    abortedLastRun: nil,
+                    thinkingLevel: nil,
+                    verboseLevel: nil,
+                    inputTokens: nil,
+                    outputTokens: nil,
+                    totalTokens: nil,
+                    model: nil,
+                    contextTokens: nil),
+                ClawdisChatSessionEntry(
+                    key: "recent-2",
+                    kind: nil,
+                    updatedAt: recentOlder,
+                    sessionId: nil,
+                    systemSent: nil,
+                    abortedLastRun: nil,
+                    thinkingLevel: nil,
+                    verboseLevel: nil,
+                    inputTokens: nil,
+                    outputTokens: nil,
+                    totalTokens: nil,
+                    model: nil,
+                    contextTokens: nil),
+                ClawdisChatSessionEntry(
+                    key: "old-1",
+                    kind: nil,
+                    updatedAt: stale,
+                    sessionId: nil,
+                    systemSent: nil,
+                    abortedLastRun: nil,
+                    thinkingLevel: nil,
+                    verboseLevel: nil,
+                    inputTokens: nil,
+                    outputTokens: nil,
+                    totalTokens: nil,
+                    model: nil,
+                    contextTokens: nil),
+            ])
+
+        let transport = TestChatTransport(
+            historyResponses: [history],
+            sessionsResponses: [sessions])
+        let vm = await MainActor.run { ClawdisChatViewModel(sessionKey: "main", transport: transport) }
+        await MainActor.run { vm.load() }
+        try await waitUntil("sessions loaded") { await MainActor.run { !vm.sessions.isEmpty } }
+
+        let keys = await MainActor.run { vm.sessionChoices.map(\.key) }
+        #expect(keys == ["main", "recent-1", "recent-2"])
+    }
+
+    @Test func sessionChoicesIncludeCurrentWhenMissing() async throws {
+        let now = Date().timeIntervalSince1970 * 1000
+        let recent = now - (30 * 60 * 1000)
+        let history = ClawdisChatHistoryPayload(
+            sessionKey: "custom",
+            sessionId: "sess-custom",
+            messages: [],
+            thinkingLevel: "off")
+        let sessions = ClawdisChatSessionsListResponse(
+            ts: now,
+            path: nil,
+            count: 1,
+            defaults: nil,
+            sessions: [
+                ClawdisChatSessionEntry(
+                    key: "main",
+                    kind: nil,
+                    updatedAt: recent,
+                    sessionId: nil,
+                    systemSent: nil,
+                    abortedLastRun: nil,
+                    thinkingLevel: nil,
+                    verboseLevel: nil,
+                    inputTokens: nil,
+                    outputTokens: nil,
+                    totalTokens: nil,
+                    model: nil,
+                    contextTokens: nil),
+            ])
+
+        let transport = TestChatTransport(
+            historyResponses: [history],
+            sessionsResponses: [sessions])
+        let vm = await MainActor.run { ClawdisChatViewModel(sessionKey: "custom", transport: transport) }
+        await MainActor.run { vm.load() }
+        try await waitUntil("sessions loaded") { await MainActor.run { !vm.sessions.isEmpty } }
+
+        let keys = await MainActor.run { vm.sessionChoices.map(\.key) }
+        #expect(keys == ["main", "custom"])
     }
 
     @Test func clearsStreamingOnExternalErrorEvent() async throws {

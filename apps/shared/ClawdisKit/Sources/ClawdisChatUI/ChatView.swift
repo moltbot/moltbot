@@ -58,7 +58,10 @@ public struct ClawdisChatView: View {
             VStack(spacing: Layout.stackSpacing) {
                 self.messageList
                     .padding(.horizontal, Layout.outerPaddingHorizontal)
-                ClawdisChatComposer(viewModel: self.viewModel, style: self.style)
+                ClawdisChatComposer(
+                    viewModel: self.viewModel,
+                    style: self.style,
+                    showsSessionSwitcher: self.showsSessionSwitcher)
                     .padding(.horizontal, Layout.composerPaddingHorizontal)
             }
             .padding(.vertical, Layout.outerPaddingVertical)

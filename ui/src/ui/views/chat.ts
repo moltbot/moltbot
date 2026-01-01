@@ -1,5 +1,7 @@
 import { html, nothing } from "lit";
 
+import type { SessionsListResult } from "../types";
+
 export type ChatProps = {
   sessionKey: string;
   onSessionKeyChange: (next: string) => void;
@@ -12,6 +14,7 @@ export type ChatProps = {
   connected: boolean;
   canSend: boolean;
   disabledReason: string | null;
+  sessions: SessionsListResult | null;
   onRefresh: () => void;
   onDraftChange: (next: string) => void;
   onSend: () => void;
@@ -20,6 +23,7 @@ export type ChatProps = {
 export function renderChat(props: ChatProps) {
   const canInteract = props.connected;
   const canCompose = props.canSend && !props.sending;
+  const sessionOptions = resolveSessionOptions(props.sessionKey, props.sessions);
   const composePlaceholder = (() => {
     if (!props.connected) return "Connect to the gateway to start chatting…";
     if (!props.canSend) return "Connect an iOS/Android node to enable Web Chat + Talk…";
@@ -32,12 +36,16 @@ export function renderChat(props: ChatProps) {
         <div class="chat-header__left">
           <label class="field chat-session">
             <span>Session Key</span>
-            <input
+            <select
               .value=${props.sessionKey}
               ?disabled=${!canInteract}
-              @input=${(e: Event) =>
-                props.onSessionKeyChange((e.target as HTMLInputElement).value)}
-            />
+              @change=${(e: Event) =>
+                props.onSessionKeyChange((e.target as HTMLSelectElement).value)}
+            >
+              ${sessionOptions.map(
+                (entry) => html`<option value=${entry.key}>${entry.key}</option>`,
+              )}
+            </select>
           </label>
           <button
             class="btn"
@@ -102,6 +110,55 @@ export function renderChat(props: ChatProps) {
       </div>
     </section>
   `;
+}
+
+type SessionOption = {
+  key: string;
+  updatedAt?: number | null;
+};
+
+function resolveSessionOptions(
+  currentKey: string,
+  sessions: SessionsListResult | null,
+) {
+  const now = Date.now();
+  const cutoff = now - 24 * 60 * 60 * 1000;
+  const entries = Array.isArray(sessions?.sessions) ? sessions?.sessions ?? [] : [];
+  const sorted = [...entries].sort(
+    (a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0),
+  );
+  const recent: SessionOption[] = [];
+  const seen = new Set<string>();
+  for (const entry of sorted) {
+    if (seen.has(entry.key)) continue;
+    seen.add(entry.key);
+    if ((entry.updatedAt ?? 0) < cutoff) continue;
+    recent.push(entry);
+  }
+
+  const result: SessionOption[] = [];
+  const included = new Set<string>();
+  const mainKey = "main";
+  const mainEntry = sorted.find((entry) => entry.key === mainKey);
+  if (mainEntry) {
+    result.push(mainEntry);
+    included.add(mainKey);
+  } else if (currentKey === mainKey) {
+    result.push({ key: mainKey, updatedAt: null });
+    included.add(mainKey);
+  }
+
+  for (const entry of recent) {
+    if (included.has(entry.key)) continue;
+    result.push(entry);
+    included.add(entry.key);
+  }
+
+  if (!included.has(currentKey)) {
+    result.push({ key: currentKey, updatedAt: null });
+  }
+
+  return result;
 }
 
 function renderMessage(message: unknown, opts?: { streaming?: boolean }) {

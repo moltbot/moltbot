@@ -15,7 +15,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.ButtonDefaults
@@ -39,10 +38,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.steipete.clawdis.node.chat.ChatSessionEntry
 
 @Composable
 fun ChatComposer(
   sessionKey: String,
+  sessions: List<ChatSessionEntry>,
   healthOk: Boolean,
   thinkingLevel: String,
   pendingRunCount: Int,
@@ -51,13 +52,16 @@ fun ChatComposer(
   onPickImages: () -> Unit,
   onRemoveAttachment: (id: String) -> Unit,
   onSetThinkingLevel: (level: String) -> Unit,
-  onShowSessions: () -> Unit,
+  onSelectSession: (sessionKey: String) -> Unit,
   onRefresh: () -> Unit,
   onAbort: () -> Unit,
   onSend: (text: String) -> Unit,
 ) {
   var input by rememberSaveable { mutableStateOf("") }
   var showThinkingMenu by remember { mutableStateOf(false) }
+  var showSessionMenu by remember { mutableStateOf(false) }
+
+  val sessionOptions = resolveSessionChoices(sessionKey, sessions)
 
   val canSend = pendingRunCount == 0 && (input.trim().isNotEmpty() || attachments.isNotEmpty()) && healthOk
 
@@ -75,6 +79,34 @@ fun ChatComposer(
       ) {
         Box {
           FilledTonalButton(
+            onClick = { showSessionMenu = true },
+            contentPadding = ButtonDefaults.ContentPadding,
+          ) {
+            Text("Session: $sessionKey")
+          }
+
+          DropdownMenu(expanded = showSessionMenu, onDismissRequest = { showSessionMenu = false }) {
+            for (entry in sessionOptions) {
+              DropdownMenuItem(
+                text = { Text(entry.key) },
+                onClick = {
+                  onSelectSession(entry.key)
+                  showSessionMenu = false
+                },
+                trailingIcon = {
+                  if (entry.key == sessionKey) {
+                    Text("✓")
+                  } else {
+                    Spacer(modifier = Modifier.width(10.dp))
+                  }
+                },
+              )
+            }
+          }
+        }
+
+        Box {
+          FilledTonalButton(
             onClick = { showThinkingMenu = true },
             contentPadding = ButtonDefaults.ContentPadding,
           ) {
@@ -90,10 +122,6 @@ fun ChatComposer(
         }
 
         Spacer(modifier = Modifier.weight(1f))
-
-        FilledTonalIconButton(onClick = onShowSessions, modifier = Modifier.size(42.dp)) {
-          Icon(Icons.Default.FolderOpen, contentDescription = "Sessions")
-        }
 
         FilledTonalIconButton(onClick = onRefresh, modifier = Modifier.size(42.dp)) {
           Icon(Icons.Default.Refresh, contentDescription = "Refresh")

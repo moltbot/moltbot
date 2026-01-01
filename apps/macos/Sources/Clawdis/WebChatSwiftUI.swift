@@ -156,7 +156,10 @@ final class WebChatSwiftUIWindowController {
         self.presentation = presentation
         let vm = ClawdisChatViewModel(sessionKey: sessionKey, transport: transport)
         let accent = Self.color(fromHex: AppStateStore.shared.seamColorHex)
-        self.hosting = NSHostingController(rootView: ClawdisChatView(viewModel: vm, userAccent: accent))
+        self.hosting = NSHostingController(rootView: ClawdisChatView(
+            viewModel: vm,
+            showsSessionSwitcher: true,
+            userAccent: accent))
         self.contentController = Self.makeContentController(for: presentation, hosting: self.hosting)
         self.window = Self.makeWindow(for: presentation, contentViewController: self.contentController)
     }
