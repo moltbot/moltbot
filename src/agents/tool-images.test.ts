@@ -32,4 +32,32 @@ describe("tool image sanitizing", () => {
     expect(size).toBeLessThanOrEqual(5 * 1024 * 1024);
     expect(image.mimeType).toBe("image/jpeg");
   }, 20_000);
+
+  it("corrects mismatched jpeg mimeType", async () => {
+    const jpeg = await sharp({
+      create: {
+        width: 10,
+        height: 10,
+        channels: 3,
+        background: { r: 255, g: 0, b: 0 },
+      },
+    })
+      .jpeg()
+      .toBuffer();
+
+    const blocks = [
+      {
+        type: "image" as const,
+        data: jpeg.toString("base64"),
+        mimeType: "image/png",
+      },
+    ];
+
+    const out = await sanitizeContentBlocksImages(blocks, "test");
+    const image = out.find((b) => b.type === "image");
+    if (!image || image.type !== "image") {
+      throw new Error("expected image block");
+    }
+    expect(image.mimeType).toBe("image/jpeg");
+  });
 });

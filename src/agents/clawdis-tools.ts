@@ -746,6 +746,7 @@ const CanvasToolSchema = Type.Union([
     ),
     maxWidth: Type.Optional(Type.Number()),
     quality: Type.Optional(Type.Number()),
+    delayMs: Type.Optional(Type.Number()),
   }),
   Type.Object({
     action: Type.Literal("a2ui_push"),
@@ -874,8 +875,7 @@ function createCanvasTool(): AnyAgentTool {
             ext: payload.format === "jpeg" ? "jpg" : payload.format,
           });
           await writeBase64ToFile(filePath, payload.base64);
-          const mimeType =
-            imageMimeFromFormat(payload.format) ?? "image/png";
+          const mimeType = imageMimeFromFormat(payload.format) ?? "image/png";
           return await imageResult({
             label: "canvas:snapshot",
             path: filePath,
@@ -978,6 +978,15 @@ const NodesToolSchema = Type.Union([
     ),
     maxWidth: Type.Optional(Type.Number()),
     quality: Type.Optional(Type.Number()),
+    delayMs: Type.Optional(Type.Number()),
+    deviceId: Type.Optional(Type.String()),
+  }),
+  Type.Object({
+    action: Type.Literal("camera_list"),
+    gatewayUrl: Type.Optional(Type.String()),
+    gatewayToken: Type.Optional(Type.String()),
+    timeoutMs: Type.Optional(Type.Number()),
+    node: Type.String(),
   }),
   Type.Object({
     action: Type.Literal("camera_clip"),
@@ -991,6 +1000,7 @@ const NodesToolSchema = Type.Union([
     duration: Type.Optional(Type.String()),
     durationMs: Type.Optional(Type.Number()),
     includeAudio: Type.Optional(Type.Boolean()),
+    deviceId: Type.Optional(Type.String()),
   }),
   Type.Object({
     action: Type.Literal("screen_record"),
@@ -1114,6 +1124,15 @@ function createNodesTool(): AnyAgentTool {
             Number.isFinite(params.quality)
               ? params.quality
               : undefined;
+          const delayMs =
+            typeof params.delayMs === "number" &&
+            Number.isFinite(params.delayMs)
+              ? params.delayMs
+              : undefined;
+          const deviceId =
+            typeof params.deviceId === "string" && params.deviceId.trim()
+              ? params.deviceId.trim()
+              : undefined;
 
           const content: AgentToolResult<unknown>["content"] = [];
           const details: Array<Record<string, unknown>> = [];
@@ -1127,14 +1146,29 @@ function createNodesTool(): AnyAgentTool {
                 maxWidth,
                 quality,
                 format: "jpg",
+                delayMs,
+                deviceId,
               },
               idempotencyKey: crypto.randomUUID(),
             })) as { payload?: unknown };
             const payload = parseCameraSnapPayload(raw?.payload);
+            const normalizedFormat = payload.format.toLowerCase();
+            if (
+              normalizedFormat !== "jpg" &&
+              normalizedFormat !== "jpeg" &&
+              normalizedFormat !== "png"
+            ) {
+              throw new Error(
+                `unsupported camera.snap format: ${payload.format}`,
+              );
+            }
+
+            const isJpeg =
+              normalizedFormat === "jpg" || normalizedFormat === "jpeg";
             const filePath = cameraTempPath({
               kind: "snap",
               facing,
-              ext: payload.format === "jpeg" ? "jpg" : payload.format,
+              ext: isJpeg ? "jpg" : "png",
             });
             await writeBase64ToFile(filePath, payload.base64);
             content.push({ type: "text", text: `MEDIA:${filePath}` });
@@ -1142,7 +1176,8 @@ function createNodesTool(): AnyAgentTool {
               type: "image",
               data: payload.base64,
               mimeType:
-                imageMimeFromFormat(payload.format) ?? "image/png",
+                imageMimeFromFormat(payload.format) ??
+                (isJpeg ? "image/jpeg" : "image/png"),
             });
             details.push({
               facing,
@@ -1154,6 +1189,21 @@ function createNodesTool(): AnyAgentTool {
 
           const result: AgentToolResult<unknown> = { content, details };
           return await sanitizeToolResultImages(result, "nodes:camera_snap");
+        }
+        case "camera_list": {
+          const node = readStringParam(params, "node", { required: true });
+          const nodeId = await resolveNodeId(gatewayOpts, node);
+          const raw = (await callGatewayTool("node.invoke", gatewayOpts, {
+            nodeId,
+            command: "camera.list",
+            params: {},
+            idempotencyKey: crypto.randomUUID(),
+          })) as { payload?: unknown };
+          const payload =
+            raw && typeof raw.payload === "object" && raw.payload !== null
+              ? raw.payload
+              : {};
+          return jsonResult(payload);
         }
         case "camera_clip": {
           const node = readStringParam(params, "node", { required: true });
@@ -1176,6 +1226,10 @@ function createNodesTool(): AnyAgentTool {
             typeof params.includeAudio === "boolean"
               ? params.includeAudio
               : true;
+          const deviceId =
+            typeof params.deviceId === "string" && params.deviceId.trim()
+              ? params.deviceId.trim()
+              : undefined;
           const raw = (await callGatewayTool("node.invoke", gatewayOpts, {
             nodeId,
             command: "camera.clip",
@@ -1184,6 +1238,7 @@ function createNodesTool(): AnyAgentTool {
               durationMs,
               includeAudio,
               format: "mp4",
+              deviceId,
             },
             idempotencyKey: crypto.randomUUID(),
           })) as { payload?: unknown };

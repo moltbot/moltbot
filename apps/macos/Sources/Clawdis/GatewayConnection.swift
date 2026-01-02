@@ -450,10 +450,18 @@ extension GatewayConnection {
 
     // MARK: - Chat
 
-    func chatHistory(sessionKey: String) async throws -> ClawdisChatHistoryPayload {
-        try await self.requestDecoded(
+    func chatHistory(
+        sessionKey: String,
+        limit: Int? = nil,
+        timeoutMs: Int? = nil) async throws -> ClawdisChatHistoryPayload
+    {
+        var params: [String: AnyCodable] = ["sessionKey": AnyCodable(sessionKey)]
+        if let limit { params["limit"] = AnyCodable(limit) }
+        let timeout = timeoutMs.map { Double($0) }
+        return try await self.requestDecoded(
             method: .chatHistory,
-            params: ["sessionKey": AnyCodable(sessionKey)])
+            params: params,
+            timeoutMs: timeout)
     }
 
     func chatSend(

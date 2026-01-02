@@ -419,7 +419,9 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
           return;
         }
         const channelName =
-          interaction.channel && "name" in interaction.channel
+          interaction.channel &&
+          "name" in interaction.channel &&
+          typeof interaction.channel.name === "string"
             ? interaction.channel.name
             : undefined;
         const channelSlug = channelName
@@ -459,8 +461,10 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
         }
       } else if (isGroupDm) {
         const channelName =
-          interaction.channel && "name" in interaction.channel
-            ? (interaction.channel.name ?? undefined)
+          interaction.channel &&
+          "name" in interaction.channel &&
+          typeof interaction.channel.name === "string"
+            ? interaction.channel.name
             : undefined;
         const channelSlug = channelName
           ? normalizeDiscordSlug(channelName)

@@ -31,6 +31,15 @@ function isTextBlock(block: unknown): block is TextContentBlock {
   return rec.type === "text" && typeof rec.text === "string";
 }
 
+function inferMimeTypeFromBase64(base64: string): string | undefined {
+  const trimmed = base64.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.startsWith("/9j/")) return "image/jpeg";
+  if (trimmed.startsWith("iVBOR")) return "image/png";
+  if (trimmed.startsWith("R0lGOD")) return "image/gif";
+  return undefined;
+}
+
 async function resizeImageBase64IfNeeded(params: {
   base64: string;
   mimeType: string;
@@ -127,13 +136,19 @@ export async function sanitizeContentBlocksImages(
     }
 
     try {
+      const inferredMimeType = inferMimeTypeFromBase64(data);
+      const mimeType = inferredMimeType ?? block.mimeType;
       const resized = await resizeImageBase64IfNeeded({
         base64: data,
-        mimeType: block.mimeType,
+        mimeType,
         maxDimensionPx,
         maxBytes,
       });
-      out.push({ ...block, data: resized.base64, mimeType: resized.mimeType });
+      out.push({
+        ...block,
+        data: resized.base64,
+        mimeType: resized.resized ? resized.mimeType : mimeType,
+      });
     } catch (err) {
       out.push({
         type: "text",

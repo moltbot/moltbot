@@ -73,12 +73,17 @@
 - macOS settings: colorize provider status subtitles to distinguish healthy vs degraded states.
 - macOS: keep config writes on the main actor to satisfy Swift concurrency rules.
 - macOS menu: show multi-line gateway error details, add an always-visible gateway row, avoid duplicate gateway status rows, suppress transient `cancelled` device refresh errors, and auto-recover the control channel on disconnect.
+- macOS menu: show session last-used timestamps in the list and add recent-message previews in session submenus.
+- macOS menu: tighten session row padding and time out session preview loading with cached fallback.
 - macOS: log health refresh failures and recovery to make gateway issues easier to diagnose.
 - macOS codesign: skip hardened runtime for ad-hoc signing and avoid empty options args (#70) — thanks @petter-b
 - macOS codesign: include camera entitlement so permission prompts work in the menu bar app.
 - Agent tools: map `camera.snap` JPEG payloads to `image/jpeg` to avoid MIME mismatch errors.
 - Tests: cover `camera.snap` MIME mapping to prevent image/png vs image/jpeg mismatches.
 - macOS camera: wait for exposure/white balance to settle before capturing a snap to avoid dark images.
+- Camera snap: add `delayMs` parameter (default 2000ms on macOS) to improve exposure reliability.
+- Camera: add `camera.list` and optional `deviceId` selection for snaps/clips.
+- Tests: cover camera device selection params in CLI + agent tools.
 - macOS packaging: move rpath config into swift build for reliability (#69) — thanks @petter-b
 - macOS: prioritize main bundle for device resources to prevent crash (#73) — thanks @petter-b
 - macOS remote: route settings through gateway config and avoid local config reads in remote mode.
