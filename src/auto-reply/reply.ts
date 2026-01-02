@@ -798,8 +798,10 @@ export async function getReplyFromConfig(
   const perMessageQueueMode =
     hasQueueDirective && !inlineQueueReset ? inlineQueueMode : undefined;
 
-  // Optional allowlist by origin number (E.164 without whatsapp: prefix)
+  // Optional allowlist by origin number (E.164 without whatsapp: prefix).
   const configuredAllowFrom = cfg.routing?.allowFrom;
+  const surface = (ctx.Surface ?? "").trim().toLowerCase();
+  const shouldEnforceAllowFrom = !surface || surface === "whatsapp";
   const from = (ctx.From ?? "").replace(/^whatsapp:/, "");
   const to = (ctx.To ?? "").replace(/^whatsapp:/, "");
   const isSamePhone = from && to && from === to;
@@ -834,7 +836,9 @@ export async function getReplyFromConfig(
   }
 
   // Same-phone mode (self-messaging) is always allowed
-  if (isSamePhone) {
+  if (!shouldEnforceAllowFrom) {
+    // Provider-specific allowlists handle non-WhatsApp surfaces.
+  } else if (isSamePhone) {
     logVerbose(`Allowing same-phone mode: from === to (${from})`);
   } else if (!isGroup && Array.isArray(allowFrom) && allowFrom.length > 0) {
     // Support "*" as wildcard to allow all senders
