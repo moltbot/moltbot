@@ -885,10 +885,8 @@ async function deliverReplies({
   target: string;
   token: string;
   runtime: RuntimeEnv;
-  /** Discord message ID to reply to (creates native reply link for the first message only) */
   originalMessageId?: string;
 }) {
-  // Track whether we've sent the first message (only the first should be a reply)
   let isFirstMessage = true;
   for (const payload of replies) {
     const mediaList =

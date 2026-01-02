@@ -22,7 +22,6 @@ type DiscordSendOpts = {
   mediaUrl?: string;
   verbose?: boolean;
   rest?: REST;
-  /** Discord message ID to reply to (creates native reply link) */
   replyTo?: string;
 };
 
@@ -132,7 +131,6 @@ async function sendDiscordText(
     last = (await rest.post(Routes.channelMessages(channelId), {
       body: {
         content: chunk,
-        // Only the first chunk should be a reply; subsequent chunks are regular messages
         message_reference: isFirst ? messageReference : undefined,
       },
     })) as { id: string; channel_id: string };
@@ -172,7 +170,6 @@ async function sendDiscordMedia(
   if (text.length > DISCORD_TEXT_LIMIT) {
     const remaining = text.slice(DISCORD_TEXT_LIMIT).trim();
     if (remaining) {
-      // Remaining text is not a reply; only the first message with media is the reply
       await sendDiscordText(rest, channelId, remaining);
     }
   }
