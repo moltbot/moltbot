@@ -173,7 +173,8 @@ struct SessionMenuPreviewView: View {
         from payload: ClawdisChatHistoryPayload,
         maxItems: Int) -> [SessionPreviewItem]
     {
-        let messages = self.decodeMessages(payload.messages ?? [])
+        let raw: [ClawdisKit.AnyCodable] = payload.messages ?? []
+        let messages = self.decodeMessages(raw)
         let built = messages.compactMap { message -> SessionPreviewItem? in
             guard let text = self.previewText(for: message) else { return nil }
             let isTool = self.isToolCall(message)
@@ -186,9 +187,10 @@ struct SessionMenuPreviewView: View {
         return Array(trimmed.reversed())
     }
 
-    private static func decodeMessages(_ raw: [AnyCodable]) -> [ClawdisChatMessage] {
+    private static func decodeMessages(_ raw: [ClawdisKit.AnyCodable]) -> [ClawdisChatMessage] {
         raw.compactMap { item in
-            (try? ChatPayloadDecoding.decode(item, as: ClawdisChatMessage.self))
+            guard let data = try? JSONEncoder().encode(item) else { return nil }
+            return try? JSONDecoder().decode(ClawdisChatMessage.self, from: data)
         }
     }
 
