@@ -30,6 +30,8 @@ export type MonitorDiscordOpts = {
     users?: Array<string | number>;
   };
   requireMention?: boolean;
+  ignoredChannels?: Array<string | number>;
+  ignoredCategories?: Array<string | number>;
   mediaMaxMb?: number;
   historyLimit?: number;
 };
@@ -73,6 +75,9 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
   const guildAllowFrom = opts.guildAllowFrom ?? cfg.discord?.guildAllowFrom;
   const requireMention =
     opts.requireMention ?? cfg.discord?.requireMention ?? true;
+  const ignoredChannels = opts.ignoredChannels ?? cfg.discord?.ignoredChannels;
+  const ignoredCategories =
+    opts.ignoredCategories ?? cfg.discord?.ignoredCategories;
   const mediaMaxBytes =
     (opts.mediaMaxMb ?? cfg.discord?.mediaMaxMb ?? 8) * 1024 * 1024;
   const historyLimit = Math.max(
@@ -107,6 +112,22 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
       if (!message.author) return;
 
       const isDirectMessage = !message.guild;
+      if (!isDirectMessage) {
+        const categoryId =
+          "parentId" in message.channel ? message.channel.parentId ?? "" : "";
+        const ignoreReason = getIgnoreReason({
+          channelId: message.channelId,
+          categoryId,
+          ignoredChannels,
+          ignoredCategories,
+        });
+        if (ignoreReason) {
+          logVerbose(
+            `Ignoring discord message from channel ${message.channelId} (${ignoreReason})`,
+          );
+          return;
+        }
+      }
       const botId = client.user?.id;
       const wasMentioned =
         !isDirectMessage && Boolean(botId && message.mentions.has(botId));
@@ -383,6 +404,27 @@ function normalizeDiscordAllowList(
   const allowAll = cleaned.includes("*");
   const ids = new Set(cleaned.filter((entry) => entry !== "*"));
   return { allowAll, ids };
+}
+
+function getIgnoreReason({
+  channelId,
+  categoryId,
+  ignoredChannels,
+  ignoredCategories,
+}: {
+  channelId: string;
+  categoryId: string;
+  ignoredChannels: Array<string | number> | undefined;
+  ignoredCategories: Array<string | number> | undefined;
+}): string | null {
+  const channels = normalizeDiscordAllowList(ignoredChannels, []);
+  if (channels?.allowAll || channels?.ids.has(channelId)) {
+    return "ignoredChannels";
+  }
+  const categories = normalizeDiscordAllowList(ignoredCategories, []);
+  if (categories?.allowAll) return "ignoredCategories";
+  if (categoryId && categories?.ids.has(categoryId)) return "ignoredCategories";
+  return null;
 }
 
 async function sendTyping(message: Message) {

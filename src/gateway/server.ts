@@ -2156,6 +2156,8 @@ export async function startGatewayServer(
       allowFrom: cfg.discord?.allowFrom,
       guildAllowFrom: cfg.discord?.guildAllowFrom,
       requireMention: cfg.discord?.requireMention,
+      ignoredChannels: cfg.discord?.ignoredChannels,
+      ignoredCategories: cfg.discord?.ignoredCategories,
       mediaMaxMb: cfg.discord?.mediaMaxMb,
       historyLimit: cfg.discord?.historyLimit,
     })

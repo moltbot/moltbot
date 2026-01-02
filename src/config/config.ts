@@ -174,6 +174,8 @@ export type DiscordConfig = {
     users?: Array<string | number>;
   };
   requireMention?: boolean;
+  ignoredChannels?: Array<string | number>;
+  ignoredCategories?: Array<string | number>;
   mediaMaxMb?: number;
   /** Number of recent guild messages to include for context (default: 20). */
   historyLimit?: number;
@@ -916,6 +918,8 @@ const ClawdisSchema = z.object({
         })
         .optional(),
       requireMention: z.boolean().optional(),
+      ignoredChannels: z.array(z.union([z.string(), z.number()])).optional(),
+      ignoredCategories: z.array(z.union([z.string(), z.number()])).optional(),
       mediaMaxMb: z.number().positive().optional(),
       historyLimit: z.number().int().min(0).optional(),
       enableReactions: z.boolean().optional(),
