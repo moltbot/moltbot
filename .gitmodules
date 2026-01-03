@@ -2,3 +2,6 @@
 	path = Peekaboo
 	url = https://github.com/steipete/Peekaboo.git
 	branch = main
+[submodule "Swabble/Swabble"]
+	path = Swabble/Swabble
+	url = https://github.com/steipete/Swabble.git
