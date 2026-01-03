@@ -7,11 +7,6 @@ vi.mock('../web-search/executor.js', () => ({
   executeWebSearch: vi.fn(),
 }));
 
-vi.mock('../web-search/detect.js', () => ({
-  detectWebSearchIntent: vi.fn(),
-  extractSearchQuery: vi.fn(),
-}));
-
 vi.mock('../web-search/messages.js', () => ({
   messages: {
     acknowledgment: () => '🔍 Выполняю веб-поиск...',
@@ -22,8 +17,9 @@ vi.mock('../web-search/messages.js', () => ({
 
 // Mock deep research to avoid conflicts
 vi.mock('../deep-research/index.js', () => ({
-  detectDeepResearchIntent: vi.fn(() => false),
+  parseDeepResearchCommand: vi.fn(() => null),
   executeDeepResearch: vi.fn(),
+  normalizeDeepResearchTopic: vi.fn(),
   messages: {
     error: (msg: string) => `Deep research error: ${msg}`,
   },
@@ -43,6 +39,7 @@ const onSpy = vi.fn();
 const stopSpy = vi.fn();
 const sendChatActionSpy = vi.fn();
 const sendMessageSpy = vi.fn(async () => ({ message_id: 77 }));
+const editMessageTextSpy = vi.fn(async () => ({ message_id: 77 }));
 
 vi.mock('grammy', () => ({
   Bot: class {
@@ -50,6 +47,7 @@ vi.mock('grammy', () => ({
       config: { use: useSpy },
       sendChatAction: sendChatActionSpy,
       sendMessage: sendMessageSpy,
+      editMessageText: editMessageTextSpy,
     };
     on = onSpy;
     stop = stopSpy;
@@ -84,8 +82,6 @@ vi.mock('@grammyjs/transformer-throttler', () => ({
 }));
 
 import { executeWebSearch } from '../web-search/executor.js';
-import { detectWebSearchIntent, extractSearchQuery } from '../web-search/detect.js';
-import { detectDeepResearchIntent } from '../deep-research/index.js';
 
 describe('Telegram Bot - Web Search Integration', () => {
   let bot: any;
@@ -95,9 +91,6 @@ describe('Telegram Bot - Web Search Integration', () => {
     vi.clearAllMocks();
     
     // Default mock implementations
-    vi.mocked(detectDeepResearchIntent).mockReturnValue(false);
-    vi.mocked(detectWebSearchIntent).mockReturnValue(false);
-    vi.mocked(extractSearchQuery).mockReturnValue('test query');
     vi.mocked(executeWebSearch).mockResolvedValue({
       success: true,
       result: {
@@ -143,16 +136,11 @@ describe('Telegram Bot - Web Search Integration', () => {
     };
   }
   
-  it('triggers web search on detection', async () => {
-    vi.mocked(detectWebSearchIntent).mockReturnValue(true);
-    
-    const message = createMockMessage('погода в Москве');
+  it('triggers web search on /web command', async () => {
+    const message = createMockMessage('/web погода в Москве');
     await bot.handleUpdate(createMessageUpdate(message));
     
-    // Verify detection was called
-    expect(detectWebSearchIntent).toHaveBeenCalledWith('погода в Москве');
-    expect(extractSearchQuery).toHaveBeenCalled();
-    expect(executeWebSearch).toHaveBeenCalledWith('test query');
+    expect(executeWebSearch).toHaveBeenCalledWith('погода в Москве');
     
     // Verify acknowledgment was sent
     expect(bot.api.sendMessage).toHaveBeenCalledWith(
@@ -161,26 +149,14 @@ describe('Telegram Bot - Web Search Integration', () => {
     );
     
     // Verify result was delivered
-    expect(bot.api.sendMessage).toHaveBeenCalledWith(
+    expect(bot.api.editMessageText).toHaveBeenCalledWith(
       123,
+      77,
       expect.stringContaining('🌐 Результат поиска:')
     );
   });
   
-  it('does not trigger when deep research is detected', async () => {
-    vi.mocked(detectDeepResearchIntent).mockReturnValue(true);
-    vi.mocked(detectWebSearchIntent).mockReturnValue(true);
-    
-    const message = createMockMessage('тема: что такое AI');
-    await bot.handleUpdate(createMessageUpdate(message));
-    
-    // Web search should not be called when deep research is detected
-    expect(detectWebSearchIntent).not.toHaveBeenCalled();
-    expect(executeWebSearch).not.toHaveBeenCalled();
-  });
-  
   it('handles search errors gracefully', async () => {
-    vi.mocked(detectWebSearchIntent).mockReturnValue(true);
     vi.mocked(executeWebSearch).mockResolvedValue({
       success: false,
       error: 'CLI not found',
@@ -189,18 +165,17 @@ describe('Telegram Bot - Web Search Integration', () => {
       stderr: ''
     });
     
-    const message = createMockMessage('тестовый запрос');
+    const message = createMockMessage('/web тестовый запрос');
     await bot.handleUpdate(createMessageUpdate(message));
     
-    expect(bot.api.sendMessage).toHaveBeenCalledWith(
+    expect(bot.api.editMessageText).toHaveBeenCalledWith(
       123,
+      77,
       expect.stringContaining('❌ Ошибка поиска:')
     );
   });
   
   it('prevents duplicate searches for same chat', async () => {
-    vi.mocked(detectWebSearchIntent).mockReturnValue(true);
-    
     // Mock executeWebSearch to be slow
     let resolveSearch: (value: any) => void;
     const searchPromise = new Promise((resolve) => {
@@ -208,7 +183,7 @@ describe('Telegram Bot - Web Search Integration', () => {
     });
     vi.mocked(executeWebSearch).mockReturnValue(searchPromise);
     
-    const message = createMockMessage('медленный запрос');
+    const message = createMockMessage('/web медленный запрос');
     const chatId = message.chat.id;
     
     // Start first search (don't await yet)
@@ -242,19 +217,18 @@ describe('Telegram Bot - Web Search Integration', () => {
   });
   
   it('handles missing query extraction', async () => {
-    vi.mocked(detectWebSearchIntent).mockReturnValue(true);
-    vi.mocked(extractSearchQuery).mockReturnValue('');
-    
-    const message = createMockMessage('поиск');
+    const message = createMockMessage('/web   ');
     await bot.handleUpdate(createMessageUpdate(message));
     
-    // Should log warning and return early
+    // Should reply with missing query error
     expect(executeWebSearch).not.toHaveBeenCalled();
+    expect(bot.api.sendMessage).toHaveBeenCalledWith(
+      123,
+      expect.stringContaining('Please provide a search query after /web')
+    );
   });
   
   it('works in group chats with mention', async () => {
-    vi.mocked(detectWebSearchIntent).mockReturnValue(true);
-    
     const groupMessage: Message.TextMessage = {
       message_id: 1,
       date: Date.now(),
@@ -268,12 +242,11 @@ describe('Telegram Bot - Web Search Integration', () => {
         is_bot: false,
         first_name: 'Test',
       },
-      text: '@testbot погода в Москве',
+      text: '/web@testbot погода в Москве',
     };
     
     await bot.handleUpdate(createMessageUpdate(groupMessage));
     
-    expect(detectWebSearchIntent).toHaveBeenCalled();
     expect(executeWebSearch).toHaveBeenCalled();
   });
 });
