@@ -21,6 +21,7 @@ Core parameters:
 - `yieldMs` (auto-background after timeout, default 20000)
 - `background` (immediate background)
 - `timeout` (seconds; kills the process if exceeded, default 1800)
+- `stdinMode` (`pipe` | `pty`; `pty` uses node-pty for a real TTY with fallback warning)
 
 Notes:
 - Returns `status: "running"` with a `sessionId` when backgrounded.

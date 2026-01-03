@@ -16,6 +16,7 @@ Key parameters:
 - `yieldMs` (default 20000): auto‑background after this delay
 - `background` (bool): background immediately
 - `timeout` (seconds, default 1800): kill the process after this timeout
+- `stdinMode` (`pipe` | `pty`): use a real TTY when `pty` is requested and node-pty loads (otherwise warns + falls back)
 - `workdir`, `env`
 
 Behavior:

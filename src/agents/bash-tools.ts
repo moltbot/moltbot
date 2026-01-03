@@ -2,6 +2,7 @@ import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { Type } from "@sinclair/typebox";
+import type { IPty } from "node-pty";
 
 import {
   addSession,
@@ -14,6 +15,7 @@ import {
   listRunningSessions,
   markBackgrounded,
   markExited,
+  type ProcessStdinMode,
   setJobTtlMs,
 } from "./bash-process-registry.js";
 import {
@@ -29,6 +31,19 @@ const DEFAULT_MAX_OUTPUT = clampNumber(
   1_000,
   150_000,
 );
+const DEFAULT_PTY_NAME = "xterm-256color";
+
+type PtyModule = typeof import("node-pty");
+let ptyModulePromise: Promise<PtyModule | null> | null = null;
+
+async function loadPtyModule(): Promise<PtyModule | null> {
+  if (!ptyModulePromise) {
+    ptyModulePromise = import("node-pty")
+      .then((mod) => mod)
+      .catch(() => null);
+  }
+  return ptyModulePromise;
+}
 
 const stringEnum = (
   values: readonly string[],
@@ -72,7 +87,7 @@ const bashSchema = Type.Object({
   ),
   stdinMode: Type.Optional(
     stringEnum(["pipe", "pty"] as const, {
-      description: "Only pipe is supported",
+      description: "stdin mode (pipe or pty when node-pty is available)",
     }),
   ),
 });
@@ -127,9 +142,6 @@ export function createBashTool(
       if (!params.command) {
         throw new Error("Provide a command to start.");
       }
-      if (params.stdinMode && params.stdinMode !== "pipe") {
-        throw new Error('Only stdinMode "pipe" is supported right now.');
-      }
 
       const yieldWindow = params.background
         ? 0
@@ -146,21 +158,56 @@ export function createBashTool(
 
       const { shell, args: shellArgs } = getShellConfig();
       const env = params.env ? { ...process.env, ...params.env } : process.env;
-      const child: ChildProcessWithoutNullStreams = spawn(
-        shell,
-        [...shellArgs, params.command],
-        {
+      const requestedStdinMode =
+        params.stdinMode === "pty" ? "pty" : "pipe";
+      let stdinMode: ProcessStdinMode = requestedStdinMode;
+      let warning: string | null = null;
+      let child: ChildProcessWithoutNullStreams | undefined;
+      let pty: IPty | undefined;
+
+      if (stdinMode === "pty") {
+        const ptyModule = await loadPtyModule();
+        if (!ptyModule) {
+          warning =
+            "Warning: node-pty failed to load; falling back to pipe mode.";
+          stdinMode = "pipe";
+        } else {
+          const ptyEnv = {
+            ...env,
+            TERM: env.TERM ?? DEFAULT_PTY_NAME,
+          } as Record<string, string>;
+          try {
+            pty = ptyModule.spawn(shell, [...shellArgs, params.command], {
+              cwd: workdir,
+              env: ptyEnv,
+              name: ptyEnv.TERM || DEFAULT_PTY_NAME,
+              cols: 120,
+              rows: 30,
+            });
+          } catch {
+            warning =
+              "Warning: node-pty failed to start; falling back to pipe mode.";
+            stdinMode = "pipe";
+          }
+        }
+      }
+
+      if (stdinMode === "pipe") {
+        child = spawn(shell, [...shellArgs, params.command], {
           cwd: workdir,
           env,
           detached: true,
           stdio: ["pipe", "pipe", "pipe"],
-        },
-      );
+        });
+      }
 
       const session = {
         id: sessionId,
         command: params.command,
         child,
+        pty,
+        pid: child?.pid ?? pty?.pid,
+        stdinMode,
         startedAt,
         cwd: workdir,
         maxOutputChars: maxOutput,
@@ -190,9 +237,7 @@ export function createBashTool(
       };
 
       const onAbort = () => {
-        if (child.pid) {
-          killProcessTree(child.pid);
-        }
+        killSession(session);
       };
 
       if (signal?.aborted) onAbort();
@@ -212,33 +257,46 @@ export function createBashTool(
       const emitUpdate = () => {
         if (!onUpdate) return;
         const tailText = session.tail || session.aggregated;
+        const warningText = warning ? `${warning}\n\n` : "";
         onUpdate({
-          content: [{ type: "text", text: tailText || "" }],
+          content: [{ type: "text", text: warningText + (tailText || "") }],
           details: {
             status: "running",
             sessionId,
-            pid: child.pid ?? undefined,
+            pid: session.pid ?? undefined,
             startedAt,
             tail: session.tail,
           },
         });
       };
 
-      child.stdout.on("data", (data) => {
-        const str = sanitizeBinaryOutput(data.toString());
-        for (const chunk of chunkString(str)) {
-          appendOutput(session, "stdout", chunk);
-          emitUpdate();
-        }
-      });
+      if (child) {
+        child.stdout.on("data", (data) => {
+          const str = sanitizeBinaryOutput(data.toString());
+          for (const chunk of chunkString(str)) {
+            appendOutput(session, "stdout", chunk);
+            emitUpdate();
+          }
+        });
 
-      child.stderr.on("data", (data) => {
-        const str = sanitizeBinaryOutput(data.toString());
-        for (const chunk of chunkString(str)) {
-          appendOutput(session, "stderr", chunk);
-          emitUpdate();
-        }
-      });
+        child.stderr.on("data", (data) => {
+          const str = sanitizeBinaryOutput(data.toString());
+          for (const chunk of chunkString(str)) {
+            appendOutput(session, "stderr", chunk);
+            emitUpdate();
+          }
+        });
+      }
+
+      if (pty) {
+        pty.onData((data) => {
+          const str = sanitizeBinaryOutput(data);
+          for (const chunk of chunkString(str)) {
+            appendOutput(session, "stdout", chunk);
+            emitUpdate();
+          }
+        });
+      }
 
       return new Promise<AgentToolResult<BashToolDetails>>(
         (resolve, reject) => {
@@ -249,14 +307,15 @@ export function createBashTool(
                   {
                     type: "text",
                     text:
-                      `Command still running (session ${sessionId}, pid ${child.pid ?? "n/a"}). ` +
+                      `${warning ? `${warning}\n\n` : ""}` +
+                      `Command still running (session ${sessionId}, pid ${session.pid ?? "n/a"}). ` +
                       "Use process (list/poll/log/write/kill/clear/remove) for follow-up.",
                   },
                 ],
                 details: {
                   status: "running",
                   sessionId,
-                  pid: child.pid ?? undefined,
+                  pid: session.pid ?? undefined,
                   startedAt,
                   tail: session.tail,
                 },
@@ -283,7 +342,10 @@ export function createBashTool(
             }, yieldWindow);
           }
 
-          child.once("exit", (code, exitSignal) => {
+          const handleExit = (
+            code: number | null,
+            exitSignal: NodeJS.Signals | number | null,
+          ) => {
             if (yieldTimer) clearTimeout(yieldTimer);
             if (timeoutTimer) clearTimeout(timeoutTimer);
             const durationMs = Date.now() - startedAt;
@@ -315,7 +377,14 @@ export function createBashTool(
 
             settle(() =>
               resolve({
-                content: [{ type: "text", text: aggregated || "(no output)" }],
+                content: [
+                  {
+                    type: "text",
+                    text:
+                      `${warning ? `${warning}\n\n` : ""}` +
+                      (aggregated || "(no output)"),
+                  },
+                ],
                 details: {
                   status: "completed",
                   exitCode: code ?? 0,
@@ -324,14 +393,26 @@ export function createBashTool(
                 },
               }),
             );
-          });
+          };
 
-          child.once("error", (err) => {
-            if (yieldTimer) clearTimeout(yieldTimer);
-            if (timeoutTimer) clearTimeout(timeoutTimer);
-            markExited(session, null, null, "failed");
-            settle(() => reject(err));
-          });
+          if (child) {
+            child.once("exit", (code, exitSignal) => {
+              handleExit(code, exitSignal);
+            });
+
+            child.once("error", (err) => {
+              if (yieldTimer) clearTimeout(yieldTimer);
+              if (timeoutTimer) clearTimeout(timeoutTimer);
+              markExited(session, null, null, "failed");
+              settle(() => reject(err));
+            });
+          }
+
+          if (pty) {
+            pty.onExit(({ exitCode, signal }) => {
+              handleExit(exitCode ?? null, signal ?? null);
+            });
+          }
         },
       );
     },
@@ -383,7 +464,7 @@ export function createProcessTool(
         const running = listRunningSessions().map((s) => ({
           sessionId: s.id,
           status: "running",
-          pid: s.child.pid ?? undefined,
+          pid: s.pid ?? undefined,
           startedAt: s.startedAt,
           runtimeMs: Date.now() - s.startedAt,
           cwd: s.cwd,
@@ -627,25 +708,43 @@ export function createProcessTool(
               details: { status: "failed" },
             };
           }
-          if (!session.child.stdin || session.child.stdin.destroyed) {
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `Session ${params.sessionId} stdin is not writable.`,
-                },
-              ],
-              details: { status: "failed" },
-            };
-          }
-          await new Promise<void>((resolve, reject) => {
-            session.child.stdin.write(params.data ?? "", (err) => {
-              if (err) reject(err);
-              else resolve();
+          if (session.stdinMode === "pty") {
+            if (!session.pty || session.exited) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Session ${params.sessionId} stdin is not writable.`,
+                  },
+                ],
+                details: { status: "failed" },
+              };
+            }
+            session.pty.write(params.data ?? "");
+            if (params.eof) {
+              session.pty.write("\x04");
+            }
+          } else {
+            if (!session.child?.stdin || session.child.stdin.destroyed) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Session ${params.sessionId} stdin is not writable.`,
+                  },
+                ],
+                details: { status: "failed" },
+              };
+            }
+            await new Promise<void>((resolve, reject) => {
+              session.child?.stdin.write(params.data ?? "", (err) => {
+                if (err) reject(err);
+                else resolve();
+              });
             });
-          });
-          if (params.eof) {
-            session.child.stdin.end();
+            if (params.eof) {
+              session.child.stdin.end();
+            }
           }
           return {
             content: [
@@ -687,9 +786,7 @@ export function createProcessTool(
               details: { status: "failed" },
             };
           }
-          if (session.child.pid) {
-            killProcessTree(session.child.pid);
-          }
+          killSession(session);
           markExited(session, null, "SIGKILL", "failed");
           return {
             content: [
@@ -725,9 +822,7 @@ export function createProcessTool(
 
         case "remove": {
           if (session) {
-            if (session.child.pid) {
-              killProcessTree(session.child.pid);
-            }
+            killSession(session);
             markExited(session, null, "SIGKILL", "failed");
             return {
               content: [
@@ -771,6 +866,25 @@ export function createProcessTool(
 }
 
 export const processTool = createProcessTool();
+
+function killSession(session: {
+  pid?: number;
+  stdinMode: ProcessStdinMode;
+  pty?: IPty;
+  child?: ChildProcessWithoutNullStreams;
+}) {
+  const pid = session.pid ?? session.child?.pid ?? session.pty?.pid;
+  if (pid) {
+    killProcessTree(pid);
+  }
+  if (session.stdinMode === "pty") {
+    try {
+      session.pty?.kill();
+    } catch {
+      // ignore kill failures
+    }
+  }
+}
 
 function clampNumber(
   value: number | undefined,

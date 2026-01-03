@@ -1,4 +1,5 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import type { IPty } from "node-pty";
 
 const DEFAULT_JOB_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const MIN_JOB_TTL_MS = 60 * 1000; // 1 minute
@@ -15,10 +16,15 @@ let jobTtlMs = clampTtl(
 
 export type ProcessStatus = "running" | "completed" | "failed" | "killed";
 
+export type ProcessStdinMode = "pipe" | "pty";
+
 export interface ProcessSession {
   id: string;
   command: string;
-  child: ChildProcessWithoutNullStreams;
+  child?: ChildProcessWithoutNullStreams;
+  pty?: IPty;
+  pid?: number;
+  stdinMode: ProcessStdinMode;
   startedAt: number;
   cwd?: string;
   maxOutputChars: number;

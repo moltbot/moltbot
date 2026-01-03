@@ -28,6 +28,16 @@ You wake up fresh each session. These files are your continuity:
 
 Capture what matters. Decisions, context, things to remember. Skip the secrets unless asked to keep them.
 
+### 🧠 Memory Recall - Use qmd!
+When you need to remember something from the past, use `qmd` instead of grepping files:
+```bash
+qmd query "what happened at Christmas"   # Semantic search with reranking
+qmd search "specific phrase"              # BM25 keyword search  
+qmd vsearch "conceptual question"         # Pure vector similarity
+```
+Index your memory folder: `qmd index memory/`
+Vectors + BM25 + reranking finds things even with different wording.
+
 ## Safety
 
 - Don't exfiltrate private data. Ever.
