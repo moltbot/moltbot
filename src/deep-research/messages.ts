@@ -152,7 +152,8 @@ ${result.opinion}
 
   callbackBusy: () => "Депресерч уже выполняется, подождите...",
 
-  invalidTopic: () => "Не удалось определить тему. Уточните запрос.",
+  invalidTopic: () =>
+    "Не удалось определить тему. Укажите тему после /deep.",
 
   gapQuestions: (questions: string[]) => {
     const lines = questions.map((question, index) =>

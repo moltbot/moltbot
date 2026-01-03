@@ -20,10 +20,9 @@ import { getDefaultDeepResearchCliPath } from "../config/config.js";
 import {
   type DeliveryContext,
   deliverResults,
-  detectDeepResearchIntent,
   executeDeepResearch,
-  extractTopicFromMessage,
   messages,
+  parseDeepResearchCommand,
   parseResultJson,
 } from "./index.js";
 
@@ -44,29 +43,33 @@ describeE2E("Deep Research E2E (dry-run)", () => {
     process.env.DEEP_RESEARCH_DRY_RUN = "true";
   });
 
-  describe("Detection → Execution → Delivery flow", () => {
-    const testMessage = "Сделай депресерч про квантовые компьютеры";
+  describe("Command → Execution → Delivery flow", () => {
+    const testMessage = "/deep квантовые компьютеры";
 
-    it("Step 1: detects deep research intent", () => {
-      const detected = detectDeepResearchIntent(testMessage);
-      expect(detected).toBe(true);
+    it("Step 1: parses deep research command", () => {
+      const parsed = parseDeepResearchCommand(testMessage);
+      expect(parsed).not.toBeNull();
     });
 
-    it("Step 2: extracts topic from message", () => {
-      const topic = extractTopicFromMessage(testMessage);
-      expect(topic).toBe("квантовые компьютеры");
+    it("Step 2: extracts topic from command", () => {
+      const parsed = parseDeepResearchCommand(testMessage);
+      expect(parsed).not.toBeNull();
+      expect(parsed!.topic).toBe("квантовые компьютеры");
     });
 
     it("Step 3: generates acknowledgment message", () => {
-      const topic = extractTopicFromMessage(testMessage);
-      const ack = messages.acknowledgment(topic);
+      const parsed = parseDeepResearchCommand(testMessage);
+      expect(parsed).not.toBeNull();
+      const ack = messages.acknowledgment(parsed!.topic);
       expect(ack).toContain("🔍");
       expect(ack).toContain("deep research");
-      expect(ack).toContain(topic);
+      expect(ack).toContain(parsed!.topic);
     });
 
     it("Step 4: executes dry-run successfully", async () => {
-      const topic = extractTopicFromMessage(testMessage);
+      const parsed = parseDeepResearchCommand(testMessage);
+      expect(parsed).not.toBeNull();
+      const topic = parsed!.topic;
       const result = await executeDeepResearch({
         topic,
         dryRun: true,
@@ -78,7 +81,9 @@ describeE2E("Deep Research E2E (dry-run)", () => {
     }, 60000);
 
     it("Step 5: parses result.json", async () => {
-      const topic = extractTopicFromMessage(testMessage);
+      const parsed = parseDeepResearchCommand(testMessage);
+      expect(parsed).not.toBeNull();
+      const topic = parsed!.topic;
       const execResult = await executeDeepResearch({
         topic,
         dryRun: true,
@@ -97,7 +102,9 @@ describeE2E("Deep Research E2E (dry-run)", () => {
     }, 60000);
 
     it("Step 6: generates result delivery message", async () => {
-      const topic = extractTopicFromMessage(testMessage);
+      const parsed = parseDeepResearchCommand(testMessage);
+      expect(parsed).not.toBeNull();
+      const topic = parsed!.topic;
       const execResult = await executeDeepResearch({
         topic,
         dryRun: true,
@@ -124,36 +131,6 @@ describeE2E("Deep Research E2E (dry-run)", () => {
     });
   });
 
-  describe("All 20 patterns detected", () => {
-    const patterns = [
-      "сделай депресерч",
-      "сделать депресерч",
-      "сделайте депресерч",
-      "запусти депресерч",
-      "нужен депресерч",
-      "депресерч по",
-      "депресерч на тему",
-      "депресерч про",
-      "сделай дип рисерч",
-      "сделать дип рисерч",
-      "do deep research",
-      "run deep research",
-      "start deep research",
-      "conduct deep research",
-      "perform deep research",
-      "сделай deep research",
-      "сделать deep research",
-      "запусти deep research",
-      "сделай дипресерч",
-      "сделать дипресерч",
-    ];
-
-    patterns.forEach((pattern) => {
-      it(`detects "${pattern}"`, () => {
-        expect(detectDeepResearchIntent(`Test ${pattern} test`)).toBe(true);
-      });
-    });
-  });
 });
 
 describe("Deep Research E2E (publish fallback)", () => {

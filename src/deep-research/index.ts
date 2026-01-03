@@ -1,8 +1,7 @@
 export {
-  detectDeepResearchIntent,
-  extractTopicFromMessage,
-  getDefaultPatterns,
-} from "./detect.js";
+  parseDeepResearchCommand,
+  type DeepResearchCommand,
+} from "./command.js";
 export {
   normalizeDeepResearchTopic,
   MAX_DEEP_RESEARCH_TOPIC_LENGTH,
