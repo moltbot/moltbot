@@ -106,7 +106,7 @@ function emitStruct(name: string, schema: JsonSchema): string {
   const props = schema.properties ?? {};
   const required = new Set(schema.required ?? []);
   const lines: string[] = [];
-  lines.push(`public struct ${name}: Codable {`);
+  lines.push(`public struct ${name}: Codable, Sendable {`);
   if (Object.keys(props).length === 0) {
     lines.push("}\n");
     return lines.join("\n");
