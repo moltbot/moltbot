@@ -82,14 +82,11 @@ export function createTelegramBot(opts: TelegramBotOptions) {
   const registerCommands = async () => {
     const commands: BotCommand[] = [
       { command: "help", description: "Show available commands" },
+      { command: "status", description: "Show current status" },
       { command: "new", description: "Start a new conversation" },
-      { command: "model", description: "Show or change the model" },
-      {
-        command: "thinking",
-        description: "Set thinking level (off/low/medium/high)",
-      },
-      { command: "compact", description: "Compact conversation context" },
       { command: "stop", description: "Stop current generation" },
+      { command: "model", description: "Show or change the model" },
+      { command: "thinking", description: "Set thinking level" },
     ];
     try {
       await bot.api.setMyCommands(commands, {
@@ -114,7 +111,7 @@ export function createTelegramBot(opts: TelegramBotOptions) {
   >();
   const EDIT_THROTTLE_MS = 250; // Slightly faster for smoother feel
   const TELEGRAM_MAX_LENGTH = 4096;
-  const WORKING_INDICATOR = " ∙"; // Same as Pi coding agent
+  const WORKING_INDICATOR = " _thinking..._";
 
   const editWorkingMessage = async (
     chatId: string,
@@ -219,6 +216,11 @@ export function createTelegramBot(opts: TelegramBotOptions) {
     try {
       const msg = ctx.message;
       if (!msg) return;
+
+      // Ignore messages from the bot itself to prevent self-triggering loops
+      const botId = ctx.me?.id;
+      if (botId && msg.from?.id === botId) return;
+
       const chatId = msg.chat.id;
       const isGroup =
         msg.chat.type === "group" || msg.chat.type === "supergroup";
@@ -365,6 +367,17 @@ export function createTelegramBot(opts: TelegramBotOptions) {
         );
       }
 
+      // Track status lines (tool labels) and content separately (nessie-style)
+      const statusLines: string[] = [];
+      let streamedText = "";
+      const chatIdStr = String(chatId);
+
+      // Helper to build display text: status lines + content
+      const buildDisplayText = (content: string) => {
+        if (statusLines.length === 0) return content;
+        return `${statusLines.join("\n")}\n\n${content}`;
+      };
+
       let blockSendChain: Promise<void> = Promise.resolve();
       const sendBlockReply = (payload: ReplyPayload) => {
         if (
@@ -376,9 +389,16 @@ export function createTelegramBot(opts: TelegramBotOptions) {
         }
         blockSendChain = blockSendChain
           .then(async () => {
+            // For text-only replies, edit the working message instead of sending new
+            if (payload.text && !payload.mediaUrl && !payload.mediaUrls?.length) {
+              streamedText = payload.text;
+              await editWorkingMessage(chatIdStr, buildDisplayText(payload.text), true);
+              return;
+            }
+            // For media replies, send separately
             await deliverReplies({
               replies: [payload],
-              chatId: String(chatId),
+              chatId: chatIdStr,
               token: opts.token,
               runtime,
               bot,
@@ -393,26 +413,31 @@ export function createTelegramBot(opts: TelegramBotOptions) {
           });
       };
 
-      // Track accumulated text for streaming
-      let streamedText = "";
-      const chatIdStr = String(chatId);
-
       const onReplyStart = async () => {
         await sendTyping();
-        // Send initial "thinking" message that we'll edit
-        await editWorkingMessage(chatIdStr, "", true);
+        // Send initial "thinking" message that we'll edit (preserve any status lines)
+        await editWorkingMessage(chatIdStr, buildDisplayText(streamedText), true);
       };
 
       const onPartialReply = async (payload: ReplyPayload) => {
         if (payload.text) {
           streamedText = payload.text;
-          await editWorkingMessage(chatIdStr, streamedText, true);
+          await editWorkingMessage(chatIdStr, buildDisplayText(streamedText), true);
+        }
+      };
+
+      const onToolResult = async (payload: ReplyPayload) => {
+        if (payload.text) {
+          // Add tool label to status lines
+          statusLines.push(`_${payload.text}_`);
+          // Update display with status + current content
+          await editWorkingMessage(chatIdStr, buildDisplayText(streamedText), true);
         }
       };
 
       const replyResult = await getReplyFromConfig(
         ctxPayload,
-        { onReplyStart, onBlockReply: sendBlockReply, onPartialReply },
+        { onReplyStart, onBlockReply: sendBlockReply, onPartialReply, onToolResult },
         cfg,
       );
 
@@ -423,24 +448,19 @@ export function createTelegramBot(opts: TelegramBotOptions) {
         : [];
       await blockSendChain;
 
-      // Final update - remove "working" indicator or use working message for final reply
+      // Final update - use the final reply text (not partial streamed text)
       const workingState = workingMessages.get(chatIdStr);
-      if (streamedText) {
-        // Streaming worked - update working message with final text
-        await editWorkingMessage(chatIdStr, streamedText, false);
-        clearWorkingMessage(chatIdStr);
-        return;
-      }
+      const finalText = replies[0]?.text || streamedText;
 
       if (workingState) {
-        // Streaming didn't work but we have a working message
-        if (replies.length > 0 && replies[0]?.text) {
-          // Edit the working message with the final reply instead of sending new
-          await editWorkingMessage(chatIdStr, replies[0].text, false);
+        if (finalText) {
+          // Edit the working message with the final reply
+          await editWorkingMessage(chatIdStr, finalText, false);
           clearWorkingMessage(chatIdStr);
+          // Don't send additional reply since we used the working message
           return;
         }
-        // No reply - delete orphaned working message
+        // No reply text - delete orphaned working message
         try {
           await bot.api.deleteMessage(Number(chatIdStr), workingState.messageId);
         } catch {
@@ -449,7 +469,7 @@ export function createTelegramBot(opts: TelegramBotOptions) {
         clearWorkingMessage(chatIdStr);
       }
 
-      // Only deliver replies if we didn't handle them above
+      // Only deliver replies if we didn't have a working message to edit
       if (replies.length === 0) return;
 
       await deliverReplies({
