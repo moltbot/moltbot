@@ -1,7 +1,10 @@
 /**
  * Deep Research message templates
+ * Uses telegram formatter for MarkdownV2 and emoji restrictions
  * @see docs/sdd/deep-research/ui-flow.md
  */
+
+import { formatTelegramMessage } from "../telegram/formatter.js";
 
 export interface DeepResearchMessages {
   acknowledgment: (topic: string, transcript?: string) => string;
@@ -90,16 +93,23 @@ export const messages: DeepResearchMessages = {
   acknowledgment: (topic: string, transcript?: string) => {
     const lines: string[] = [];
     if (transcript) {
-      lines.push("🎙️ Голосовое принято");
-      lines.push(`📝 Текст: ${truncateTranscript(transcript)}`);
+      lines.push("○ Голосовое принято");
+      lines.push(`○ Текст: ${truncateTranscript(transcript)}`);
       lines.push("");
     }
-    lines.push("🔍 Вижу запрос на deep research");
+    lines.push("● Вижу запрос на deep research");
     lines.push(`Тема: ${topic}`);
-    return lines.join("\n");
+    return formatTelegramMessage(lines.join("\n"));
   },
 
-  startExecution: () => messages.progress("starting"),
+  startExecution: () => {
+    const step = PROGRESS_STEPS["starting"];
+    const lines: string[] = [renderProgressBar(step.percent, step.label)];
+    if (step.detail) {
+      lines.push(step.detail);
+    }
+    return formatTelegramMessage(lines.join("\n"));
+  },
 
   progress: (stage: DeepResearchProgressStage, runId?: string) => {
     const step = PROGRESS_STEPS[stage];
@@ -110,7 +120,7 @@ export const messages: DeepResearchMessages = {
     if (runId) {
       lines.push(`Run ID: ${runId}`);
     }
-    return lines.join("\n");
+    return formatTelegramMessage(lines.join("\n"));
   },
 
   resultDelivery: (result: DeepResearchResult) => {
@@ -118,31 +128,38 @@ export const messages: DeepResearchMessages = {
       .map((b) => `• ${b}`)
       .join("\n");
 
-    return `✅ Deep Research завершен
+    const message = `○ Deep Research завершен
 
-📝 Краткий ответ:
+○ Краткий ответ:
 ${result.shortAnswer}
 
-📋 Основные пункты:
+○ Основные пункты:
 ${bullets}
 
-💭 Мнение:
+○ Мнение:
 ${result.opinion}
 
-🔗 Полный отчет: ${result.publishUrl}`;
+○ Полный отчет: ${result.publishUrl}`;
+    return formatTelegramMessage(message);
   },
 
   error: (error: string, runId?: string) => {
-    const runInfo = runId ? `\nRun ID: \`${runId}\`` : "";
+    const runInfo = runId ? `\nRun ID: ${runId}` : "";
     const errorText = error.length > 200 ? `${error.slice(0, 200)}...` : error;
-    return `❌ Deep research failed\n\nОшибка: ${errorText}${runInfo}`;
+    const message = `✂︎ Deep research failed\n\nОшибка: ${errorText}${runInfo}`;
+    return formatTelegramMessage(message);
   },
 
-  timeout: () =>
-    "⏱️ Deep research timeout\n\nИсследование заняло слишком много времени.",
+  timeout: () => {
+    return formatTelegramMessage(
+      "◐ Deep research timeout\n\nИсследование заняло слишком много времени.",
+    );
+  },
 
-  cliNotFound: (path: string) =>
-    `❌ CLI not found\n\nПуть: \`${path}\`\nПроверьте настройки deepResearch.cliPath`,
+  cliNotFound: (path: string) => {
+    const message = `✂︎ CLI not found\n\nПуть: ${path}\nПроверьте настройки deepResearch.cliPath`;
+    return formatTelegramMessage(message);
+  },
 
   callbackAcknowledgment: () => "Запускаю deep research...",
 
@@ -159,7 +176,7 @@ ${result.opinion}
     const lines = questions.map((question, index) =>
       `${index + 1}. ${question}`.trim(),
     );
-    return ["Нужны уточнения:", ...lines].join("\n");
+    return formatTelegramMessage(["Нужны уточнения:", ...lines].join("\n"));
   },
 
   missingUserId: () =>
