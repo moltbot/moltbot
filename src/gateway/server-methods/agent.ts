@@ -295,7 +295,7 @@ export const agentHandlers: GatewayRequestHandlers = {
     const timeoutMs =
       typeof p.timeoutMs === "number" && Number.isFinite(p.timeoutMs)
         ? Math.max(0, Math.floor(p.timeoutMs))
-        : 30_000;
+        : 600_000; // 10 minutes default to allow multi-turn agent loops
 
     const snapshot = await waitForAgentJob({
       runId,
