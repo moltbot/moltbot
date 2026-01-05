@@ -2,9 +2,10 @@
 import { Buffer } from "node:buffer";
 
 import { apiThrottler } from "@grammyjs/transformer-throttler";
-import type { ApiClientOptions, BotCommand, Message } from "grammy";
+import type { ApiClientOptions, Message } from "grammy";
 import { Bot, InputFile, webhookCallback } from "grammy";
 import { chunkText, resolveTextChunkLimit } from "../auto-reply/chunk.js";
+import { getChatSlashCommands } from "../auto-reply/slash-commands.js";
 import { hasControlCommand } from "../auto-reply/command-detection.js";
 import { formatAgentEnvelope } from "../auto-reply/envelope.js";
 import { createReplyDispatcher } from "../auto-reply/reply/reply-dispatcher.js";
@@ -80,19 +81,7 @@ export function createTelegramBot(opts: TelegramBotOptions) {
   };
 
   const registerCommands = async () => {
-    const commands: BotCommand[] = [
-      { command: "help", description: "Show available commands" },
-      { command: "status", description: "Show current status" },
-      { command: "new", description: "Start a new conversation" },
-      { command: "stop", description: "Stop current generation" },
-      { command: "model", description: "Show or change the model" },
-      { command: "thinking", description: "Set thinking level" },
-      { command: "verbose", description: "Toggle verbose mode" },
-      { command: "queue", description: "Show or manage command queue" },
-      { command: "elevated", description: "Set elevated access mode" },
-      { command: "reset", description: "Reset the conversation" },
-      { command: "activation", description: "Manage agent activation" },
-    ];
+    const commands = getChatSlashCommands();
     try {
       await bot.api.setMyCommands(commands, {
         scope: { type: "all_private_chats" },
