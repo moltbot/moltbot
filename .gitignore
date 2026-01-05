@@ -152,9 +152,16 @@ test*.md
 *_test.sh
 *_test.md
 scripts/test-*.sh
+*.mjs
 
 # E2E test results (local)
 tests/e2e_web_search_results/
+docs/e2e-telega-v2/
+
+# Final reports and temporary investigation results
+*_FINAL_REPORT.md
+FINAL_REPORT.md
+web-search-*-example.md
 
 # Development update/create scripts
 create_*.py
