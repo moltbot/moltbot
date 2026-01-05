@@ -1,195 +1,81 @@
-# Engineering Execution Spec: groupPolicy Hardening
+# Engineering Execution Spec: groupPolicy Hardening (Telegram Allowlist Parity)
 
-**Date**: 2026-01-05
-**Status**: In Progress
+**Date**: 2026-01-05  
+**Status**: Complete  
 **PR**: #216 (feat/whatsapp-group-policy)
 
 ---
 
 ## Executive Summary
 
-Self-critique of the `groupPolicy` feature implementation revealed 3 issues and 2 test gaps that need addressing before the PR can be considered production-ready.
+Follow-up hardening work ensures Telegram allowlists behave consistently across inbound group/DM filtering and outbound send normalization. The focus is on prefix parity (`telegram:` / `tg:`), case-insensitive matching for prefixes, and resilience to accidental whitespace in config entries. Documentation and tests were updated to reflect and lock in this behavior.
 
 ---
 
 ## Findings Analysis
 
-### [MED] F1: Telegram Group Allowlist Ignores Prefixed IDs
+### [MED] F1: Telegram Allowlist Prefix Handling Is Case-Sensitive and Excludes `tg:`
 
-**Location**: `src/telegram/bot.ts:105-128`
+**Location**: `src/telegram/bot.ts`
 
-**Problem**: The DM allowlist (lines 140-153) accepts both raw IDs (`123456789`) and prefixed IDs (`telegram:123456789`), but the group allowlist only checks raw IDs/usernames.
+**Problem**: Inbound allowlist normalization only stripped a lowercase `telegram:` prefix. This rejected `TG:123` / `Telegram:123` and did not accept the `tg:` shorthand even though outbound send normalization already accepts `tg:` and case-insensitive prefixes.
 
-```typescript
-// DM check (correct - supports prefix):
-const candidateWithPrefix = `telegram:${candidate}`;
-normalizedAllowFrom.some((v) => v === candidateWithPrefix);
+**Impact**:
+- DMs and group allowlists fail when users copy/paste prefixed IDs from logs or existing send format.
+- Behavior is inconsistent between inbound filtering and outbound send normalization.
 
-// Group check (missing prefix support):
-const senderIdAllowed = normalizedAllowFrom.includes(String(senderId));
-// ^ Only checks raw ID, not telegram:123456789
-```
-
-**Impact**: Users who configure `allowFrom: ["telegram:123456789"]` will find:
-- DMs work correctly
-- Group messages get blocked (even though sender is in allowlist)
-
-**Fix**: Strip `telegram:` prefix when matching sender IDs in group allowlist.
+**Fix**: Normalize allowlist entries by trimming whitespace and stripping `telegram:` / `tg:` prefixes case-insensitively at pre-compute time.
 
 ---
 
-### [LOW] F2: Documentation Contradiction
+### [LOW] F2: Allowlist Entries Are Not Trimmed
 
-**Location**: `docs/groups.md:41-43`
+**Location**: `src/telegram/bot.ts`
 
-**Problem**: The docs state:
-> `groupPolicy` is separate from `allowFrom` (which only filters DMs)
+**Problem**: Allowlist entries are not trimmed; accidental whitespace causes mismatches.
 
-But `groupPolicy: "allowlist"` explicitly uses `allowFrom` for group filtering. This is misleading.
-
-**Fix**: Reword to clarify that `allowFrom` is used for:
-1. DMs (always, when set)
-2. Groups (only when `groupPolicy: "allowlist"`)
-
----
-
-### [LOW] F3: Zod Schema `.default().optional()` Pattern
-
-**Location**: `src/config/zod-schema.ts:549,580`
-
-**Problem**: Using `GroupPolicySchema.default("open").optional()` may seem redundant.
-
-**Analysis**: This is actually correct behavior:
-- `.optional()` - Field can be omitted from input
-- `.default("open")` - If omitted, parsing returns "open"
-
-The combination ensures:
-- TypeScript type is `"open" | "disabled" | "allowlist" | undefined` for input
-- Runtime always resolves to `"open"` if not provided
-
-**Decision**: Keep current implementation - it's correct. Add a code comment explaining the pattern.
-
----
-
-## Test Gaps
-
-### T1: WhatsApp Wildcard Allowlist Test
-
-**Missing**: Test for `groupPolicy: "allowlist"` with `allowFrom: ["*"]`
-
-The Telegram tests include wildcard coverage, but WhatsApp does not.
-
----
-
-### T2: Telegram Prefixed ID Test
-
-**Missing**: Test for `groupPolicy: "allowlist"` with `allowFrom: ["telegram:123456789"]`
-
-After fixing F1, need a test to verify prefixed IDs work.
+**Fix**: Trim and drop empty entries while normalizing allowlist inputs.
 
 ---
 
 ## Implementation Phases
 
-### Phase 1: Fix [MED] Telegram Prefixed ID Support
+### Phase 1: Normalize Telegram Allowlist Inputs
 
 **File**: `src/telegram/bot.ts`
-**Lines**: 105-128
 
 **Changes**:
-1. Strip `telegram:` prefix when building the normalized allowlist (at pre-computation, not per-message)
-2. Update `normalizedAllowFrom` to handle both raw and prefixed formats
-
-**Code**:
-```typescript
-// Pre-compute: strip telegram: prefix for group matching
-const normalizedAllowFrom = (allowFrom ?? []).map((v) => {
-  const s = String(v);
-  return s.startsWith("telegram:") ? s.slice(9) : s;
-});
-```
+1. Trim allowlist entries and drop empty values.
+2. Strip `telegram:` / `tg:` prefixes case-insensitively.
+3. Simplify DM allowlist check to rely on normalized values.
 
 ---
 
-### Phase 2: Fix [LOW] Documentation
-
-**File**: `docs/groups.md`
-**Lines**: 41-43
-
-**Changes**:
-Replace:
-> `groupPolicy` is separate from `allowFrom` (which only filters DMs)
-
-With:
-> `allowFrom` filters DMs by default. With `groupPolicy: "allowlist"`, it also filters group message senders.
-
----
-
-### Phase 3: Add Code Comment for Zod Pattern
-
-**File**: `src/config/zod-schema.ts`
-**Lines**: 549, 580
-
-**Changes**:
-Add comment above `groupPolicy` field:
-```typescript
-// .default("open") ensures runtime always has a value
-// .optional() allows omission in input config
-groupPolicy: GroupPolicySchema.default("open").optional(),
-```
-
----
-
-### Phase 4: Add Missing Tests
-
-**File**: `src/web/monitor-inbox.test.ts`
-
-**Add Test**: WhatsApp wildcard allowlist
-```typescript
-it("allows all group senders with wildcard in groupPolicy allowlist", async () => {
-  mockLoadConfig.mockReturnValue({
-    whatsapp: {
-      allowFrom: ["*"],
-      groupPolicy: "allowlist",
-    },
-    messages: { ... },
-  });
-  // ... emit group message, verify onMessage called
-});
-```
+### Phase 2: Add Coverage for Prefix + Whitespace
 
 **File**: `src/telegram/bot.test.ts`
 
-**Add Test**: Telegram prefixed ID
-```typescript
-it("matches telegram:-prefixed allowFrom entries in group allowlist", async () => {
-  loadConfig.mockReturnValue({
-    telegram: {
-      groupPolicy: "allowlist",
-      allowFrom: ["telegram:123456789"],
-      groups: { "*": { requireMention: false } },
-    },
-  });
-  // ... emit group message from user 123456789, verify reply called
-});
-```
+**Add Tests**:
+- DM allowlist accepts `TG:` prefix with surrounding whitespace.
+- Group allowlist accepts `TG:` prefix case-insensitively.
 
 ---
 
-### Phase 5: Verification
+### Phase 3: Documentation Updates
 
-1. Run `pnpm build` - TypeScript compilation
-2. Run `pnpm lint` - Biome linting
-3. Run `pnpm test` - All tests (886+)
-4. Manual verification of changes
+**Files**:
+- `docs/groups.md`
+- `docs/telegram.md`
+
+**Changes**:
+- Document `tg:` alias and case-insensitive prefixes for Telegram allowlists.
 
 ---
 
-### Phase 6: Commit and PR Update
+### Phase 4: Verification
 
-1. Stage changes with `scripts/committer`
-2. Push to fork
-3. Update PR description with hardening changes
+1. Run targeted Telegram tests (`pnpm test -- src/telegram/bot.test.ts`).
+2. If time allows, run full suite (`pnpm test`).
 
 ---
 
@@ -197,25 +83,21 @@ it("matches telegram:-prefixed allowFrom entries in group allowlist", async () =
 
 | File | Change Type | Description |
 |------|-------------|-------------|
-| `src/telegram/bot.ts` | Fix | Strip telegram: prefix in group allowlist |
-| `src/config/zod-schema.ts` | Comment | Explain default+optional pattern |
-| `docs/groups.md` | Fix | Clarify allowFrom usage with groupPolicy |
-| `src/web/monitor-inbox.test.ts` | Test | Add wildcard allowlist test |
-| `src/telegram/bot.test.ts` | Test | Add prefixed ID test |
+| `src/telegram/bot.ts` | Fix | Trim allowlist values; strip `telegram:` / `tg:` prefixes case-insensitively |
+| `src/telegram/bot.test.ts` | Test | Add DM + group allowlist coverage for `TG:` prefix + whitespace |
+| `docs/groups.md` | Docs | Mention `tg:` alias + case-insensitive prefixes |
+| `docs/telegram.md` | Docs | Mention `tg:` alias + case-insensitive prefixes |
 
 ---
 
 ## Success Criteria
 
-- [ ] F1: Prefixed IDs work in Telegram group allowlist
-- [ ] F2: Docs accurately describe allowFrom behavior
-- [ ] F3: Zod pattern has explanatory comment
-- [ ] T1: WhatsApp wildcard test exists and passes
-- [ ] T2: Telegram prefixed ID test exists and passes
-- [ ] All 888+ tests pass
-- [ ] Build succeeds
-- [ ] Lint passes
-- [ ] PR updated with hardening notes
+- [x] Telegram allowlist accepts `telegram:` / `tg:` prefixes case-insensitively.
+- [x] Telegram allowlist tolerates whitespace in config entries.
+- [x] DM and group allowlist tests cover prefixed cases.
+- [x] Docs updated to reflect allowlist formats.
+- [x] Targeted tests pass.
+- [x] Full test suite passes.
 
 ---
 
@@ -223,18 +105,17 @@ it("matches telegram:-prefixed allowFrom entries in group allowlist", async () =
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| Breaking existing configs | Low | Prefix stripping is additive, not breaking |
-| Test interference | Low | New tests are isolated |
-| Doc changes | None | Documentation only |
+| Behavior change for malformed entries | Low | Normalization is additive and trims only whitespace |
+| Test fragility | Low | Isolated unit tests; no external dependencies |
+| Doc drift | Low | Updated docs alongside code |
 
 ---
 
 ## Estimated Complexity
 
-- **Phase 1**: Low (3 lines of code change)
-- **Phase 2**: Low (2 sentences)
-- **Phase 3**: Low (2 line comment)
-- **Phase 4**: Medium (2 new tests)
-- **Phase 5-6**: Low (standard workflow)
+- **Phase 1**: Low (normalization helpers)
+- **Phase 2**: Low (2 new tests)
+- **Phase 3**: Low (doc edits)
+- **Phase 4**: Low (verification)
 
-**Total**: ~30 minutes estimated execution time
+**Total**: ~20 minutes

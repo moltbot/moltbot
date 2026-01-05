@@ -179,9 +179,7 @@ export async function monitorWebInbox(options: {
       // Pre-compute normalized allowlist for filtering (used by both group and DM checks)
       const hasWildcard = allowFrom?.includes("*") ?? false;
       const normalizedAllowFrom =
-        allowFrom && allowFrom.length > 0
-          ? allowFrom.map(normalizeE164)
-          : [];
+        allowFrom && allowFrom.length > 0 ? allowFrom.map(normalizeE164) : [];
 
       // Group policy filtering: controls how group messages are handled
       // - "open" (default): groups bypass allowFrom, only mention-gating applies

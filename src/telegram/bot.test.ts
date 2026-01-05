@@ -939,6 +939,37 @@ describe("createTelegramBot", () => {
     expect(replySpy).toHaveBeenCalledTimes(1);
   });
 
+  it("allows direct messages with tg/Telegram-prefixed allowFrom entries", async () => {
+    onSpy.mockReset();
+    const replySpy = replyModule.__replySpy as unknown as ReturnType<
+      typeof vi.fn
+    >;
+    replySpy.mockReset();
+    loadConfig.mockReturnValue({
+      telegram: {
+        allowFrom: ["  TG:123456789  "],
+      },
+    });
+
+    createTelegramBot({ token: "tok" });
+    const handler = onSpy.mock.calls[0][1] as (
+      ctx: Record<string, unknown>,
+    ) => Promise<void>;
+
+    await handler({
+      message: {
+        chat: { id: 123456789, type: "private" }, // Direct message
+        from: { id: 123456789, username: "testuser" },
+        text: "hello",
+        date: 1736380800,
+      },
+      me: { username: "clawdbot_bot" },
+      getFile: async () => ({ download: async () => new Uint8Array() }),
+    });
+
+    expect(replySpy).toHaveBeenCalledTimes(1);
+  });
+
   it("allows group messages with wildcard in allowFrom when groupPolicy is 'allowlist'", async () => {
     onSpy.mockReset();
     const replySpy = replyModule.__replySpy as unknown as ReturnType<
@@ -1035,6 +1066,40 @@ describe("createTelegramBot", () => {
     });
 
     // Should call reply because sender ID matches after stripping telegram: prefix
+    expect(replySpy).toHaveBeenCalled();
+  });
+
+  it("matches tg:-prefixed allowFrom entries case-insensitively in group allowlist", async () => {
+    onSpy.mockReset();
+    const replySpy = replyModule.__replySpy as unknown as ReturnType<
+      typeof vi.fn
+    >;
+    replySpy.mockReset();
+    loadConfig.mockReturnValue({
+      telegram: {
+        groupPolicy: "allowlist",
+        allowFrom: ["TG:123456789"], // Prefixed format (case-insensitive)
+        groups: { "*": { requireMention: false } },
+      },
+    });
+
+    createTelegramBot({ token: "tok" });
+    const handler = onSpy.mock.calls[0][1] as (
+      ctx: Record<string, unknown>,
+    ) => Promise<void>;
+
+    await handler({
+      message: {
+        chat: { id: -100123456789, type: "group", title: "Test Group" },
+        from: { id: 123456789, username: "testuser" }, // Matches after stripping tg: prefix
+        text: "hello from prefixed user",
+        date: 1736380800,
+      },
+      me: { username: "clawdbot_bot" },
+      getFile: async () => ({ download: async () => new Uint8Array() }),
+    });
+
+    // Should call reply because sender ID matches after stripping tg: prefix
     expect(replySpy).toHaveBeenCalled();
   });
 });

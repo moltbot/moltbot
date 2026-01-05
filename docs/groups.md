@@ -41,7 +41,7 @@ Both WhatsApp and Telegram support a `groupPolicy` config to control how group m
 Notes:
 - `allowFrom` filters DMs by default. With `groupPolicy: "allowlist"`, it also filters group message senders.
 - `groupPolicy` is separate from mention-gating (which requires @mentions).
-- For Telegram `allowlist`, the sender can be matched by user ID (e.g., `"123456789"` or `"telegram:123456789"`) or username (e.g., `"@alice"` or `"alice"`).
+- For Telegram `allowlist`, the sender can be matched by user ID (e.g., `"123456789"`, `"telegram:123456789"`, or `"tg:123456789"`; prefixes are case-insensitive) or username (e.g., `"@alice"` or `"alice"`).
 
 ## Mention gating (default)
 Group messages require a mention unless overridden per group. Defaults live per subsystem under `*.groups."*"`.
