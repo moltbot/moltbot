@@ -20,13 +20,14 @@ import type { MsgContext } from "../templating.js";
 import type { ThinkLevel, VerboseLevel } from "../thinking.js";
 import type { ReplyPayload } from "../types.js";
 import { isAbortTrigger, setAbortMemory } from "./abort.js";
+import type { InlineDirectives } from "./directive-handling.js";
 import { stripMentions } from "./mentions.js";
 
 export type CommandContext = {
   surface: string;
   isWhatsAppSurface: boolean;
   ownerList: string[];
-  isOwnerSender: boolean;
+  isAuthorizedSender: boolean;
   senderE164?: string;
   abortKey?: string;
   rawBodyNormalized: string;
@@ -41,8 +42,16 @@ export function buildCommandContext(params: {
   sessionKey?: string;
   isGroup: boolean;
   triggerBodyNormalized: string;
+  commandAuthorized: boolean;
 }): CommandContext {
-  const { ctx, cfg, sessionKey, isGroup, triggerBodyNormalized } = params;
+  const {
+    ctx,
+    cfg,
+    sessionKey,
+    isGroup,
+    triggerBodyNormalized,
+    commandAuthorized,
+  } = params;
   const surface = (ctx.Surface ?? "").trim().toLowerCase();
   const isWhatsAppSurface =
     surface === "whatsapp" ||
@@ -80,14 +89,17 @@ export function buildCommandContext(params: {
   const ownerList = ownerCandidates
     .map((entry) => normalizeE164(entry))
     .filter((entry): entry is string => Boolean(entry));
-  const isOwnerSender =
-    Boolean(senderE164) && ownerList.includes(senderE164 ?? "");
+  const isOwner =
+    !isWhatsAppSurface ||
+    ownerList.length === 0 ||
+    (senderE164 ? ownerList.includes(senderE164) : false);
+  const isAuthorizedSender = commandAuthorized && isOwner;
 
   return {
     surface,
     isWhatsAppSurface,
     ownerList,
-    isOwnerSender,
+    isAuthorizedSender,
     senderE164: senderE164 || undefined,
     abortKey,
     rawBodyNormalized,
@@ -101,6 +113,7 @@ export async function handleCommands(params: {
   ctx: MsgContext;
   cfg: ClawdbotConfig;
   command: CommandContext;
+  directives: InlineDirectives;
   sessionEntry?: SessionEntry;
   sessionStore?: Record<string, SessionEntry>;
   sessionKey?: string;
@@ -122,6 +135,7 @@ export async function handleCommands(params: {
   const {
     cfg,
     command,
+    directives,
     sessionEntry,
     sessionStore,
     sessionKey,
@@ -151,9 +165,25 @@ export async function handleCommands(params: {
         reply: { text: "⚙️ Group activation only applies to group chats." },
       };
     }
-    if (!command.isOwnerSender) {
+    const activationOwnerList =
+      command.ownerList.length > 0
+        ? command.ownerList
+        : command.isWhatsAppSurface && command.to
+          ? [normalizeE164(command.to)]
+          : [];
+    const activationSenderE164 = command.senderE164
+      ? normalizeE164(command.senderE164)
+      : "";
+    const isActivationOwner =
+      Boolean(activationSenderE164) &&
+      activationOwnerList.includes(activationSenderE164);
+
+    if (
+      !command.isAuthorizedSender ||
+      (command.isWhatsAppSurface && !isActivationOwner)
+    ) {
       logVerbose(
-        `Ignoring /activation from non-owner in group: ${command.senderE164 || "<unknown>"}`,
+        `Ignoring /activation from unauthorized sender in group: ${command.senderE164 || "<unknown>"}`,
       );
       return { shouldContinue: false };
     }
@@ -179,9 +209,9 @@ export async function handleCommands(params: {
   }
 
   if (sendPolicyCommand.hasCommand) {
-    if (!command.isOwnerSender) {
+    if (!command.isAuthorizedSender) {
       logVerbose(
-        `Ignoring /send from non-owner: ${command.senderE164 || "<unknown>"}`,
+        `Ignoring /send from unauthorized sender: ${command.senderE164 || "<unknown>"}`,
       );
       return { shouldContinue: false };
     }
@@ -220,9 +250,9 @@ export async function handleCommands(params: {
     command.commandBodyNormalized === "restart" ||
     command.commandBodyNormalized.startsWith("/restart ")
   ) {
-    if (isGroup && !command.isOwnerSender) {
+    if (!command.isAuthorizedSender) {
       logVerbose(
-        `Ignoring /restart from non-owner in group: ${command.senderE164 || "<unknown>"}`,
+        `Ignoring /restart from unauthorized sender: ${command.senderE164 || "<unknown>"}`,
       );
       return { shouldContinue: false };
     }
@@ -235,14 +265,15 @@ export async function handleCommands(params: {
     };
   }
 
-  if (
+  const statusRequested =
+    directives.hasStatusDirective ||
     command.commandBodyNormalized === "/status" ||
     command.commandBodyNormalized === "status" ||
-    command.commandBodyNormalized.startsWith("/status ")
-  ) {
-    if (isGroup && !command.isOwnerSender) {
+    command.commandBodyNormalized.startsWith("/status ");
+  if (statusRequested) {
+    if (!command.isAuthorizedSender) {
       logVerbose(
-        `Ignoring /status from non-owner in group: ${command.senderE164 || "<unknown>"}`,
+        `Ignoring /status from unauthorized sender: ${command.senderE164 || "<unknown>"}`,
       );
       return { shouldContinue: false };
     }

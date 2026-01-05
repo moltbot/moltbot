@@ -7,18 +7,28 @@
 ### Highlights
 - Models: add image-specific model config (`agent.imageModel` + fallbacks) and scan support.
 - Agent tools: new `image` tool routed to the image model (when configured).
+- Config: default model shorthands (`opus`, `sonnet`, `gpt`, `gpt-mini`, `gemini`, `gemini-flash`).
+- Docs: document built-in model shorthands + precedence (user config wins).
 
 ### Fixes
+- Control UI: render Markdown in tool result cards.
+- Control UI: prevent overlapping action buttons in Discord guild rules on narrow layouts.
 - Android: tapping the foreground service notification brings the app to the front. (#179) — thanks @Syhids
 - Cron tool passes `id` to the gateway for update/remove/run/runs (keeps `jobId` input). (#180) — thanks @adamgall
+- Control UI: chat view uses page scroll with sticky header/sidebar and fixed composer (no inner scroll frame).
 - macOS: treat location permission as always-only to avoid iOS-only enums. (#165) — thanks @Nachx639
 - macOS: make generated gateway protocol models `Sendable` for Swift 6 strict concurrency. (#195) — thanks @andranik-sahakyan
 - WhatsApp: suppress typing indicator during heartbeat background tasks. (#190) — thanks @mcinteerj
+- WhatsApp: mark offline history sync messages as read without auto-reply. (#193) — thanks @mcinteerj
+- Discord: avoid duplicate replies when a provider emits late streaming `text_end` events (OpenAI/GPT).
+- Env: load global `$CLAWDBOT_STATE_DIR/.env` (`~/.clawdbot/.env`) as a fallback after CWD `.env`.
+- Env: optional login-shell env fallback (opt-in; imports expected keys without overriding existing env).
 - Agent tools: OpenAI-compatible tool JSON Schemas (fix `browser`, normalize union schemas).
 - Onboarding: when running from source, auto-build missing Control UI assets (`pnpm ui:build`).
 - Discord/Slack: route reaction + system notifications to the correct session (no main-session bleed).
 - Agent tools: honor `agent.tools` allow/deny policy even when sandbox is off.
 - Discord: avoid duplicate replies when OpenAI emits repeated `message_end` events.
+- Commands: unify /status (inline) and command auth across providers; group bypass for authorized control commands; remove Discord /clawd slash handler.
 
 ## 2026.1.5
 

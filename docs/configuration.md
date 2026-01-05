@@ -3,7 +3,6 @@ summary: "All configuration options for ~/.clawdbot/clawdbot.json with examples"
 read_when:
   - Adding or modifying config fields
 ---
-<!-- {% raw %} -->
 # Configuration 🔧
 
 CLAWDBOT reads an optional **JSON5** config from `~/.clawdbot/clawdbot.json` (comments + trailing commas allowed).
@@ -59,6 +58,36 @@ To prevent the bot from responding to WhatsApp @-mentions in groups (only respon
 ```
 
 ## Common options
+
+### Env vars + `.env`
+
+CLAWDBOT reads env vars from the parent process (shell, launchd/systemd, CI, etc.).
+
+Additionally, it loads:
+- `.env` from the current working directory (if present)
+- a global fallback `.env` from `~/.clawdbot/.env` (aka `$CLAWDBOT_STATE_DIR/.env`)
+
+Neither `.env` file overrides existing env vars.
+
+### `env.shellEnv` (optional)
+
+Opt-in convenience: if enabled and none of the expected keys are set yet, CLAWDBOT runs your login shell and imports only the missing expected keys (never overrides).
+This effectively sources your shell profile.
+
+```json5
+{
+  env: {
+    shellEnv: {
+      enabled: true,
+      timeoutMs: 15000
+    }
+  }
+}
+```
+
+Env var equivalent:
+- `CLAWDBOT_LOAD_SHELL_ENV=1`
+- `CLAWDBOT_SHELL_ENV_TIMEOUT_MS=15000`
 
 ### `identity`
 
@@ -433,6 +462,17 @@ Controls the embedded agent runtime (model/thinking/verbose/timeouts).
 `modelFallbacks` lists ordered fallback models to try when the default fails.
 `imageModel` selects an image-capable model for the `image` tool.
 `imageModelFallbacks` lists ordered fallback image models for the `image` tool.
+
+Clawdbot also ships a few built-in `modelAliases` shorthands (when an `agent` section exists):
+
+- `opus` -> `anthropic/claude-opus-4-5`
+- `sonnet` -> `anthropic/claude-sonnet-4-5`
+- `gpt` -> `openai/gpt-5.2`
+- `gpt-mini` -> `openai/gpt-5-mini`
+- `gemini` -> `google/gemini-3-pro-preview`
+- `gemini-flash` -> `google/gemini-3-flash-preview`
+
+If you configure the same alias name (case-insensitive) yourself, your value wins (defaults never override).
 
 ```json5
 {
@@ -976,9 +1016,15 @@ Requires full Gateway restart:
 
 To run multiple gateways on one host, isolate per-instance state + config and use unique ports:
 - `CLAWDBOT_CONFIG_PATH` (per-instance config)
-- `CLAWDBOT_STATE_DIR` (sessions/creds/logs)
+- `CLAWDBOT_STATE_DIR` (sessions/creds)
 - `agent.workspace` (memories)
 - `gateway.port` (unique per instance)
+
+Convenience flags (CLI):
+- `clawdbot --dev …` → uses `~/.clawdbot-dev` + shifts ports from base `19001`
+- `clawdbot --profile <name> …` → uses `~/.clawdbot-<name>` (port via config/env/flags)
+
+See `docs/gateway.md` for the derived port mapping (gateway/bridge/browser/canvas).
 
 Example:
 ```bash
@@ -1188,4 +1234,3 @@ Cron is a Gateway-owned scheduler for wakeups and scheduled jobs. See [Cron + wa
 ---
 
 *Next: [Agent Runtime](./agent.md)* 🦞
-<!-- {% endraw %} -->

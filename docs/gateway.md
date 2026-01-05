@@ -49,6 +49,34 @@ pnpm gateway:watch
 
 Supported if you isolate state + config and use unique ports.
 
+### Dev profile (`--dev`)
+
+Fast path: run a fully-isolated dev instance (config/state/workspace) without touching your primary setup.
+
+```bash
+clawdbot --dev setup
+clawdbot --dev gateway --allow-unconfigured
+# then target the dev instance:
+clawdbot --dev status
+clawdbot --dev health
+```
+
+Defaults (can be overridden via env/flags/config):
+- `CLAWDBOT_STATE_DIR=~/.clawdbot-dev`
+- `CLAWDBOT_CONFIG_PATH=~/.clawdbot-dev/clawdbot.json`
+- `CLAWDBOT_GATEWAY_PORT=19001` (Gateway WS + HTTP)
+- `bridge.port=19002` (derived: `gateway.port+1`)
+- `browser.controlUrl=http://127.0.0.1:19003` (derived: `gateway.port+2`)
+- `canvasHost.port=19005` (derived: `gateway.port+4`)
+- `agent.workspace` default becomes `~/clawd-dev` when you run `setup`/`onboard` under `--dev`.
+
+Derived ports (rules of thumb):
+- Base port = `gateway.port` (or `CLAWDBOT_GATEWAY_PORT` / `--port`)
+- `bridge.port = base + 1` (or `CLAWDBOT_BRIDGE_PORT` / config override)
+- `browser.controlUrl port = base + 2` (or `CLAWDBOT_BROWSER_CONTROL_URL` / config override)
+- `canvasHost.port = base + 4` (or `CLAWDBOT_CANVAS_HOST_PORT` / config override)
+- Browser profile CDP ports auto-allocate from `browser.controlPort + 9 .. + 108` (persisted per profile).
+
 Checklist per instance:
 - unique `gateway.port`
 - unique `CLAWDBOT_CONFIG_PATH`
