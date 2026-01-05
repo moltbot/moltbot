@@ -1,0 +1,526 @@
+import chalk from "chalk";
+import { Command } from "commander";
+import { agentCommand } from "../commands/agent.js";
+import { configureCommand } from "../commands/configure.js";
+import { doctorCommand } from "../commands/doctor.js";
+import { healthCommand } from "../commands/health.js";
+import { onboardCommand } from "../commands/onboard.js";
+import { sendCommand } from "../commands/send.js";
+import { sessionsCommand } from "../commands/sessions.js";
+import { setupCommand } from "../commands/setup.js";
+import { statusCommand } from "../commands/status.js";
+import { updateCommand } from "../commands/update.js";
+import { readConfigFileSnapshot } from "../config/config.js";
+import { danger, setVerbose } from "../globals.js";
+import { loginWeb, logoutWeb } from "../provider-web.js";
+import { defaultRuntime } from "../runtime.js";
+import { VERSION } from "../version.js";
+import { registerBrowserCli } from "./browser-cli.js";
+import { registerCanvasCli } from "./canvas-cli.js";
+import { registerCronCli } from "./cron-cli.js";
+import { createDefaultDeps } from "./deps.js";
+import { registerDnsCli } from "./dns-cli.js";
+import { registerGatewayCli } from "./gateway-cli.js";
+import { registerHooksCli } from "./hooks-cli.js";
+import { registerNodesCli } from "./nodes-cli.js";
+import { forceFreePort } from "./ports.js";
+import { registerTuiCli } from "./tui-cli.js";
+
+export { forceFreePort };
+
+export function buildProgram() {
+  const program = new Command();
+  const PROGRAM_VERSION = VERSION;
+  const TAGLINE =
+    "Send, receive, and auto-reply on WhatsApp (web) and Telegram (bot).";
+
+  program.name("clawdis").description("").version(PROGRAM_VERSION);
+
+  const formatIntroLine = (version: string, rich = true) => {
+    const base = `📡 clawdis ${version} — ${TAGLINE}`;
+    return rich && chalk.level > 0
+      ? `${chalk.bold.cyan("📡 clawdis")} ${chalk.white(version)} ${chalk.gray("—")} ${chalk.green(TAGLINE)}`
+      : base;
+  };
+
+  program.configureHelp({
+    optionTerm: (option) => chalk.yellow(option.flags),
+    subcommandTerm: (cmd) => chalk.green(cmd.name()),
+  });
+
+  program.configureOutput({
+    writeOut: (str) => {
+      const colored = str
+        .replace(/^Usage:/gm, chalk.bold.cyan("Usage:"))
+        .replace(/^Options:/gm, chalk.bold.cyan("Options:"))
+        .replace(/^Commands:/gm, chalk.bold.cyan("Commands:"));
+      process.stdout.write(colored);
+    },
+    writeErr: (str) => process.stderr.write(str),
+    outputError: (str, write) => write(chalk.red(str)),
+  });
+
+  if (
+    process.argv.includes("-V") ||
+    process.argv.includes("--version") ||
+    process.argv.includes("-v")
+  ) {
+    console.log(PROGRAM_VERSION);
+    process.exit(0);
+  }
+
+  program.addHelpText("beforeAll", `\n${formatIntroLine(PROGRAM_VERSION)}\n`);
+
+  program.hook("preAction", async (_thisCommand, actionCommand) => {
+    if (actionCommand.name() === "doctor") return;
+    const snapshot = await readConfigFileSnapshot();
+    if (snapshot.legacyIssues.length === 0) return;
+    const issues = snapshot.legacyIssues
+      .map((issue) => `- ${issue.path}: ${issue.message}`)
+      .join("\n");
+    defaultRuntime.error(
+      danger(
+        `Legacy config entries detected. Run "clawdis doctor" (or ask your agent) to migrate.\n${issues}`,
+      ),
+    );
+    process.exit(1);
+  });
+  const examples = [
+    [
+      "clawdis login --verbose",
+      "Link personal WhatsApp Web and show QR + connection logs.",
+    ],
+    [
+      'clawdis send --to +15555550123 --message "Hi" --json',
+      "Send via your web session and print JSON result.",
+    ],
+    ["clawdis gateway --port 18789", "Run the WebSocket Gateway locally."],
+    [
+      "clawdis gateway --force",
+      "Kill anything bound to the default gateway port, then start it.",
+    ],
+    ["clawdis gateway ...", "Gateway control via WebSocket."],
+    [
+      'clawdis agent --to +15555550123 --message "Run summary" --deliver',
+      "Talk directly to the agent using the Gateway; optionally send the WhatsApp reply.",
+    ],
+    [
+      'clawdis send --provider telegram --to @mychat --message "Hi"',
+      "Send via your Telegram bot.",
+    ],
+  ] as const;
+
+  const fmtExamples = examples
+    .map(([cmd, desc]) => `  ${chalk.green(cmd)}\n    ${chalk.gray(desc)}`)
+    .join("\n");
+
+  program.addHelpText(
+    "afterAll",
+    `\n${chalk.bold.cyan("Examples:")}\n${fmtExamples}\n`,
+  );
+
+  program
+    .command("setup")
+    .description("Initialize ~/.clawdis/clawdis.json and the agent workspace")
+    .option(
+      "--workspace <dir>",
+      "Agent workspace directory (default: ~/clawd; stored as agent.workspace)",
+    )
+    .option("--wizard", "Run the interactive onboarding wizard", false)
+    .option("--non-interactive", "Run the wizard without prompts", false)
+    .option("--mode <mode>", "Wizard mode: local|remote")
+    .option("--remote-url <url>", "Remote Gateway WebSocket URL")
+    .option("--remote-token <token>", "Remote Gateway token (optional)")
+    .action(async (opts) => {
+      try {
+        if (opts.wizard) {
+          await onboardCommand(
+            {
+              workspace: opts.workspace as string | undefined,
+              nonInteractive: Boolean(opts.nonInteractive),
+              mode: opts.mode as "local" | "remote" | undefined,
+              remoteUrl: opts.remoteUrl as string | undefined,
+              remoteToken: opts.remoteToken as string | undefined,
+            },
+            defaultRuntime,
+          );
+          return;
+        }
+        await setupCommand(
+          { workspace: opts.workspace as string | undefined },
+          defaultRuntime,
+        );
+      } catch (err) {
+        defaultRuntime.error(String(err));
+        defaultRuntime.exit(1);
+      }
+    });
+
+  program
+    .command("onboard")
+    .description(
+      "Interactive wizard to set up the gateway, workspace, and skills",
+    )
+    .option("--workspace <dir>", "Agent workspace directory (default: ~/clawd)")
+    .option("--non-interactive", "Run without prompts", false)
+    .option("--mode <mode>", "Wizard mode: local|remote")
+    .option("--auth-choice <choice>", "Auth: oauth|apiKey|minimax|skip")
+    .option("--anthropic-api-key <key>", "Anthropic API key")
+    .option("--gateway-port <port>", "Gateway port")
+    .option("--gateway-bind <mode>", "Gateway bind: loopback|lan|tailnet|auto")
+    .option("--gateway-auth <mode>", "Gateway auth: off|token|password")
+    .option("--gateway-token <token>", "Gateway token (token auth)")
+    .option("--gateway-password <password>", "Gateway password (password auth)")
+    .option("--remote-url <url>", "Remote Gateway WebSocket URL")
+    .option("--remote-token <token>", "Remote Gateway token (optional)")
+    .option("--tailscale <mode>", "Tailscale: off|serve|funnel")
+    .option("--tailscale-reset-on-exit", "Reset tailscale serve/funnel on exit")
+    .option("--install-daemon", "Install gateway daemon")
+    .option("--skip-skills", "Skip skills setup")
+    .option("--skip-health", "Skip health check")
+    .option("--node-manager <name>", "Node manager for skills: npm|pnpm|bun")
+    .option("--json", "Output JSON summary", false)
+    .action(async (opts) => {
+      try {
+        await onboardCommand(
+          {
+            workspace: opts.workspace as string | undefined,
+            nonInteractive: Boolean(opts.nonInteractive),
+            mode: opts.mode as "local" | "remote" | undefined,
+            authChoice: opts.authChoice as
+              | "oauth"
+              | "apiKey"
+              | "minimax"
+              | "skip"
+              | undefined,
+            anthropicApiKey: opts.anthropicApiKey as string | undefined,
+            gatewayPort:
+              typeof opts.gatewayPort === "string"
+                ? Number.parseInt(opts.gatewayPort, 10)
+                : undefined,
+            gatewayBind: opts.gatewayBind as
+              | "loopback"
+              | "lan"
+              | "tailnet"
+              | "auto"
+              | undefined,
+            gatewayAuth: opts.gatewayAuth as
+              | "off"
+              | "token"
+              | "password"
+              | undefined,
+            gatewayToken: opts.gatewayToken as string | undefined,
+            gatewayPassword: opts.gatewayPassword as string | undefined,
+            remoteUrl: opts.remoteUrl as string | undefined,
+            remoteToken: opts.remoteToken as string | undefined,
+            tailscale: opts.tailscale as "off" | "serve" | "funnel" | undefined,
+            tailscaleResetOnExit: Boolean(opts.tailscaleResetOnExit),
+            installDaemon: Boolean(opts.installDaemon),
+            skipSkills: Boolean(opts.skipSkills),
+            skipHealth: Boolean(opts.skipHealth),
+            nodeManager: opts.nodeManager as "npm" | "pnpm" | "bun" | undefined,
+            json: Boolean(opts.json),
+          },
+          defaultRuntime,
+        );
+      } catch (err) {
+        defaultRuntime.error(String(err));
+        defaultRuntime.exit(1);
+      }
+    });
+
+  program
+    .command("configure")
+    .description(
+      "Interactive wizard to update models, providers, skills, and gateway",
+    )
+    .action(async () => {
+      try {
+        await configureCommand(defaultRuntime);
+      } catch (err) {
+        defaultRuntime.error(String(err));
+        defaultRuntime.exit(1);
+      }
+    });
+
+  program
+    .command("doctor")
+    .description("Health checks + quick fixes for the gateway and providers")
+    .action(async () => {
+      try {
+        await doctorCommand(defaultRuntime);
+      } catch (err) {
+        defaultRuntime.error(String(err));
+        defaultRuntime.exit(1);
+      }
+    });
+
+  program
+    .command("update")
+    .description("Audit and modernize the local configuration")
+    .action(async () => {
+      try {
+        await updateCommand(defaultRuntime);
+      } catch (err) {
+        defaultRuntime.error(String(err));
+        defaultRuntime.exit(1);
+      }
+    });
+
+  program
+    .command("login")
+    .description("Link your personal WhatsApp via QR (web provider)")
+    .option("--verbose", "Verbose connection logs", false)
+    .option("--provider <provider>", "Provider alias (default: whatsapp)")
+    .action(async (opts) => {
+      setVerbose(Boolean(opts.verbose));
+      try {
+        const provider = opts.provider ?? "whatsapp";
+        await loginWeb(Boolean(opts.verbose), provider);
+      } catch (err) {
+        defaultRuntime.error(danger(`Web login failed: ${String(err)}`));
+        defaultRuntime.exit(1);
+      }
+    });
+
+  program
+    .command("logout")
+    .description("Clear cached WhatsApp Web credentials")
+    .option("--provider <provider>", "Provider alias (default: whatsapp)")
+    .action(async (opts) => {
+      try {
+        void opts.provider; // placeholder for future multi-provider; currently web only.
+        await logoutWeb(defaultRuntime);
+      } catch (err) {
+        defaultRuntime.error(danger(`Logout failed: ${String(err)}`));
+        defaultRuntime.exit(1);
+      }
+    });
+
+  program
+    .command("send")
+    .description(
+      "Send a message (WhatsApp Web, Telegram bot, Discord, Slack, Signal, iMessage)",
+    )
+    .requiredOption(
+      "-t, --to <number>",
+      "Recipient: E.164 for WhatsApp/Signal, Telegram chat id/@username, Discord channel/user, or iMessage handle/chat_id",
+    )
+    .requiredOption("-m, --message <text>", "Message body")
+    .option(
+      "--media <path-or-url>",
+      "Attach media (image/audio/video/document). Accepts local paths or URLs.",
+    )
+    .option(
+      "--gif-playback",
+      "Treat video media as GIF playback (WhatsApp only).",
+      false,
+    )
+    .option(
+      "--provider <provider>",
+      "Delivery provider: whatsapp|telegram|discord|slack|signal|imessage (default: whatsapp)",
+    )
+    .option("--dry-run", "Print payload and skip sending", false)
+    .option("--json", "Output result as JSON", false)
+    .option("--verbose", "Verbose logging", false)
+    .addHelpText(
+      "after",
+      `
+Examples:
+  clawdis send --to +15555550123 --message "Hi"
+  clawdis send --to +15555550123 --message "Hi" --media photo.jpg
+  clawdis send --to +15555550123 --message "Hi" --dry-run      # print payload only
+  clawdis send --to +15555550123 --message "Hi" --json         # machine-readable result`,
+    )
+    .action(async (opts) => {
+      setVerbose(Boolean(opts.verbose));
+      const deps = createDefaultDeps();
+      try {
+        await sendCommand(opts, deps, defaultRuntime);
+      } catch (err) {
+        defaultRuntime.error(String(err));
+        defaultRuntime.exit(1);
+      }
+    });
+
+  program
+    .command("agent")
+    .description(
+      "Talk directly to the configured agent (no chat send; optional delivery)",
+    )
+    .requiredOption("-m, --message <text>", "Message body for the agent")
+    .option(
+      "-t, --to <number>",
+      "Recipient number in E.164 used to derive the session key",
+    )
+    .option("--session-id <id>", "Use an explicit session id")
+    .option(
+      "--thinking <level>",
+      "Thinking level: off | minimal | low | medium | high",
+    )
+    .option("--verbose <on|off>", "Persist agent verbose level for the session")
+    .option(
+      "--provider <provider>",
+      "Delivery provider: whatsapp|telegram|discord|slack|signal|imessage (default: whatsapp)",
+    )
+    .option(
+      "--deliver",
+      "Send the agent's reply back to the selected provider (requires --to)",
+      false,
+    )
+    .option("--json", "Output result as JSON", false)
+    .option(
+      "--timeout <seconds>",
+      "Override agent command timeout (seconds, default 600 or config value)",
+    )
+    .addHelpText(
+      "after",
+      `
+Examples:
+  clawdis agent --to +15555550123 --message "status update"
+  clawdis agent --session-id 1234 --message "Summarize inbox" --thinking medium
+  clawdis agent --to +15555550123 --message "Trace logs" --verbose on --json
+  clawdis agent --to +15555550123 --message "Summon reply" --deliver
+`,
+    )
+    .action(async (opts) => {
+      const verboseLevel =
+        typeof opts.verbose === "string" ? opts.verbose.toLowerCase() : "";
+      setVerbose(verboseLevel === "on");
+      // Build default deps (keeps parity with other commands; future-proofing).
+      void createDefaultDeps();
+      try {
+        await agentCommand(opts, defaultRuntime);
+      } catch (err) {
+        defaultRuntime.error(String(err));
+        defaultRuntime.exit(1);
+      }
+    });
+
+  registerCanvasCli(program);
+  registerGatewayCli(program);
+  registerNodesCli(program);
+  registerTuiCli(program);
+  registerCronCli(program);
+  registerDnsCli(program);
+  registerHooksCli(program);
+
+  program
+    .command("status")
+    .description("Show web session health and recent session recipients")
+    .option("--json", "Output JSON instead of text", false)
+    .option(
+      "--deep",
+      "Probe providers (WhatsApp Web + Telegram + Discord + Slack + Signal)",
+      false,
+    )
+    .option("--timeout <ms>", "Probe timeout in milliseconds", "10000")
+    .option("--verbose", "Verbose logging", false)
+    .addHelpText(
+      "after",
+      `
+Examples:
+  clawdis status                   # show linked account + session store summary
+  clawdis status --json            # machine-readable output
+  clawdis status --deep            # run provider probes (WA + Telegram + Discord + Slack + Signal)
+  clawdis status --deep --timeout 5000 # tighten probe timeout`,
+    )
+    .action(async (opts) => {
+      setVerbose(Boolean(opts.verbose));
+      const timeout = opts.timeout
+        ? Number.parseInt(String(opts.timeout), 10)
+        : undefined;
+      if (timeout !== undefined && (Number.isNaN(timeout) || timeout <= 0)) {
+        defaultRuntime.error(
+          "--timeout must be a positive integer (milliseconds)",
+        );
+        defaultRuntime.exit(1);
+        return;
+      }
+      try {
+        await statusCommand(
+          {
+            json: Boolean(opts.json),
+            deep: Boolean(opts.deep),
+            timeoutMs: timeout,
+          },
+          defaultRuntime,
+        );
+      } catch (err) {
+        defaultRuntime.error(String(err));
+        defaultRuntime.exit(1);
+      }
+    });
+
+  program
+    .command("health")
+    .description("Fetch health from the running gateway")
+    .option("--json", "Output JSON instead of text", false)
+    .option("--timeout <ms>", "Connection timeout in milliseconds", "10000")
+    .option("--verbose", "Verbose logging", false)
+    .action(async (opts) => {
+      setVerbose(Boolean(opts.verbose));
+      const timeout = opts.timeout
+        ? Number.parseInt(String(opts.timeout), 10)
+        : undefined;
+      if (timeout !== undefined && (Number.isNaN(timeout) || timeout <= 0)) {
+        defaultRuntime.error(
+          "--timeout must be a positive integer (milliseconds)",
+        );
+        defaultRuntime.exit(1);
+        return;
+      }
+      try {
+        await healthCommand(
+          {
+            json: Boolean(opts.json),
+            timeoutMs: timeout,
+          },
+          defaultRuntime,
+        );
+      } catch (err) {
+        defaultRuntime.error(String(err));
+        defaultRuntime.exit(1);
+      }
+    });
+
+  program
+    .command("sessions")
+    .description("List stored conversation sessions")
+    .option("--json", "Output as JSON", false)
+    .option("--verbose", "Verbose logging", false)
+    .option(
+      "--store <path>",
+      "Path to session store (default: resolved from config)",
+    )
+    .option(
+      "--active <minutes>",
+      "Only show sessions updated within the past N minutes",
+    )
+    .addHelpText(
+      "after",
+      `
+Examples:
+  clawdis sessions                 # list all sessions
+  clawdis sessions --active 120    # only last 2 hours
+  clawdis sessions --json          # machine-readable output
+  clawdis sessions --store ./tmp/sessions.json
+
+Shows token usage per session when the agent reports it; set agent.contextTokens to see % of your model window.`,
+    )
+    .action(async (opts) => {
+      setVerbose(Boolean(opts.verbose));
+      await sessionsCommand(
+        {
+          json: Boolean(opts.json),
+          store: opts.store as string | undefined,
+          active: opts.active as string | undefined,
+        },
+        defaultRuntime,
+      );
+    });
+
+  registerBrowserCli(program);
+
+  return program;
+}

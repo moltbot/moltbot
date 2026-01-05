@@ -1,0 +1,13 @@
+packages:
+  - .
+  - ui
+
+onlyBuiltDependencies:
+  - '@whiskeysockets/baileys'
+  - authenticate-pam
+  - esbuild
+  - protobufjs
+  - sharp
+
+patchedDependencies:
+  '@mariozechner/pi-ai': patches/@mariozechner__pi-ai.patch

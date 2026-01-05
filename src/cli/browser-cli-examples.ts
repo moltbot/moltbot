@@ -1,0 +1,32 @@
+export const browserCoreExamples = [
+  "clawdis browser status",
+  "clawdis browser start",
+  "clawdis browser stop",
+  "clawdis browser tabs",
+  "clawdis browser open https://example.com",
+  "clawdis browser focus abcd1234",
+  "clawdis browser close abcd1234",
+  "clawdis browser screenshot",
+  "clawdis browser screenshot --full-page",
+  "clawdis browser screenshot --ref 12",
+  "clawdis browser snapshot",
+  "clawdis browser snapshot --format aria --limit 200",
+];
+
+export const browserActionExamples = [
+  "clawdis browser navigate https://example.com",
+  "clawdis browser resize 1280 720",
+  "clawdis browser click 12 --double",
+  'clawdis browser type 23 "hello" --submit',
+  "clawdis browser press Enter",
+  "clawdis browser hover 44",
+  "clawdis browser drag 10 11",
+  "clawdis browser select 9 OptionA OptionB",
+  "clawdis browser upload /tmp/file.pdf",
+  'clawdis browser fill --fields \'[{"ref":"1","value":"Ada"}]\'',
+  "clawdis browser dialog --accept",
+  'clawdis browser wait --text "Done"',
+  "clawdis browser evaluate --fn '(el) => el.textContent' --ref 7",
+  "clawdis browser console --level error",
+  "clawdis browser pdf",
+];

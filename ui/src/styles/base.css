@@ -1,0 +1,197 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Unbounded:wght@400;500;600&family=Work+Sans:wght@400;500;600;700&display=swap");
+
+:root {
+  --bg: #0a0f14;
+  --bg-accent: #111826;
+  --bg-grad-1: #162031;
+  --bg-grad-2: #1f2a22;
+  --bg-overlay: rgba(255, 255, 255, 0.05);
+  --bg-glow: rgba(245, 159, 74, 0.12);
+  --panel: rgba(14, 20, 30, 0.88);
+  --panel-strong: rgba(18, 26, 38, 0.96);
+  --chrome: rgba(9, 14, 20, 0.72);
+  --chrome-strong: rgba(9, 14, 20, 0.86);
+  --text: rgba(244, 246, 251, 0.96);
+  --chat-text: rgba(231, 237, 244, 0.92);
+  --muted: rgba(156, 169, 189, 0.72);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --accent: #f59f4a;
+  --accent-2: #34c7b7;
+  --ok: #2bd97f;
+  --warn: #f2c94c;
+  --danger: #ff6b6b;
+  --focus: rgba(245, 159, 74, 0.35);
+  --grid-line: rgba(255, 255, 255, 0.04);
+  --theme-switch-x: 50%;
+  --theme-switch-y: 50%;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  --font-body: "Work Sans", system-ui, sans-serif;
+  --font-display: "Unbounded", "Times New Roman", serif;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg: #f5f1ea;
+  --bg-accent: #ffffff;
+  --bg-grad-1: #f1e6d6;
+  --bg-grad-2: #e5eef4;
+  --bg-overlay: rgba(28, 32, 46, 0.05);
+  --bg-glow: rgba(52, 199, 183, 0.14);
+  --panel: rgba(255, 255, 255, 0.9);
+  --panel-strong: rgba(255, 255, 255, 0.97);
+  --chrome: rgba(255, 255, 255, 0.75);
+  --chrome-strong: rgba(255, 255, 255, 0.88);
+  --text: rgba(27, 36, 50, 0.98);
+  --chat-text: rgba(36, 48, 66, 0.9);
+  --muted: rgba(80, 94, 114, 0.7);
+  --border: rgba(18, 24, 40, 0.12);
+  --border-strong: rgba(18, 24, 40, 0.2);
+  --accent: #e28a3f;
+  --accent-2: #1ba99d;
+  --ok: #1aa86c;
+  --warn: #b3771c;
+  --danger: #d44848;
+  --focus: rgba(226, 138, 63, 0.35);
+  --grid-line: rgba(18, 24, 40, 0.06);
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font: 15px/1.5 var(--font-body);
+  background:
+    radial-gradient(1200px 900px at 15% -10%, var(--bg-grad-1) 0%, transparent 55%)
+      fixed,
+    radial-gradient(900px 700px at 80% 10%, var(--bg-grad-2) 0%, transparent 60%)
+      fixed,
+    linear-gradient(160deg, var(--bg) 0%, var(--bg-accent) 100%) fixed;
+  color: var(--text);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    linear-gradient(
+      140deg,
+      var(--bg-overlay) 0%,
+      rgba(255, 255, 255, 0) 40%
+    ),
+    radial-gradient(620px 420px at 75% 75%, var(--bg-glow), transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      var(--grid-line) 0,
+      var(--grid-line) 1px,
+      transparent 1px,
+      transparent 140px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      var(--grid-line) 0,
+      var(--grid-line) 1px,
+      transparent 1px,
+      transparent 140px
+    );
+  opacity: 0.45;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes theme-circle-transition {
+  0% {
+    clip-path: circle(
+      0% at var(--theme-switch-x, 50%) var(--theme-switch-y, 50%)
+    );
+  }
+
+  100% {
+    clip-path: circle(
+      150% at var(--theme-switch-x, 50%) var(--theme-switch-y, 50%)
+    );
+  }
+}
+
+html.theme-transition {
+  view-transition-name: theme;
+}
+
+html.theme-transition::view-transition-old(theme) {
+  mix-blend-mode: normal;
+  animation: none;
+  z-index: 1;
+}
+
+html.theme-transition::view-transition-new(theme) {
+  mix-blend-mode: normal;
+  z-index: 2;
+  animation: theme-circle-transition 0.45s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.theme-transition::view-transition-old(theme),
+  html.theme-transition::view-transition-new(theme) {
+    animation: none !important;
+  }
+}
+
+clawdis-app {
+  display: block;
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dashboard-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "clawdis-control-ui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "dependencies": {
+    "lit": "^3.3.2"
+  },
+  "devDependencies": {
+    "@vitest/browser-playwright": "4.0.16",
+    "playwright": "^1.57.0",
+    "typescript": "^5.9.3",
+    "vite": "7.3.0",
+    "vitest": "4.0.16"
+  }
+}

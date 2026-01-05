@@ -1,0 +1,108 @@
+name: Clawdis
+options:
+  bundleIdPrefix: com.clawdis
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "16.0"
+
+packages:
+  ClawdisKit:
+    path: ../shared/ClawdisKit
+  Swabble:
+    path: ../../Swabble
+
+schemes:
+  Clawdis:
+    shared: true
+    build:
+      targets:
+        Clawdis: all
+    test:
+      targets:
+        - ClawdisTests
+
+targets:
+  Clawdis:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    dependencies:
+      - package: ClawdisKit
+      - package: ClawdisKit
+        product: ClawdisChatUI
+      - package: Swabble
+        product: SwabbleKit
+      - sdk: AppIntents.framework
+    preBuildScripts:
+      - name: SwiftFormat (lint)
+        basedOnDependencyAnalysis: false
+        inputFileLists:
+          - $(SRCROOT)/SwiftSources.input.xcfilelist
+        script: |
+          set -euo pipefail
+          export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+          if ! command -v swiftformat >/dev/null 2>&1; then
+            echo "error: swiftformat not found (brew install swiftformat)" >&2
+            exit 1
+          fi
+          swiftformat --lint --config "$SRCROOT/../../.swiftformat" \
+            --filelist "$SRCROOT/SwiftSources.input.xcfilelist"
+      - name: SwiftLint
+        basedOnDependencyAnalysis: false
+        inputFileLists:
+          - $(SRCROOT)/SwiftSources.input.xcfilelist
+        script: |
+          set -euo pipefail
+          export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+          if ! command -v swiftlint >/dev/null 2>&1; then
+            echo "error: swiftlint not found (brew install swiftlint)" >&2
+            exit 1
+          fi
+          swiftlint lint --config "$SRCROOT/.swiftlint.yml" --use-script-input-file-lists
+    settings:
+      base:
+        CODE_SIGN_IDENTITY: "Apple Development"
+        CODE_SIGN_STYLE: Manual
+        DEVELOPMENT_TEAM: Y5PE65HELJ
+        PRODUCT_BUNDLE_IDENTIFIER: com.clawdis.ios
+        PROVISIONING_PROFILE_SPECIFIER: "com.clawdis.ios Development"
+        SWIFT_VERSION: "6.0"
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: Clawdis
+        CFBundleIconName: AppIcon
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UIBackgroundModes:
+          - audio
+        NSLocalNetworkUsageDescription: Clawdis discovers and connects to your Clawdis bridge on the local network.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoadsInWebContent: true
+        NSBonjourServices:
+          - _clawdis-bridge._tcp
+        NSCameraUsageDescription: Clawdis can capture photos or short video clips when requested via the bridge.
+        NSMicrophoneUsageDescription: Clawdis needs microphone access for voice wake.
+        NSSpeechRecognitionUsageDescription: Clawdis uses on-device speech recognition for voice wake.
+
+  ClawdisTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: Clawdis
+      - package: Swabble
+        product: SwabbleKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.clawdis.ios.tests
+        SWIFT_VERSION: "6.0"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Clawdis.app/Clawdis"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+    info:
+      path: Tests/Info.plist
+      properties:
+        CFBundleDisplayName: ClawdisTests

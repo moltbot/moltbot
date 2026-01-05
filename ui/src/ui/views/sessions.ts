@@ -1,0 +1,165 @@
+import { html, nothing } from "lit";
+
+import { formatAgo } from "../format";
+import { formatSessionTokens } from "../presenter";
+import type { GatewaySessionRow, SessionsListResult } from "../types";
+
+export type SessionsProps = {
+  loading: boolean;
+  result: SessionsListResult | null;
+  error: string | null;
+  activeMinutes: string;
+  limit: string;
+  includeGlobal: boolean;
+  includeUnknown: boolean;
+  onFiltersChange: (next: {
+    activeMinutes: string;
+    limit: string;
+    includeGlobal: boolean;
+    includeUnknown: boolean;
+  }) => void;
+  onRefresh: () => void;
+  onPatch: (
+    key: string,
+    patch: { thinkingLevel?: string | null; verboseLevel?: string | null },
+  ) => void;
+};
+
+const THINK_LEVELS = ["", "off", "minimal", "low", "medium", "high"] as const;
+const VERBOSE_LEVELS = ["", "off", "on"] as const;
+
+export function renderSessions(props: SessionsProps) {
+  const rows = props.result?.sessions ?? [];
+  return html`
+    <section class="card">
+      <div class="row" style="justify-content: space-between;">
+        <div>
+          <div class="card-title">Sessions</div>
+          <div class="card-sub">Active session keys and per-session overrides.</div>
+        </div>
+        <button class="btn" ?disabled=${props.loading} @click=${props.onRefresh}>
+          ${props.loading ? "Loading…" : "Refresh"}
+        </button>
+      </div>
+
+      <div class="filters" style="margin-top: 14px;">
+        <label class="field">
+          <span>Active within (minutes)</span>
+          <input
+            .value=${props.activeMinutes}
+            @input=${(e: Event) =>
+              props.onFiltersChange({
+                activeMinutes: (e.target as HTMLInputElement).value,
+                limit: props.limit,
+                includeGlobal: props.includeGlobal,
+                includeUnknown: props.includeUnknown,
+              })}
+          />
+        </label>
+        <label class="field">
+          <span>Limit</span>
+          <input
+            .value=${props.limit}
+            @input=${(e: Event) =>
+              props.onFiltersChange({
+                activeMinutes: props.activeMinutes,
+                limit: (e.target as HTMLInputElement).value,
+                includeGlobal: props.includeGlobal,
+                includeUnknown: props.includeUnknown,
+              })}
+          />
+        </label>
+        <label class="field checkbox">
+          <span>Include global</span>
+          <input
+            type="checkbox"
+            .checked=${props.includeGlobal}
+            @change=${(e: Event) =>
+              props.onFiltersChange({
+                activeMinutes: props.activeMinutes,
+                limit: props.limit,
+                includeGlobal: (e.target as HTMLInputElement).checked,
+                includeUnknown: props.includeUnknown,
+              })}
+          />
+        </label>
+        <label class="field checkbox">
+          <span>Include unknown</span>
+          <input
+            type="checkbox"
+            .checked=${props.includeUnknown}
+            @change=${(e: Event) =>
+              props.onFiltersChange({
+                activeMinutes: props.activeMinutes,
+                limit: props.limit,
+                includeGlobal: props.includeGlobal,
+                includeUnknown: (e.target as HTMLInputElement).checked,
+              })}
+          />
+        </label>
+      </div>
+
+      ${props.error
+        ? html`<div class="callout danger" style="margin-top: 12px;">${props.error}</div>`
+        : nothing}
+
+      <div class="muted" style="margin-top: 12px;">
+        ${props.result ? `Store: ${props.result.path}` : ""}
+      </div>
+
+      <div class="table" style="margin-top: 16px;">
+        <div class="table-head">
+          <div>Key</div>
+          <div>Kind</div>
+          <div>Updated</div>
+          <div>Tokens</div>
+          <div>Thinking</div>
+          <div>Verbose</div>
+        </div>
+        ${rows.length === 0
+          ? html`<div class="muted">No sessions found.</div>`
+          : rows.map((row) => renderRow(row, props.onPatch))}
+      </div>
+    </section>
+  `;
+}
+
+function renderRow(row: GatewaySessionRow, onPatch: SessionsProps["onPatch"]) {
+  const updated = row.updatedAt ? formatAgo(row.updatedAt) : "n/a";
+  const thinking = row.thinkingLevel ?? "";
+  const verbose = row.verboseLevel ?? "";
+  return html`
+    <div class="table-row">
+      <div class="mono">${row.displayName ?? row.key}</div>
+      <div>${row.kind}</div>
+      <div>${updated}</div>
+      <div>${formatSessionTokens(row)}</div>
+      <div>
+        <select
+          .value=${thinking}
+          @change=${(e: Event) => {
+            const value = (e.target as HTMLSelectElement).value;
+            onPatch(row.key, { thinkingLevel: value || null });
+          }}
+        >
+          ${THINK_LEVELS.map((level) =>
+            html`<option value=${level}>${level || "inherit"}</option>`,
+          )}
+        </select>
+      </div>
+      <div>
+        <select
+          .value=${verbose}
+          @change=${(e: Event) => {
+            const value = (e.target as HTMLSelectElement).value;
+            onPatch(row.key, { verboseLevel: value || null });
+          }}
+        >
+          ${VERBOSE_LEVELS.map((level) =>
+            html`<option value=${level}>${level || "inherit"}</option>`,
+          )}
+        </select>
+      </div>
+    </div>
+  `;
+}
