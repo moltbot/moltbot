@@ -1055,9 +1055,12 @@ async function handleTTSCallback(
       if (fs.existsSync(result.audioPath)) {
         const file = new InputFile(result.audioPath, "tts.mp3");
 
-        await ctx.api.sendVoice(chatId, file, {
-          caption: result.cached ? "🎙️ (из кэша)" : "🎙️",
-        });
+        // Build caption with cache and truncation info
+        let caption = "🎙️";
+        if (result.cached) caption += " (из кэша)";
+        if (result.truncated) caption += " (текст укорочен)";
+
+        await ctx.api.sendVoice(chatId, file, { caption });
       }
       // Remove button
       await ctx.api.editMessageReplyMarkup(chatId, messageId);
