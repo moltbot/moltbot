@@ -1,0 +1,12 @@
+[project]
+name = "pptx-skill"
+version = "0.1.0"
+description = "PowerPoint parser for Clawdbot - rich extraction from PPTX files"
+requires-python = ">=3.10"
+dependencies = [
+    "python-pptx>=0.6.21",
+    "requests>=2.28.0",
+]
+
+[project.scripts]
+pptx-parser = "scripts.pptx_parser:main"
