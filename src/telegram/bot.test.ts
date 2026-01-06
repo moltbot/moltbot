@@ -69,6 +69,7 @@ vi.mock("grammy", () => ({
     api = apiStub;
     on = onSpy;
     stop = stopSpy;
+    use = vi.fn();
     constructor(public token: string) {}
   },
   InputFile: class {},
@@ -205,7 +206,9 @@ describe("createTelegramBot", () => {
       getFile: async () => ({ download: async () => new Uint8Array() }),
     });
 
-    expect(sendChatActionSpy).toHaveBeenCalledWith(42, "typing");
+    expect(sendChatActionSpy).toHaveBeenCalledWith(42, "typing", {
+      message_thread_id: undefined,
+    });
   });
 
   it("accepts group messages when mentionPatterns match (without @botUsername)", async () => {
