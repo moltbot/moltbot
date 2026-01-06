@@ -152,12 +152,33 @@ export function createTelegramBot(opts: TelegramBotOptions) {
         }
       }
 
-      const media = await resolveMedia(
-        ctx,
-        mediaMaxBytes,
-        opts.token,
-        opts.proxyFetch,
-      );
+      let media: Awaited<ReturnType<typeof resolveMedia>> = null;
+      try {
+        media = await resolveMedia(
+          ctx,
+          mediaMaxBytes,
+          opts.token,
+          opts.proxyFetch,
+        );
+      } catch (mediaErr) {
+        const errMsg = String(mediaErr);
+        if (errMsg.includes("exceeds") && errMsg.includes("MB limit")) {
+          // Notify user about the file size limit
+          const limitMb = Math.round(mediaMaxBytes / (1024 * 1024));
+          try {
+            await bot.api.sendMessage(
+              chatId,
+              `⚠️ File too large. Maximum size is ${limitMb}MB.`,
+              { reply_to_message_id: msg.message_id },
+            );
+          } catch {
+            // Ignore notification errors
+          }
+          logger.warn({ chatId, error: errMsg }, "media exceeds size limit");
+          return;
+        }
+        throw mediaErr; // Re-throw other errors
+      }
       const replyTarget = describeReplyTarget(msg);
       const rawBody = (
         msg.text ??
