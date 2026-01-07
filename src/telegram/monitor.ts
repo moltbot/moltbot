@@ -1,3 +1,4 @@
+import { run, type RunnerHandle } from "@grammyjs/runner";
 import { loadConfig } from "../config/config.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { createTelegramBot } from "./bot.js";
@@ -53,13 +54,28 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
     return;
   }
 
-  // Long polling
+  // Long polling with concurrent update processing
+  // Using @grammyjs/runner to process updates concurrently instead of sequentially.
+  // Without this, grammy's default bot.start() processes updates one at a time,
+  // meaning a slow handler (e.g., a 10-minute agent timeout) blocks ALL other
+  // messages from being processed until it completes.
+  const runner: RunnerHandle = run(bot);
+
   const stopOnAbort = () => {
-    if (opts.abortSignal?.aborted) void bot.stop();
+    if (opts.abortSignal?.aborted) {
+      runner.stop();
+    }
   };
+
+  if (opts.abortSignal?.aborted) {
+    runner.stop();
+    return;
+  }
+
   opts.abortSignal?.addEventListener("abort", stopOnAbort, { once: true });
   try {
-    await bot.start();
+    // Wait for the runner to complete (only happens when stopped)
+    await runner.task();
   } finally {
     opts.abortSignal?.removeEventListener("abort", stopOnAbort);
   }

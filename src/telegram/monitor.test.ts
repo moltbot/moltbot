@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { monitorTelegramProvider } from "./monitor.js";
 
@@ -23,6 +23,23 @@ const api = {
   setWebhook: vi.fn(),
   deleteWebhook: vi.fn(),
 };
+
+// Track runner calls
+const runnerMock = {
+  run: vi.fn(),
+  stop: vi.fn(),
+  task: vi.fn(),
+};
+
+vi.mock("@grammyjs/runner", () => ({
+  run: (bot: unknown) => {
+    runnerMock.run(bot);
+    return {
+      stop: runnerMock.stop,
+      task: runnerMock.task.mockResolvedValue(undefined),
+    };
+  },
+}));
 
 vi.mock("./bot.js", () => ({
   createTelegramBot: () => {
@@ -87,5 +104,53 @@ describe("monitorTelegramProvider (grammY)", () => {
       getFile: vi.fn(async () => ({})),
     });
     expect(api.sendMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe("monitorTelegramProvider concurrent runner", () => {
+  beforeEach(() => {
+    runnerMock.run.mockClear();
+    runnerMock.stop.mockClear();
+    runnerMock.task.mockClear();
+  });
+
+  it("uses @grammyjs/runner for concurrent update processing in long polling mode", async () => {
+    // Long polling mode (default, no useWebhook flag)
+    await monitorTelegramProvider({ token: "tok" });
+
+    // The runner should be called instead of bot.start()
+    expect(runnerMock.run).toHaveBeenCalledTimes(1);
+    expect(runnerMock.task).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops runner when abort signal fires", async () => {
+    const controller = new AbortController();
+
+    // Start monitoring with abort signal
+    const monitorPromise = monitorTelegramProvider({
+      token: "tok",
+      abortSignal: controller.signal,
+    });
+
+    // Abort immediately
+    controller.abort();
+
+    await monitorPromise;
+
+    // Runner should have been stopped
+    expect(runnerMock.stop).toHaveBeenCalled();
+  });
+
+  it("stops runner immediately if abort signal is already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort(); // Pre-abort
+
+    await monitorTelegramProvider({
+      token: "tok",
+      abortSignal: controller.signal,
+    });
+
+    // Runner should have been stopped immediately
+    expect(runnerMock.stop).toHaveBeenCalled();
   });
 });
