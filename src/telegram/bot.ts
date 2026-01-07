@@ -28,7 +28,11 @@ import {
   resolveProviderGroupPolicy,
   resolveProviderGroupRequireMention,
 } from "../config/group-policy.js";
-import { resolveStorePath, updateLastRoute } from "../config/sessions.js";
+import {
+  loadSessionStore,
+  resolveStorePath,
+  updateLastRoute,
+} from "../config/sessions.js";
 import { danger, logVerbose, shouldLogVerbose } from "../globals.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { getChildLogger } from "../logging.js";
@@ -179,13 +183,45 @@ export function createTelegramBot(opts: TelegramBotOptions) {
       provider: "telegram",
       groupId: String(chatId),
     });
-  const resolveGroupRequireMention = (chatId: string | number) =>
-    resolveProviderGroupRequireMention({
+  const resolveGroupActivation = (params: {
+    chatId: string | number;
+    agentId: string;
+    messageThreadId?: number;
+  }) => {
+    // Build session key to look up activation state
+    const sessionKey = `agent:${params.agentId}:telegram:group:${buildTelegramGroupPeerId(params.chatId, params.messageThreadId)}`;
+    const storePath = resolveStorePath(cfg.session?.store, {
+      agentId: params.agentId,
+    });
+    try {
+      const store = loadSessionStore(storePath);
+      const entry = store[sessionKey];
+      // Check session state first (from /activation command)
+      if (entry?.groupActivation === "always") return false; // requireMention = false
+      if (entry?.groupActivation === "mention") return true; // requireMention = true
+    } catch (err) {
+      // Silently fall back to config if session loading fails
+      logVerbose(
+        `Failed to load session for activation check: ${String(err)}`,
+      );
+    }
+    // Fall back to config
+    return resolveProviderGroupRequireMention({
       cfg,
       provider: "telegram",
-      groupId: String(chatId),
+      groupId: String(params.chatId),
       requireMentionOverride: opts.requireMention,
       overrideOrder: "after-config",
+    });
+  };
+  const resolveGroupRequireMention = (
+    chatId: string | number,
+    messageThreadId?: number,
+  ) =>
+    resolveGroupActivation({
+      chatId,
+      agentId: cfg.agent?.id ?? "main",
+      messageThreadId,
     });
 
   const processMessage = async (
@@ -304,7 +340,7 @@ export function createTelegramBot(opts: TelegramBotOptions) {
     const hasAnyMention = (msg.entities ?? msg.caption_entities ?? []).some(
       (ent) => ent.type === "mention",
     );
-    const requireMention = resolveGroupRequireMention(chatId);
+    const requireMention = resolveGroupRequireMention(chatId, messageThreadId);
     const shouldBypassMention =
       isGroup &&
       requireMention &&
