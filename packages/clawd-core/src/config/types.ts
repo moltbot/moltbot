@@ -51,6 +51,14 @@ export type ClawdConfig = {
       nodeManager?: "npm" | "pnpm" | "yarn" | "bun";
     };
   };
+  cron?: {
+    /** Enable cron scheduler (default: true) */
+    enabled?: boolean;
+    /** Custom store path for cron jobs */
+    store?: string;
+    /** Maximum concurrent cron job runs */
+    maxConcurrentRuns?: number;
+  };
 };
 
 export type SessionEntry = {
