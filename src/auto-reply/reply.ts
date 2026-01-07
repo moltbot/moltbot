@@ -689,7 +689,7 @@ export async function getReplyFromConfig(
     resolvedThinkLevel = await modelState.resolveDefaultThinkingLevel();
   }
   const sessionIdFinal = sessionId ?? crypto.randomUUID();
-  const sessionFile = resolveSessionTranscriptPath(sessionIdFinal);
+  const sessionFile = resolveSessionTranscriptPath(sessionIdFinal, undefined, ctx.MessageThreadId);
   const queueBodyBase = transcribedText
     ? [baseBodyFinal, `Transcript:\n${transcribedText}`]
         .filter(Boolean)
