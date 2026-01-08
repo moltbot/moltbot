@@ -145,6 +145,9 @@ export async function authorizeGatewayConnect(params: {
 }): Promise<GatewayAuthResult> {
   const { auth, connectAuth, req } = params;
   const localDirect = isLocalDirectRequest(req);
+  if (localDirect) {
+    return { ok: true, method: "none" };
+  }
 
   if (auth.mode === "none") {
     if (auth.allowTailscale && !localDirect) {
