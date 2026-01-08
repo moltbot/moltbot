@@ -6,6 +6,7 @@ import {
   type SkillStatusReport,
 } from "../agents/skills-status.js";
 import { loadConfig } from "../config/config.js";
+import { defaultRuntime } from "../runtime.js";
 
 export type SkillsListOptions = {
   json?: boolean;
@@ -320,10 +321,15 @@ export function registerSkillsCli(program: Command) {
       false,
     )
     .action(async (opts) => {
-      const config = loadConfig();
-      const workspaceDir = config.agent?.workspace ?? process.cwd();
-      const report = buildWorkspaceSkillStatus(workspaceDir, { config });
-      console.log(formatSkillsList(report, opts));
+      try {
+        const config = loadConfig();
+        const workspaceDir = config.agent?.workspace ?? process.cwd();
+        const report = buildWorkspaceSkillStatus(workspaceDir, { config });
+        console.log(formatSkillsList(report, opts));
+      } catch (err) {
+        defaultRuntime.error(String(err));
+        defaultRuntime.exit(1);
+      }
     });
 
   skills
@@ -332,10 +338,15 @@ export function registerSkillsCli(program: Command) {
     .argument("<name>", "Skill name")
     .option("--json", "Output as JSON", false)
     .action(async (name, opts) => {
-      const config = loadConfig();
-      const workspaceDir = config.agent?.workspace ?? process.cwd();
-      const report = buildWorkspaceSkillStatus(workspaceDir, { config });
-      console.log(formatSkillInfo(report, name, opts));
+      try {
+        const config = loadConfig();
+        const workspaceDir = config.agent?.workspace ?? process.cwd();
+        const report = buildWorkspaceSkillStatus(workspaceDir, { config });
+        console.log(formatSkillInfo(report, name, opts));
+      } catch (err) {
+        defaultRuntime.error(String(err));
+        defaultRuntime.exit(1);
+      }
     });
 
   skills
@@ -343,17 +354,27 @@ export function registerSkillsCli(program: Command) {
     .description("Check which skills are ready vs missing requirements")
     .option("--json", "Output as JSON", false)
     .action(async (opts) => {
-      const config = loadConfig();
-      const workspaceDir = config.agent?.workspace ?? process.cwd();
-      const report = buildWorkspaceSkillStatus(workspaceDir, { config });
-      console.log(formatSkillsCheck(report, opts));
+      try {
+        const config = loadConfig();
+        const workspaceDir = config.agent?.workspace ?? process.cwd();
+        const report = buildWorkspaceSkillStatus(workspaceDir, { config });
+        console.log(formatSkillsCheck(report, opts));
+      } catch (err) {
+        defaultRuntime.error(String(err));
+        defaultRuntime.exit(1);
+      }
     });
 
   // Default action (no subcommand) - show list
   skills.action(async () => {
-    const config = loadConfig();
-    const workspaceDir = config.agent?.workspace ?? process.cwd();
-    const report = buildWorkspaceSkillStatus(workspaceDir, { config });
-    console.log(formatSkillsList(report, {}));
+    try {
+      const config = loadConfig();
+      const workspaceDir = config.agent?.workspace ?? process.cwd();
+      const report = buildWorkspaceSkillStatus(workspaceDir, { config });
+      console.log(formatSkillsList(report, {}));
+    } catch (err) {
+      defaultRuntime.error(String(err));
+      defaultRuntime.exit(1);
+    }
   });
 }
