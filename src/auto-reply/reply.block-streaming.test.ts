@@ -198,4 +198,59 @@ describe("block streaming", () => {
       expect(onBlockReply).toHaveBeenCalledTimes(1);
     });
   });
+
+  it("falls back to final payloads when block reply send times out", async () => {
+    await withTempHome(async (home) => {
+      let sawAbort = false;
+      const onBlockReply = vi.fn((_, context) => {
+        return new Promise<void>((resolve) => {
+          context?.abortSignal?.addEventListener(
+            "abort",
+            () => {
+              sawAbort = true;
+              resolve();
+            },
+            { once: true },
+          );
+        });
+      });
+
+      vi.mocked(runEmbeddedPiAgent).mockImplementation(async (params) => {
+        void params.onBlockReply?.({ text: "streamed" });
+        return {
+          payloads: [{ text: "final" }],
+          meta: {
+            durationMs: 5,
+            agentMeta: { sessionId: "s", provider: "p", model: "m" },
+          },
+        };
+      });
+
+      const replyPromise = getReplyFromConfig(
+        {
+          Body: "ping",
+          From: "+1004",
+          To: "+2000",
+          MessageSid: "msg-126",
+          Provider: "telegram",
+        },
+        {
+          onBlockReply,
+          blockReplyTimeoutMs: 10,
+        },
+        {
+          agent: {
+            model: "anthropic/claude-opus-4-5",
+            workspace: path.join(home, "clawd"),
+          },
+          telegram: { allowFrom: ["*"] },
+          session: { store: path.join(home, "sessions.json") },
+        },
+      );
+
+      const res = await replyPromise;
+      expect(res).toMatchObject({ text: "final" });
+      expect(sawAbort).toBe(true);
+    });
+  });
 });

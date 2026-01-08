@@ -166,6 +166,8 @@ export async function runReplyAgent(params: {
   let blockReplyAborted = false;
   let didLogBlockReplyAbort = false;
   let didStreamBlockReply = false;
+  const blockReplyTimeoutMs =
+    opts?.blockReplyTimeoutMs ?? BLOCK_REPLY_SEND_TIMEOUT_MS;
   const buildPayloadKey = (payload: ReplyPayload) => {
     const text = payload.text?.trim() ?? "";
     const mediaList = payload.mediaUrls?.length
@@ -398,14 +400,18 @@ export async function runReplyAgent(params: {
                         );
                       });
                     const timeoutError = new Error(
-                      `block reply delivery timed out after ${BLOCK_REPLY_SEND_TIMEOUT_MS}ms`,
+                      `block reply delivery timed out after ${blockReplyTimeoutMs}ms`,
                     );
+                    const abortController = new AbortController();
                     blockReplyChain = blockReplyChain
                       .then(async () => {
                         if (blockReplyAborted) return false;
                         await withTimeout(
-                          opts.onBlockReply?.(blockPayload) ?? Promise.resolve(),
-                          BLOCK_REPLY_SEND_TIMEOUT_MS,
+                          opts.onBlockReply?.(blockPayload, {
+                            abortSignal: abortController.signal,
+                            timeoutMs: blockReplyTimeoutMs,
+                          }) ?? Promise.resolve(),
+                          blockReplyTimeoutMs,
                           timeoutError,
                         );
                         return true;
@@ -417,11 +423,12 @@ export async function runReplyAgent(params: {
                       })
                       .catch((err) => {
                         if (err === timeoutError) {
+                          abortController.abort();
                           blockReplyAborted = true;
                           if (!didLogBlockReplyAbort) {
                             didLogBlockReplyAbort = true;
                             logVerbose(
-                              `block reply delivery timed out after ${BLOCK_REPLY_SEND_TIMEOUT_MS}ms; skipping remaining block replies to preserve ordering`,
+                              `block reply delivery timed out after ${blockReplyTimeoutMs}ms; skipping remaining block replies to preserve ordering`,
                             );
                           }
                           return;
