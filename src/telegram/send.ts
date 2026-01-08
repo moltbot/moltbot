@@ -1,4 +1,9 @@
-import type { ReactionType, ReactionTypeEmoji } from "@grammyjs/types";
+import type {
+  InlineKeyboardButton,
+  InlineKeyboardMarkup,
+  ReactionType,
+  ReactionTypeEmoji,
+} from "@grammyjs/types";
 import { Bot, InputFile } from "grammy";
 import { loadConfig } from "../config/config.js";
 import { formatErrorMessage } from "../infra/errors.js";
@@ -25,6 +30,8 @@ type TelegramSendOpts = {
   replyToMessageId?: number;
   /** Forum topic thread ID (for forum supergroups) */
   messageThreadId?: number;
+  /** Inline keyboard buttons (reply markup) */
+  buttons?: Array<Array<{ text: string; callback_data: string }>>;
 };
 
 type TelegramSendResult = {
@@ -96,6 +103,26 @@ function normalizeMessageId(raw: string | number): number {
     if (Number.isFinite(parsed)) return parsed;
   }
   throw new Error("Message id is required for Telegram reactions");
+}
+
+function buildInlineKeyboard(
+  buttons?: TelegramSendOpts["buttons"],
+): InlineKeyboardMarkup | undefined {
+  if (!buttons?.length) return undefined;
+  const rows = buttons
+    .map((row) =>
+      row
+        .filter((button) => button?.text && button?.callback_data)
+        .map(
+          (button): InlineKeyboardButton => ({
+            text: button.text,
+            callback_data: button.callback_data,
+          }),
+        ),
+    )
+    .filter((row) => row.length > 0);
+  if (rows.length === 0) return undefined;
+  return { inline_keyboard: rows };
 }
 
 export async function sendMessageTelegram(
@@ -224,9 +251,17 @@ export async function sendMessageTelegram(
     throw new Error("Message must be non-empty for Telegram sends");
   }
   const htmlText = markdownToTelegramHtml(text);
+  const replyMarkup = buildInlineKeyboard(opts.buttons);
   const textParams = hasThreadParams
-    ? { parse_mode: "HTML" as const, ...threadParams }
-    : { parse_mode: "HTML" as const };
+    ? {
+        parse_mode: "HTML" as const,
+        ...threadParams,
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+      }
+    : {
+        parse_mode: "HTML" as const,
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+      };
   const res = await request(
     () => api.sendMessage(chatId, htmlText, textParams),
     "message",
@@ -240,11 +275,19 @@ export async function sendMessageTelegram(
           `telegram HTML parse failed, retrying as plain text: ${errText}`,
         );
       }
+      const plainParams = hasThreadParams
+        ? {
+            ...threadParams,
+            ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+          }
+        : replyMarkup
+          ? { reply_markup: replyMarkup }
+          : undefined;
       return await request(
         () =>
           hasThreadParams
-            ? api.sendMessage(chatId, text, threadParams)
-            : api.sendMessage(chatId, text),
+            ? api.sendMessage(chatId, text, plainParams)
+            : api.sendMessage(chatId, text, plainParams),
         "message-plain",
       ).catch((err2) => {
         throw wrapChatNotFound(err2);

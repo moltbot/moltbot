@@ -20,6 +20,17 @@ export const TelegramToolSchema = Type.Union([
     mediaUrl: Type.Optional(
       Type.String({ description: "URL of image/video/audio to attach" }),
     ),
+    buttons: Type.Optional(
+      Type.Array(
+        Type.Array(
+          Type.Object({
+            text: Type.String(),
+            callback_data: Type.String(),
+          }),
+        ),
+        { description: "Inline keyboard buttons (array of button rows)" },
+      ),
+    ),
     replyToMessageId: Type.Optional(
       Type.Union([Type.String(), Type.Number()], {
         description: "Message ID to reply to (for threading)",

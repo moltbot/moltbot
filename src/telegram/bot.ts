@@ -966,6 +966,39 @@ export function createTelegramBot(opts: TelegramBotOptions) {
     });
   }
 
+  bot.on("callback_query", async (ctx) => {
+    const callback = ctx.callbackQuery;
+    if (!callback) return;
+    try {
+      const rawData = callback.data ?? "";
+      const data = rawData.trim();
+      const callbackMessage = callback.message;
+      if (!data || !callbackMessage) return;
+      const syntheticMessage: TelegramMessage = {
+        ...callbackMessage,
+        from: callback.from,
+        text: rawData,
+        caption: undefined,
+        caption_entities: undefined,
+        entities: undefined,
+      };
+      const storeAllowFrom = await readTelegramAllowFromStore().catch(() => []);
+      const getFile =
+        typeof ctx.getFile === "function"
+          ? ctx.getFile.bind(ctx)
+          : async () => ({});
+      await processMessage(
+        { message: syntheticMessage, me: ctx.me, getFile },
+        [],
+        storeAllowFrom,
+      );
+    } catch (err) {
+      runtime.error?.(danger(`callback handler failed: ${String(err)}`));
+    } finally {
+      await bot.api.answerCallbackQuery(callback.id).catch(() => {});
+    }
+  });
+
   bot.on("message", async (ctx) => {
     try {
       const msg = ctx.message;

@@ -59,6 +59,7 @@ export async function handleTelegramAction(
     const to = readStringParam(params, "to", { required: true });
     const content = readStringParam(params, "content", { required: true });
     const mediaUrl = readStringParam(params, "mediaUrl");
+    const buttons = readTelegramButtons(params);
     // Optional threading parameters for forum topics and reply chains
     const replyToMessageId = readNumberParam(params, "replyToMessageId", {
       integer: true,
@@ -75,6 +76,7 @@ export async function handleTelegramAction(
     const result = await sendMessageTelegram(to, content, {
       token,
       mediaUrl: mediaUrl || undefined,
+      buttons,
       replyToMessageId: replyToMessageId ?? undefined,
       messageThreadId: messageThreadId ?? undefined,
     });
@@ -86,4 +88,48 @@ export async function handleTelegramAction(
   }
 
   throw new Error(`Unsupported Telegram action: ${action}`);
+}
+
+type TelegramButton = {
+  text: string;
+  callback_data: string;
+};
+
+function readTelegramButtons(
+  params: Record<string, unknown>,
+): TelegramButton[][] | undefined {
+  const raw = params.buttons;
+  if (raw == null) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new Error("buttons must be an array of button rows");
+  }
+  const rows = raw.map((row, rowIndex) => {
+    if (!Array.isArray(row)) {
+      throw new Error(`buttons[${rowIndex}] must be an array`);
+    }
+    return row.map((button, buttonIndex) => {
+      if (!button || typeof button !== "object") {
+        throw new Error(
+          `buttons[${rowIndex}][${buttonIndex}] must be an object`,
+        );
+      }
+      const text =
+        typeof (button as { text?: unknown }).text === "string"
+          ? (button as { text: string }).text.trim()
+          : "";
+      const callbackData =
+        typeof (button as { callback_data?: unknown }).callback_data ===
+        "string"
+          ? (button as { callback_data: string }).callback_data.trim()
+          : "";
+      if (!text || !callbackData) {
+        throw new Error(
+          `buttons[${rowIndex}][${buttonIndex}] requires text and callback_data`,
+        );
+      }
+      return { text, callback_data: callbackData };
+    });
+  });
+  const filtered = rows.filter((row) => row.length > 0);
+  return filtered.length > 0 ? filtered : undefined;
 }
