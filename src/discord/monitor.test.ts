@@ -129,7 +129,7 @@ describe("discord guild/channel resolution", () => {
     expect(help?.systemPrompt).toBe("Use short answers.");
   });
 
-  it("denies channel when config present but no match", () => {
+  it("allows unlisted channels by default (overrides list behavior)", () => {
     const guildInfo: DiscordGuildEntryResolved = {
       channels: {
         general: { allow: true },
@@ -141,7 +141,8 @@ describe("discord guild/channel resolution", () => {
       channelName: "random",
       channelSlug: "random",
     });
-    expect(channel?.allowed).toBe(false);
+    // Unlisted channels should return null (allow by default)
+    expect(channel).toBeNull();
   });
 });
 

@@ -2259,7 +2259,7 @@ export function resolveDiscordChannelConfig(params: {
       systemPrompt: entry.systemPrompt,
     };
   }
-  return { allowed: false };
+  return null;
 }
 
 export function isDiscordGroupAllowedByPolicy(params: {
