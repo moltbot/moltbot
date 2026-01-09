@@ -1069,7 +1069,6 @@ export async function persistInlineDirectives(params: {
               rawProfile: directives.rawModelProfile,
               provider: resolved.ref.provider,
               cfg,
-              agentDir,
             });
             if (profileResolved.error) {
               throw new Error(profileResolved.error);
