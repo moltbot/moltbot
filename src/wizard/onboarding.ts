@@ -4,6 +4,7 @@ import { ensureAuthProfileStore } from "../agents/auth-profiles.js";
 import { DEFAULT_BOOTSTRAP_FILENAME } from "../agents/workspace.js";
 import {
   applyAuthChoice,
+  resolvePreferredProviderForAuthChoice,
   warnIfModelConfigLooksOff,
 } from "../commands/auth-choice.js";
 import { buildAuthChoiceOptions } from "../commands/auth-choice-options.js";
@@ -13,6 +14,10 @@ import {
   type GatewayDaemonRuntime,
 } from "../commands/daemon-runtime.js";
 import { healthCommand } from "../commands/health.js";
+import {
+  applyPrimaryModel,
+  promptDefaultModel,
+} from "../commands/model-picker.js";
 import {
   applyWizardMetadata,
   DEFAULT_WORKSPACE,
@@ -326,6 +331,17 @@ export async function runOnboardingWizard(
     setDefaultModel: true,
   });
   nextConfig = authResult.config;
+
+  const modelSelection = await promptDefaultModel({
+    config: nextConfig,
+    prompter,
+    allowKeep: true,
+    ignoreAllowlist: true,
+    preferredProvider: resolvePreferredProviderForAuthChoice(authChoice),
+  });
+  if (modelSelection.model) {
+    nextConfig = applyPrimaryModel(nextConfig, modelSelection.model);
+  }
 
   await warnIfModelConfigLooksOff(nextConfig, prompter);
 
