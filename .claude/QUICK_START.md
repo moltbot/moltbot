@@ -18,4 +18,4 @@
 ## Explore to Learn
 - Test patterns: `src/**/*.test.ts`
 - CLI structure: `src/cli/`, `src/commands/`
-- Slash commands: `.claude/commands/`
+- Slash commands: `.claude/dev/`

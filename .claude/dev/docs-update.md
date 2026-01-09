@@ -24,13 +24,19 @@ Spawn TWO agents in parallel to review docs:
 ```
 Review workflow documentation for Claude Code best practices.
 
+SCOPE: Only report Claude Code-specific issues (hooks, slash commands, settings, tools, subagents).
+Do NOT comment on Clawdbot CLI commands, test patterns, or codebase structure.
+
 Discover files: Glob for .claude/**/* and .workflow/**/*
 
 Check for:
 - Correct Claude Code feature usage (hooks, slash commands, settings)
-- Valid tool names in allowed-tools
-- Proper subagent_type references
-- Hook configuration accuracy
+- Valid tool names in allowed-tools (Bash, Read, Write, Edit, Glob, Grep, Task, etc.)
+- Hook configuration accuracy (PreToolUse, PostToolUse, SessionStart, SessionEnd, Stop)
+- Slash command syntax (frontmatter: description, allowed-tools, argument-hint)
+
+NOTE: Built-in subagent_types (claude-code-guide, clawdbot-guide, Explore, Plan, general-purpose)
+do NOT need definitions in .claude/agents/.
 
 Report issues as: ### [severity] file:line - Description
 ```
@@ -38,6 +44,9 @@ Report issues as: ### [severity] file:line - Description
 **Agent 2: clawdbot-guide**
 ```
 Review workflow documentation for Clawdbot accuracy.
+
+SCOPE: Only report Clawdbot-specific issues (CLI commands, test patterns, file paths, codebase structure).
+Do NOT comment on Claude Code features, hooks, slash command syntax, or tool configurations.
 
 Discover files: Glob for .workflow/**/*
 
@@ -51,6 +60,8 @@ Report issues as: ### [severity] file:line - Description
 ```
 
 ### Step 2: Fix Issues
+
+**Important:** Only fix issues within each agent's scope. Ignore out-of-scope feedback.
 
 For each HIGH and MEDIUM issue found:
 1. Read the file

@@ -114,16 +114,16 @@ exit 0
 
 ## Implemented: Slash Commands
 
-Slash commands are implemented in `.claude/commands/`. These are ready to use:
+Slash commands are implemented in `.claude/dev/`. These are ready to use:
 
 | Command | File | Purpose |
 |---------|------|---------|
-| `/gate` | `.claude/commands/gate.md` | Quality gate (lint, build, test) |
-| `/test` | `.claude/commands/test.md` | Run tests with coverage/pattern options |
-| `/e2e` | `.claude/commands/e2e.md` | End-to-end tests |
-| `/commit` | `.claude/commands/commit.md` | Safe commit using scripts/committer |
-| `/tdd` | `.claude/commands/tdd.md` | TDD workflow (red/green/refactor phases) |
-| `/coverage` | `.claude/commands/coverage.md` | Coverage analysis |
+| `/gate` | `.claude/dev/gate.md` | Quality gate (lint, build, test) |
+| `/test` | `.claude/dev/test.md` | Run tests with coverage/pattern options |
+| `/e2e` | `.claude/dev/e2e.md` | End-to-end tests |
+| `/commit` | `.claude/dev/commit.md` | Safe commit using scripts/committer |
+| `/tdd` | `.claude/dev/tdd.md` | TDD workflow (red/green/refactor phases) |
+| `/coverage` | `.claude/dev/coverage.md` | Coverage analysis |
 
 ### Usage Examples
 
@@ -156,7 +156,7 @@ To add a new slash command:
 
 ```bash
 # Create new command file
-cat > .claude/commands/my-command.md << 'EOF'
+cat > .claude/dev/my-command.md << 'EOF'
 ---
 description: Brief description shown in /help
 argument-hint: [arg1] [arg2]
@@ -458,5 +458,5 @@ fi
 | Don't stash/switch branches | Repo (`CLAUDE.md`) | Multi-agent safety |
 | Quality gate before commit | Recommendation | `pnpm lint && build && test` |
 | Subagents for specialization | Claude Code best practice | `.claude/agents/` |
-| Slash commands for workflows | Claude Code best practice | `.claude/commands/` |
+| Slash commands for workflows | Claude Code best practice | `.claude/dev/` |
 | Hooks for automation | Claude Code best practice | `.claude/settings.json` |

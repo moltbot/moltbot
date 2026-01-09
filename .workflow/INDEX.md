@@ -33,7 +33,7 @@ Development happens here. Only PR-ready code goes to the public fork.
 .claude/
 ├── CLAUDE.md               # Claude Code reads this, points to AGENTS.md
 ├── settings.json           # Permissions and hooks configuration
-├── commands/               # Slash commands (dev:*)
+├── dev/                    # Slash commands (dev:*)
 └── hooks/
     └── pre-bash.sh         # Pre-bash validation hook
 ```
