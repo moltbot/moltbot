@@ -5,7 +5,6 @@ read_when:
 ---
 # WhatsApp (web provider)
 
-Updated: 2026-01-07
 
 Status: WhatsApp Web via Baileys only. Gateway owns the session(s).
 
@@ -19,11 +18,51 @@ Status: WhatsApp Web via Baileys only. Gateway owns the session(s).
 - **CLI / macOS app** talk to the gateway; no direct Baileys use.
 - **Active listener** is required for outbound sends; otherwise send fails fast.
 
-## Getting a phone number
+## Getting a phone number (two modes)
 
-WhatsApp requires a real mobile number for verification. VoIP and virtual numbers are usually blocked.
+WhatsApp requires a real mobile number for verification. VoIP and virtual numbers are usually blocked. There are two supported ways to run Clawdbot on WhatsApp:
 
-**Recommended approaches:**
+### Dedicated number (recommended)
+Use a **separate phone number** for Clawdbot. Best UX, clean routing, no self-chat quirks. Ideal setup: **spare/old Android phone + eSIM**. Leave it on Wi‑Fi and power, and link it via QR.
+
+**WhatsApp Business:** You can use WhatsApp Business on the same device with a different number. Great for keeping your personal WhatsApp separate — install WhatsApp Business and register the Clawdbot number there.
+
+**Sample config (dedicated number, single-user allowlist):**
+```json
+{
+  "whatsapp": {
+    "dmPolicy": "allowlist",
+    "allowFrom": ["+15551234567"]
+  }
+}
+```
+
+**Pairing mode (optional):**
+If you want pairing instead of allowlist, set `whatsapp.dmPolicy` to `pairing`. Unknown senders get a pairing code; approve with:
+`clawdbot pairing approve --provider whatsapp <code>`
+
+### Personal number (fallback)
+Quick fallback: run Clawdbot on **your own number**. Message yourself (WhatsApp “Message yourself”) for testing so you don’t spam contacts. Expect to read verification codes on your main phone during setup and experiments. **Must enable self-chat mode.**
+When the wizard asks for your personal WhatsApp number, enter the phone you will message from (the owner/sender), not the assistant number.
+
+**Sample config (personal number, self-chat):**
+```json
+{
+  "whatsapp": {
+    "selfChatMode": true,
+    "dmPolicy": "allowlist",
+    "allowFrom": ["+15551234567"]
+  },
+  "messages": {
+    "responsePrefix": "[clawdbot]"
+  }
+}
+```
+
+Tip: if you set the routed agent’s `identity.name`, you can omit
+`messages.responsePrefix` and it will default to `[{identity.name}]`.
+
+### Number sourcing tips
 - **Local eSIM** from your country's mobile carrier (most reliable)
   - Austria: [hot.at](https://www.hot.at)
   - UK: [giffgaff](https://www.giffgaff.com) — free SIM, no contract
@@ -32,8 +71,6 @@ WhatsApp requires a real mobile number for verification. VoIP and virtual number
 **Avoid:** TextNow, Google Voice, most "free SMS" services — WhatsApp blocks these aggressively.
 
 **Tip:** The number only needs to receive one verification SMS. After that, WhatsApp Web sessions persist via `creds.json`.
-
-**WhatsApp Business:** You can use WhatsApp Business on the same phone with a different number. This is a great option if you want to keep your personal WhatsApp separate — just install WhatsApp Business and register it with Clawdbot's dedicated number.
 
 ## Why Not Twilio?
 - Early Clawdbot builds supported Twilio’s WhatsApp Business integration.
@@ -62,27 +99,13 @@ WhatsApp requires a real mobile number for verification. VoIP and virtual number
   - Open: requires `whatsapp.allowFrom` to include `"*"`.
   - Self messages are always allowed; “self-chat mode” still requires `whatsapp.allowFrom` to include your own number.
 
-### Same-phone mode (personal number)
-If you run Clawdbot on your **personal WhatsApp number**, set:
-
-```json
-{
-  "whatsapp": {
-    "selfChatMode": true
-  }
-}
-```
+### Personal-number mode (fallback)
+If you run Clawdbot on your **personal WhatsApp number**, enable `whatsapp.selfChatMode` (see sample above).
 
 Behavior:
 - Suppresses pairing replies for **outbound DMs** (prevents spamming contacts).
 - Inbound unknown senders still follow `whatsapp.dmPolicy`.
-
-Recommended for personal numbers:
-- Set `whatsapp.dmPolicy="allowlist"` and add your number to `whatsapp.allowFrom`.
-- Set `messages.responsePrefix` (for example, `[clawdbot]`) so replies are clearly labeled.
-- **Group policy**: `whatsapp.groupPolicy` controls group handling (`open|disabled|allowlist`).
-  - `allowlist` uses `whatsapp.groupAllowFrom` (fallback: explicit `whatsapp.allowFrom`).
-- **Self-chat mode**: avoids auto read receipts and ignores mention JIDs.
+- Self-chat mode avoids auto read receipts and ignores mention JIDs.
 - Read receipts sent for non-self-chat DMs.
 
 ## Message normalization (what the model sees)
@@ -128,7 +151,7 @@ Recommended for personal numbers:
 
 ## Limits
 - Outbound text is chunked to `whatsapp.textChunkLimit` (default 4000).
-- Media items are capped by `agent.mediaMaxMb` (default 5 MB).
+- Media items are capped by `agents.defaults.mediaMaxMb` (default 5 MB).
 
 ## Outbound send (text + media)
 - Uses active web listener; error if gateway not running.
@@ -139,18 +162,18 @@ Recommended for personal numbers:
   - Caption only on first media item.
   - Media fetch supports HTTP(S) and local paths.
   - Animated GIFs: WhatsApp expects MP4 with `gifPlayback: true` for inline looping.
-    - CLI: `clawdbot send --media <mp4> --gif-playback`
+    - CLI: `clawdbot message send --media <mp4> --gif-playback`
     - Gateway: `send` params include `gifPlayback: true`
 
 ## Media limits + optimization
 - Default cap: 5 MB (per media item).
-- Override: `agent.mediaMaxMb`.
+- Override: `agents.defaults.mediaMaxMb`.
 - Images are auto-optimized to JPEG under cap (resize + quality sweep).
 - Oversize media => error; media reply falls back to text warning.
 
 ## Heartbeats
 - **Gateway heartbeat** logs connection health (`web.heartbeatSeconds`, default 60s).
-- **Agent heartbeat** is global (`agent.heartbeat.*`) and runs in the main session.
+- **Agent heartbeat** is global (`agents.defaults.heartbeat.*`) and runs in the main session.
   - Uses the configured heartbeat prompt (default: `Read HEARTBEAT.md if exists. Consider outstanding tasks. Checkup sometimes on your human during (user local) day time.`) + `HEARTBEAT_OK` skip behavior.
   - Delivery defaults to the last used provider (or configured target).
 
@@ -169,15 +192,15 @@ Recommended for personal numbers:
 - `whatsapp.groupPolicy` (group policy).
 - `whatsapp.groups` (group allowlist + mention gating defaults; use `"*"` to allow all)
 - `whatsapp.actions.reactions` (gate WhatsApp tool reactions).
-- `routing.groupChat.mentionPatterns`
-- `routing.groupChat.historyLimit`
+- `agents.list[].groupChat.mentionPatterns` (or `messages.groupChat.mentionPatterns`)
+- `messages.groupChat.historyLimit`
 - `messages.messagePrefix` (inbound prefix)
 - `messages.responsePrefix` (outbound prefix)
-- `agent.mediaMaxMb`
-- `agent.heartbeat.every`
-- `agent.heartbeat.model` (optional override)
-- `agent.heartbeat.target`
-- `agent.heartbeat.to`
+- `agents.defaults.mediaMaxMb`
+- `agents.defaults.heartbeat.every`
+- `agents.defaults.heartbeat.model` (optional override)
+- `agents.defaults.heartbeat.target`
+- `agents.defaults.heartbeat.to`
 - `session.*` (scope, idle, store, mainKey)
 - `web.enabled` (disable provider startup when false)
 - `web.heartbeatSeconds`
@@ -188,7 +211,15 @@ Recommended for personal numbers:
 - Log file: `/tmp/clawdbot/clawdbot-YYYY-MM-DD.log` (configurable).
 - Troubleshooting guide: [`docs/troubleshooting.md`](/gateway/troubleshooting).
 
-## Tests
-- [`src/web/auto-reply.test.ts`](https://github.com/clawdbot/clawdbot/blob/main/src/web/auto-reply.test.ts) (mention gating, history injection, reply flow)
-- [`src/web/monitor-inbox.test.ts`](https://github.com/clawdbot/clawdbot/blob/main/src/web/monitor-inbox.test.ts) (inbound parsing + reply context)
-- [`src/web/outbound.test.ts`](https://github.com/clawdbot/clawdbot/blob/main/src/web/outbound.test.ts) (send mapping + media)
+## Troubleshooting (quick)
+
+**Not linked / QR login required**
+- Symptom: `providers status` shows `linked: false` or warns “Not linked”.
+- Fix: run `clawdbot providers login` on the gateway host and scan the QR (WhatsApp → Settings → Linked Devices).
+
+**Linked but disconnected / reconnect loop**
+- Symptom: `providers status` shows `running, disconnected` or warns “Linked but disconnected”.
+- Fix: `clawdbot doctor` (or restart the gateway). If it persists, relink via `providers login` and inspect `clawdbot logs --follow`.
+
+**Bun runtime**
+- WhatsApp uses Baileys; run the gateway with **Node** for WhatsApp. (See Getting Started runtime note.)

@@ -12,6 +12,13 @@ file tools and for workspace context. Keep it private and treat it as memory.
 This is separate from `~/.clawdbot/`, which stores config, credentials, and
 sessions.
 
+**Important:** the workspace is the **default cwd**, not a hard sandbox. Tools
+resolve relative paths against the workspace, but absolute paths can still reach
+elsewhere on the host unless sandboxing is enabled. If you need isolation, use
+[`agents.defaults.sandbox`](/gateway/sandboxing) (and/or per‑agent sandbox config).
+When sandboxing is enabled and `workspaceAccess` is not `"rw"`, tools operate
+inside a sandbox workspace under `~/.clawdbot/sandboxes`, not your host workspace.
+
 ## Default location
 
 - Default: `~/clawd`
@@ -46,7 +53,7 @@ only one workspace is active at a time.
 **Recommendation:** keep a single active workspace. If you no longer use the
 legacy folders, archive or move them to Trash (for example `trash ~/clawdis`).
 If you intentionally keep multiple workspaces, make sure
-`agent.workspace` points to the active one.
+`agents.defaults.workspace` points to the active one.
 
 `clawdbot doctor` warns when it detects legacy workspace directories.
 
@@ -200,7 +207,7 @@ Suggested `.gitignore` starter:
 ## Moving the workspace to a new machine
 
 1. Clone the repo to the desired path (default `~/clawd`).
-2. Set `agent.workspace` to that path in `~/.clawdbot/clawdbot.json`.
+2. Set `agents.defaults.workspace` to that path in `~/.clawdbot/clawdbot.json`.
 3. Run `clawdbot setup --workspace <path>` to seed any missing files.
 4. If you need sessions, copy `~/.clawdbot/agents/<agentId>/sessions/` from the
    old machine separately.
@@ -209,5 +216,5 @@ Suggested `.gitignore` starter:
 
 - Multi-agent routing can use different workspaces per agent. See
   `docs/provider-routing.md` for routing configuration.
-- If `agent.sandbox` is enabled, non-main sessions can use per-session sandbox
-  workspaces under `agent.sandbox.workspaceRoot`.
+- If `agents.defaults.sandbox` is enabled, non-main sessions can use per-session sandbox
+  workspaces under `agents.defaults.sandbox.workspaceRoot`.

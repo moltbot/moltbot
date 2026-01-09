@@ -24,22 +24,32 @@ describe("resolveHeartbeatIntervalMs", () => {
 
   it("returns null when invalid or zero", () => {
     expect(
-      resolveHeartbeatIntervalMs({ agent: { heartbeat: { every: "0m" } } }),
+      resolveHeartbeatIntervalMs({
+        agents: { defaults: { heartbeat: { every: "0m" } } },
+      }),
     ).toBeNull();
     expect(
-      resolveHeartbeatIntervalMs({ agent: { heartbeat: { every: "oops" } } }),
+      resolveHeartbeatIntervalMs({
+        agents: { defaults: { heartbeat: { every: "oops" } } },
+      }),
     ).toBeNull();
   });
 
   it("parses duration strings with minute defaults", () => {
     expect(
-      resolveHeartbeatIntervalMs({ agent: { heartbeat: { every: "5m" } } }),
+      resolveHeartbeatIntervalMs({
+        agents: { defaults: { heartbeat: { every: "5m" } } },
+      }),
     ).toBe(5 * 60_000);
     expect(
-      resolveHeartbeatIntervalMs({ agent: { heartbeat: { every: "5" } } }),
+      resolveHeartbeatIntervalMs({
+        agents: { defaults: { heartbeat: { every: "5" } } },
+      }),
     ).toBe(5 * 60_000);
     expect(
-      resolveHeartbeatIntervalMs({ agent: { heartbeat: { every: "2h" } } }),
+      resolveHeartbeatIntervalMs({
+        agents: { defaults: { heartbeat: { every: "2h" } } },
+      }),
     ).toBe(2 * 60 * 60_000);
   });
 });
@@ -51,7 +61,7 @@ describe("resolveHeartbeatPrompt", () => {
 
   it("uses a trimmed override when configured", () => {
     const cfg: ClawdbotConfig = {
-      agent: { heartbeat: { prompt: "  ping  " } },
+      agents: { defaults: { heartbeat: { prompt: "  ping  " } } },
     };
     expect(resolveHeartbeatPrompt(cfg)).toBe("ping");
   });
@@ -65,7 +75,7 @@ describe("resolveHeartbeatDeliveryTarget", () => {
 
   it("respects target none", () => {
     const cfg: ClawdbotConfig = {
-      agent: { heartbeat: { target: "none" } },
+      agents: { defaults: { heartbeat: { target: "none" } } },
     };
     expect(resolveHeartbeatDeliveryTarget({ cfg, entry: baseEntry })).toEqual({
       provider: "none",
@@ -101,7 +111,7 @@ describe("resolveHeartbeatDeliveryTarget", () => {
 
   it("applies allowFrom fallback for WhatsApp targets", () => {
     const cfg: ClawdbotConfig = {
-      agent: { heartbeat: { target: "whatsapp", to: "+1999" } },
+      agents: { defaults: { heartbeat: { target: "whatsapp", to: "+1999" } } },
       whatsapp: { allowFrom: ["+1555", "+1666"] },
     };
     const entry = {
@@ -118,7 +128,7 @@ describe("resolveHeartbeatDeliveryTarget", () => {
 
   it("keeps explicit telegram targets", () => {
     const cfg: ClawdbotConfig = {
-      agent: { heartbeat: { target: "telegram", to: "123" } },
+      agents: { defaults: { heartbeat: { target: "telegram", to: "123" } } },
     };
     expect(resolveHeartbeatDeliveryTarget({ cfg, entry: baseEntry })).toEqual({
       provider: "telegram",
@@ -150,8 +160,10 @@ describe("runHeartbeatOnce", () => {
       );
 
       const cfg: ClawdbotConfig = {
-        agent: {
-          heartbeat: { every: "5m", target: "whatsapp", to: "+1555" },
+        agents: {
+          defaults: {
+            heartbeat: { every: "5m", target: "whatsapp", to: "+1555" },
+          },
         },
         whatsapp: { allowFrom: ["*"] },
         session: { store: storePath },
@@ -200,8 +212,10 @@ describe("runHeartbeatOnce", () => {
     const replySpy = vi.spyOn(replyModule, "getReplyFromConfig");
     try {
       const cfg: ClawdbotConfig = {
-        routing: { defaultAgentId: "work" },
-        agent: { heartbeat: { every: "5m" } },
+        agents: {
+          defaults: { heartbeat: { every: "5m" } },
+          list: [{ id: "work", default: true }],
+        },
         whatsapp: { allowFrom: ["*"] },
         session: { store: storeTemplate },
       };
@@ -277,12 +291,14 @@ describe("runHeartbeatOnce", () => {
       );
 
       const cfg: ClawdbotConfig = {
-        agent: {
-          heartbeat: {
-            every: "5m",
-            target: "whatsapp",
-            to: "+1555",
-            ackMaxChars: 0,
+        agents: {
+          defaults: {
+            heartbeat: {
+              every: "5m",
+              target: "whatsapp",
+              to: "+1555",
+              ackMaxChars: 0,
+            },
           },
         },
         whatsapp: { allowFrom: ["*"] },
@@ -335,8 +351,10 @@ describe("runHeartbeatOnce", () => {
       );
 
       const cfg: ClawdbotConfig = {
-        agent: {
-          heartbeat: { every: "5m", target: "whatsapp", to: "+1555" },
+        agents: {
+          defaults: {
+            heartbeat: { every: "5m", target: "whatsapp", to: "+1555" },
+          },
         },
         whatsapp: { allowFrom: ["*"] },
         session: { store: storePath },
@@ -368,7 +386,7 @@ describe("runHeartbeatOnce", () => {
     }
   });
 
-  it("passes telegram token from config to sendTelegram", async () => {
+  it("passes through accountId for telegram heartbeats", async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawdbot-hb-"));
     const storePath = path.join(tmpDir, "sessions.json");
     const replySpy = vi.spyOn(replyModule, "getReplyFromConfig");
@@ -392,8 +410,10 @@ describe("runHeartbeatOnce", () => {
       );
 
       const cfg: ClawdbotConfig = {
-        agent: {
-          heartbeat: { every: "5m", target: "telegram", to: "123456" },
+        agents: {
+          defaults: {
+            heartbeat: { every: "5m", target: "telegram", to: "123456" },
+          },
         },
         telegram: { botToken: "test-bot-token-123" },
         session: { store: storePath },
@@ -418,7 +438,76 @@ describe("runHeartbeatOnce", () => {
       expect(sendTelegram).toHaveBeenCalledWith(
         "123456",
         "Hello from heartbeat",
-        expect.objectContaining({ accountId: "default", verbose: false }),
+        expect.objectContaining({ accountId: undefined, verbose: false }),
+      );
+    } finally {
+      replySpy.mockRestore();
+      if (prevTelegramToken === undefined) {
+        delete process.env.TELEGRAM_BOT_TOKEN;
+      } else {
+        process.env.TELEGRAM_BOT_TOKEN = prevTelegramToken;
+      }
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not pre-resolve telegram accountId (allows config-only account tokens)", async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawdbot-hb-"));
+    const storePath = path.join(tmpDir, "sessions.json");
+    const replySpy = vi.spyOn(replyModule, "getReplyFromConfig");
+    const prevTelegramToken = process.env.TELEGRAM_BOT_TOKEN;
+    process.env.TELEGRAM_BOT_TOKEN = "";
+    try {
+      await fs.writeFile(
+        storePath,
+        JSON.stringify(
+          {
+            main: {
+              sessionId: "sid",
+              updatedAt: Date.now(),
+              lastProvider: "telegram",
+              lastTo: "123456",
+            },
+          },
+          null,
+          2,
+        ),
+      );
+
+      const cfg: ClawdbotConfig = {
+        agents: {
+          defaults: {
+            heartbeat: { every: "5m", target: "telegram", to: "123456" },
+          },
+        },
+        telegram: {
+          accounts: {
+            work: { botToken: "test-bot-token-123" },
+          },
+        },
+        session: { store: storePath },
+      };
+
+      replySpy.mockResolvedValue({ text: "Hello from heartbeat" });
+      const sendTelegram = vi.fn().mockResolvedValue({
+        messageId: "m1",
+        chatId: "123456",
+      });
+
+      await runHeartbeatOnce({
+        cfg,
+        deps: {
+          sendTelegram,
+          getQueueSize: () => 0,
+          nowMs: () => 0,
+        },
+      });
+
+      expect(sendTelegram).toHaveBeenCalledTimes(1);
+      expect(sendTelegram).toHaveBeenCalledWith(
+        "123456",
+        "Hello from heartbeat",
+        expect.objectContaining({ accountId: undefined, verbose: false }),
       );
     } finally {
       replySpy.mockRestore();

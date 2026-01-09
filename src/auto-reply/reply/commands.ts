@@ -1,11 +1,17 @@
 import {
+  resolveAgentDir,
+  resolveDefaultAgentId,
+} from "../../agents/agent-scope.js";
+import {
   ensureAuthProfileStore,
-  listProfilesForProvider,
+  resolveAuthProfileDisplayLabel,
+  resolveAuthProfileOrder,
 } from "../../agents/auth-profiles.js";
 import {
   getCustomProviderApiKey,
   resolveEnvApiKey,
 } from "../../agents/model-auth.js";
+import { normalizeProviderId } from "../../agents/model-selection.js";
 import {
   abortEmbeddedPiRun,
   compactEmbeddedPiSession,
@@ -14,6 +20,13 @@ import {
 } from "../../agents/pi-embedded.js";
 import type { ClawdbotConfig } from "../../config/config.js";
 import {
+  getConfigOverrides,
+  resetConfigOverrides,
+  setConfigOverride,
+  unsetConfigOverride,
+} from "../../config/runtime-overrides.js";
+import {
+  resolveAgentIdFromSessionKey,
   resolveSessionFilePath,
   type SessionEntry,
   type SessionScope,
@@ -23,6 +36,7 @@ import { logVerbose } from "../../globals.js";
 import {
   formatUsageSummaryLine,
   loadProviderUsageSummary,
+  resolveUsageProviderId,
 } from "../../infra/provider-usage.js";
 import {
   scheduleGatewaySigusr1Restart,
@@ -43,6 +57,7 @@ import {
 } from "../group-activation.js";
 import { parseSendPolicyCommand } from "../send-policy.js";
 import {
+  buildCommandsMessage,
   buildHelpMessage,
   buildStatusMessage,
   formatContextUsageShort,
@@ -57,6 +72,7 @@ import type {
 } from "../thinking.js";
 import type { ReplyPayload } from "../types.js";
 import { isAbortTrigger, setAbortMemory } from "./abort.js";
+import { parseDebugCommand } from "./debug-commands.js";
 import type { InlineDirectives } from "./directive-handling.js";
 import { stripMentions, stripStructuralPrefixes } from "./mentions.js";
 import { getFollowupQueueDepth, resolveQueueSettings } from "./queue.js";
@@ -91,32 +107,191 @@ export type CommandContext = {
   to?: string;
 };
 
+export async function buildStatusReply(params: {
+  cfg: ClawdbotConfig;
+  command: CommandContext;
+  sessionEntry?: SessionEntry;
+  sessionKey?: string;
+  sessionScope?: SessionScope;
+  provider: string;
+  model: string;
+  contextTokens: number;
+  resolvedThinkLevel?: ThinkLevel;
+  resolvedVerboseLevel: VerboseLevel;
+  resolvedReasoningLevel: ReasoningLevel;
+  resolvedElevatedLevel?: ElevatedLevel;
+  resolveDefaultThinkingLevel: () => Promise<ThinkLevel | undefined>;
+  isGroup: boolean;
+  defaultGroupActivation: () => "always" | "mention";
+}): Promise<ReplyPayload | undefined> {
+  const {
+    cfg,
+    command,
+    sessionEntry,
+    sessionKey,
+    sessionScope,
+    provider,
+    model,
+    contextTokens,
+    resolvedThinkLevel,
+    resolvedVerboseLevel,
+    resolvedReasoningLevel,
+    resolvedElevatedLevel,
+    resolveDefaultThinkingLevel,
+    isGroup,
+    defaultGroupActivation,
+  } = params;
+  if (!command.isAuthorizedSender) {
+    logVerbose(
+      `Ignoring /status from unauthorized sender: ${command.senderE164 || "<unknown>"}`,
+    );
+    return undefined;
+  }
+  const statusAgentId = sessionKey
+    ? resolveAgentIdFromSessionKey(sessionKey)
+    : resolveDefaultAgentId(cfg);
+  const statusAgentDir = resolveAgentDir(cfg, statusAgentId);
+  let usageLine: string | null = null;
+  try {
+    const usageProvider = resolveUsageProviderId(provider);
+    if (usageProvider) {
+      const usageSummary = await loadProviderUsageSummary({
+        timeoutMs: 3500,
+        providers: [usageProvider],
+        agentDir: statusAgentDir,
+      });
+      usageLine = formatUsageSummaryLine(usageSummary, { now: Date.now() });
+      if (
+        !usageLine &&
+        (resolvedVerboseLevel === "on" || resolvedElevatedLevel === "on")
+      ) {
+        const entry = usageSummary.providers[0];
+        if (entry?.error) {
+          usageLine = `📊 Usage: ${entry.displayName} (${entry.error})`;
+        }
+      }
+    }
+  } catch {
+    usageLine = null;
+  }
+  const queueSettings = resolveQueueSettings({
+    cfg,
+    provider: command.provider,
+    sessionEntry,
+  });
+  const queueKey = sessionKey ?? sessionEntry?.sessionId;
+  const queueDepth = queueKey ? getFollowupQueueDepth(queueKey) : 0;
+  const queueOverrides = Boolean(
+    sessionEntry?.queueDebounceMs ??
+      sessionEntry?.queueCap ??
+      sessionEntry?.queueDrop,
+  );
+  const groupActivation = isGroup
+    ? (normalizeGroupActivation(sessionEntry?.groupActivation) ??
+      defaultGroupActivation())
+    : undefined;
+  const agentDefaults = cfg.agents?.defaults ?? {};
+  const statusText = buildStatusMessage({
+    config: cfg,
+    agent: {
+      ...agentDefaults,
+      model: {
+        ...agentDefaults.model,
+        primary: `${provider}/${model}`,
+      },
+      contextTokens,
+      thinkingDefault: agentDefaults.thinkingDefault,
+      verboseDefault: agentDefaults.verboseDefault,
+      elevatedDefault: agentDefaults.elevatedDefault,
+    },
+    sessionEntry,
+    sessionKey,
+    sessionScope,
+    groupActivation,
+    resolvedThink: resolvedThinkLevel ?? (await resolveDefaultThinkingLevel()),
+    resolvedVerbose: resolvedVerboseLevel,
+    resolvedReasoning: resolvedReasoningLevel,
+    resolvedElevated: resolvedElevatedLevel,
+    modelAuth: resolveModelAuthLabel(
+      provider,
+      cfg,
+      sessionEntry,
+      statusAgentDir,
+    ),
+    usageLine: usageLine ?? undefined,
+    queue: {
+      mode: queueSettings.mode,
+      depth: queueDepth,
+      debounceMs: queueSettings.debounceMs,
+      cap: queueSettings.cap,
+      dropPolicy: queueSettings.dropPolicy,
+      showDetails: queueOverrides,
+    },
+    includeTranscriptUsage: false,
+  });
+  return { text: statusText };
+}
+
+function formatApiKeySnippet(apiKey: string): string {
+  const compact = apiKey.replace(/\s+/g, "");
+  if (!compact) return "unknown";
+  const edge = compact.length >= 12 ? 6 : 4;
+  const head = compact.slice(0, edge);
+  const tail = compact.slice(-edge);
+  return `${head}…${tail}`;
+}
+
 function resolveModelAuthLabel(
   provider?: string,
   cfg?: ClawdbotConfig,
+  sessionEntry?: SessionEntry,
+  agentDir?: string,
 ): string | undefined {
   const resolved = provider?.trim();
   if (!resolved) return undefined;
 
-  const store = ensureAuthProfileStore();
-  const profiles = listProfilesForProvider(store, resolved);
-  if (profiles.length > 0) {
-    const modes = new Set(
-      profiles
-        .map((id) => store.profiles[id]?.type)
-        .filter((mode): mode is "api_key" | "oauth" => Boolean(mode)),
-    );
-    if (modes.has("oauth") && modes.has("api_key")) return "mixed";
-    if (modes.has("oauth")) return "oauth";
-    if (modes.has("api_key")) return "api-key";
+  const providerKey = normalizeProviderId(resolved);
+  const store = ensureAuthProfileStore(agentDir, {
+    allowKeychainPrompt: false,
+  });
+  const profileOverride = sessionEntry?.authProfileOverride?.trim();
+  const order = resolveAuthProfileOrder({
+    cfg,
+    store,
+    provider: providerKey,
+    preferredProfile: profileOverride,
+  });
+  const candidates = [profileOverride, ...order].filter(Boolean) as string[];
+
+  for (const profileId of candidates) {
+    const profile = store.profiles[profileId];
+    if (!profile || normalizeProviderId(profile.provider) !== providerKey) {
+      continue;
+    }
+    const label = resolveAuthProfileDisplayLabel({ cfg, store, profileId });
+    if (profile.type === "oauth") {
+      return `oauth${label ? ` (${label})` : ""}`;
+    }
+    if (profile.type === "token") {
+      const snippet = formatApiKeySnippet(profile.token);
+      return `token ${snippet}${label ? ` (${label})` : ""}`;
+    }
+    const snippet = formatApiKeySnippet(profile.key);
+    return `api-key ${snippet}${label ? ` (${label})` : ""}`;
   }
 
-  const envKey = resolveEnvApiKey(resolved);
+  const envKey = resolveEnvApiKey(providerKey);
   if (envKey?.apiKey) {
-    return envKey.source.includes("OAUTH_TOKEN") ? "oauth" : "api-key";
+    if (envKey.source.includes("OAUTH_TOKEN")) {
+      return `oauth (${envKey.source})`;
+    }
+    return `api-key ${formatApiKeySnippet(envKey.apiKey)} (${envKey.source})`;
   }
 
-  if (getCustomProviderApiKey(cfg, resolved)) return "api-key";
+  const customKey = getCustomProviderApiKey(cfg, providerKey);
+  if (customKey) {
+    return `api-key ${formatApiKeySnippet(customKey)} (models.json)`;
+  }
 
   return "unknown";
 }
@@ -125,11 +300,12 @@ function extractCompactInstructions(params: {
   rawBody?: string;
   ctx: MsgContext;
   cfg: ClawdbotConfig;
+  agentId?: string;
   isGroup: boolean;
 }): string | undefined {
   const raw = stripStructuralPrefixes(params.rawBody ?? "");
   const stripped = params.isGroup
-    ? stripMentions(raw, params.ctx, params.cfg)
+    ? stripMentions(raw, params.ctx, params.cfg, params.agentId)
     : raw;
   const trimmed = stripped.trim();
   if (!trimmed) return undefined;
@@ -144,12 +320,14 @@ function extractCompactInstructions(params: {
 export function buildCommandContext(params: {
   ctx: MsgContext;
   cfg: ClawdbotConfig;
+  agentId?: string;
   sessionKey?: string;
   isGroup: boolean;
   triggerBodyNormalized: string;
   commandAuthorized: boolean;
 }): CommandContext {
-  const { ctx, cfg, sessionKey, isGroup, triggerBodyNormalized } = params;
+  const { ctx, cfg, agentId, sessionKey, isGroup, triggerBodyNormalized } =
+    params;
   const auth = resolveCommandAuthorization({
     ctx,
     cfg,
@@ -161,7 +339,9 @@ export function buildCommandContext(params: {
     sessionKey ?? (auth.from || undefined) ?? (auth.to || undefined);
   const rawBodyNormalized = triggerBodyNormalized;
   const commandBodyNormalized = normalizeCommandBody(
-    isGroup ? stripMentions(rawBodyNormalized, ctx, cfg) : rawBodyNormalized,
+    isGroup
+      ? stripMentions(rawBodyNormalized, ctx, cfg, agentId)
+      : rawBodyNormalized,
   );
 
   return {
@@ -206,6 +386,7 @@ export async function handleCommands(params: {
   ctx: MsgContext;
   cfg: ClawdbotConfig;
   command: CommandContext;
+  agentId?: string;
   directives: InlineDirectives;
   sessionEntry?: SessionEntry;
   sessionStore?: Record<string, SessionEntry>;
@@ -363,6 +544,14 @@ export async function handleCommands(params: {
       );
       return { shouldContinue: false };
     }
+    if (cfg.commands?.restart !== true) {
+      return {
+        shouldContinue: false,
+        reply: {
+          text: "⚠️ /restart is disabled. Set commands.restart=true to enable.",
+        },
+      };
+    }
     const hasSigusr1Listener = process.listenerCount("SIGUSR1") > 0;
     if (hasSigusr1Listener) {
       scheduleGatewaySigusr1Restart({ reason: "/restart" });
@@ -404,75 +593,121 @@ export async function handleCommands(params: {
     return { shouldContinue: false, reply: { text: buildHelpMessage() } };
   }
 
+  const commandsRequested = command.commandBodyNormalized === "/commands";
+  if (allowTextCommands && commandsRequested) {
+    if (!command.isAuthorizedSender) {
+      logVerbose(
+        `Ignoring /commands from unauthorized sender: ${command.senderE164 || "<unknown>"}`,
+      );
+      return { shouldContinue: false };
+    }
+    return { shouldContinue: false, reply: { text: buildCommandsMessage() } };
+  }
+
   const statusRequested =
     directives.hasStatusDirective ||
     command.commandBodyNormalized === "/status";
   if (allowTextCommands && statusRequested) {
-    if (!command.isAuthorizedSender) {
-      logVerbose(
-        `Ignoring /status from unauthorized sender: ${command.senderE164 || "<unknown>"}`,
-      );
-      return { shouldContinue: false };
-    }
-    let usageLine: string | null = null;
-    try {
-      const usageSummary = await loadProviderUsageSummary({
-        timeoutMs: 3500,
-      });
-      usageLine = formatUsageSummaryLine(usageSummary, { now: Date.now() });
-    } catch {
-      usageLine = null;
-    }
-    const queueSettings = resolveQueueSettings({
+    const reply = await buildStatusReply({
       cfg,
-      provider: command.provider,
-      sessionEntry,
-    });
-    const queueKey = sessionKey ?? sessionEntry?.sessionId;
-    const queueDepth = queueKey ? getFollowupQueueDepth(queueKey) : 0;
-    const queueOverrides = Boolean(
-      sessionEntry?.queueDebounceMs ??
-        sessionEntry?.queueCap ??
-        sessionEntry?.queueDrop,
-    );
-    const groupActivation = isGroup
-      ? (normalizeGroupActivation(sessionEntry?.groupActivation) ??
-        defaultGroupActivation())
-      : undefined;
-    const statusText = buildStatusMessage({
-      agent: {
-        ...cfg.agent,
-        model: {
-          ...cfg.agent?.model,
-          primary: model,
-        },
-        contextTokens,
-        thinkingDefault: cfg.agent?.thinkingDefault,
-        verboseDefault: cfg.agent?.verboseDefault,
-        elevatedDefault: cfg.agent?.elevatedDefault,
-      },
+      command,
       sessionEntry,
       sessionKey,
       sessionScope,
-      groupActivation,
-      resolvedThink:
-        resolvedThinkLevel ?? (await resolveDefaultThinkingLevel()),
-      resolvedVerbose: resolvedVerboseLevel,
-      resolvedReasoning: resolvedReasoningLevel,
-      resolvedElevated: resolvedElevatedLevel,
-      modelAuth: resolveModelAuthLabel(provider, cfg),
-      usageLine: usageLine ?? undefined,
-      queue: {
-        mode: queueSettings.mode,
-        depth: queueDepth,
-        debounceMs: queueSettings.debounceMs,
-        cap: queueSettings.cap,
-        dropPolicy: queueSettings.dropPolicy,
-        showDetails: queueOverrides,
-      },
-      includeTranscriptUsage: false,
+      provider,
+      model,
+      contextTokens,
+      resolvedThinkLevel,
+      resolvedVerboseLevel,
+      resolvedReasoningLevel,
+      resolvedElevatedLevel,
+      resolveDefaultThinkingLevel,
+      isGroup,
+      defaultGroupActivation,
     });
-    return { shouldContinue: false, reply: { text: statusText } };
+    return { shouldContinue: false, reply };
+  }
+
+  const debugCommand = allowTextCommands
+    ? parseDebugCommand(command.commandBodyNormalized)
+    : null;
+  if (debugCommand) {
+    if (!command.isAuthorizedSender) {
+      logVerbose(
+        `Ignoring /debug from unauthorized sender: ${command.senderE164 || "<unknown>"}`,
+      );
+      return { shouldContinue: false };
+    }
+    if (debugCommand.action === "error") {
+      return {
+        shouldContinue: false,
+        reply: { text: `⚠️ ${debugCommand.message}` },
+      };
+    }
+    if (debugCommand.action === "show") {
+      const overrides = getConfigOverrides();
+      const hasOverrides = Object.keys(overrides).length > 0;
+      if (!hasOverrides) {
+        return {
+          shouldContinue: false,
+          reply: { text: "⚙️ Debug overrides: (none)" },
+        };
+      }
+      const json = JSON.stringify(overrides, null, 2);
+      return {
+        shouldContinue: false,
+        reply: {
+          text: `⚙️ Debug overrides (memory-only):\n\`\`\`json\n${json}\n\`\`\``,
+        },
+      };
+    }
+    if (debugCommand.action === "reset") {
+      resetConfigOverrides();
+      return {
+        shouldContinue: false,
+        reply: { text: "⚙️ Debug overrides cleared; using config on disk." },
+      };
+    }
+    if (debugCommand.action === "unset") {
+      const result = unsetConfigOverride(debugCommand.path);
+      if (!result.ok) {
+        return {
+          shouldContinue: false,
+          reply: { text: `⚠️ ${result.error ?? "Invalid path."}` },
+        };
+      }
+      if (!result.removed) {
+        return {
+          shouldContinue: false,
+          reply: {
+            text: `⚙️ No debug override found for ${debugCommand.path}.`,
+          },
+        };
+      }
+      return {
+        shouldContinue: false,
+        reply: { text: `⚙️ Debug override removed for ${debugCommand.path}.` },
+      };
+    }
+    if (debugCommand.action === "set") {
+      const result = setConfigOverride(debugCommand.path, debugCommand.value);
+      if (!result.ok) {
+        return {
+          shouldContinue: false,
+          reply: { text: `⚠️ ${result.error ?? "Invalid override."}` },
+        };
+      }
+      const valueLabel =
+        typeof debugCommand.value === "string"
+          ? `"${debugCommand.value}"`
+          : JSON.stringify(debugCommand.value);
+      return {
+        shouldContinue: false,
+        reply: {
+          text: `⚙️ Debug override set: ${debugCommand.path}=${valueLabel ?? "null"}`,
+        },
+      };
+    }
   }
 
   const stopRequested = command.commandBodyNormalized === "/stop";
@@ -530,6 +765,7 @@ export async function handleCommands(params: {
       rawBody: ctx.Body,
       ctx,
       cfg,
+      agentId: params.agentId,
       isGroup,
     });
     const result = await compactEmbeddedPiSession({

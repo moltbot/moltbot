@@ -77,6 +77,13 @@ Even with strong system prompts, **prompt injection is not solved**. What helps 
 - Run sensitive tool execution in a sandbox; keep secrets out of the agent’s reachable filesystem.
 - **Model choice matters:** we recommend Anthropic Opus 4.5 because it’s quite good at recognizing prompt injections (see [“A step forward on safety”](https://www.anthropic.com/news/claude-opus-4-5)). Using weaker models increases risk.
 
+## Reasoning & verbose output in groups
+
+`/reasoning` and `/verbose` can expose internal reasoning or tool output that
+was not meant for a public channel. In group settings, treat them as **debug
+only** and keep them off unless you explicitly need them. If you enable them,
+do so only in trusted DMs or tightly controlled rooms.
+
 ## Lessons Learned (The Hard Way)
 
 ### The `find ~` Incident 🦞
@@ -95,6 +102,14 @@ This is social engineering 101. Create distrust, encourage snooping.
 
 ## Configuration Hardening (examples)
 
+### 0) File permissions
+
+Keep config + state private on the gateway host:
+- `~/.clawdbot/clawdbot.json`: `600` (user read/write only)
+- `~/.clawdbot`: `700` (user only)
+
+`clawdbot doctor` can warn and offer to tighten these permissions.
+
 ### 1) DMs: pairing by default
 
 ```json5
@@ -112,10 +127,13 @@ This is social engineering 101. Create distrust, encourage snooping.
       "*": { "requireMention": true }
     }
   },
-  "routing": {
-    "groupChat": {
-      "mentionPatterns": ["@clawd", "@mybot"]
-    }
+  "agents": {
+    "list": [
+      {
+        "id": "main",
+        "groupChat": { "mentionPatterns": ["@clawd", "@mybot"] }
+      }
+    ]
   }
 }
 ```
@@ -131,28 +149,30 @@ Consider running your AI on a separate phone number from your personal one:
 ### 4. Read-Only Mode (Today, via sandbox + tools)
 
 You can already build a read-only profile by combining:
-- `sandbox.workspaceAccess: "ro"` (or `"none"` for no workspace access)
+- `agents.defaults.sandbox.workspaceAccess: "ro"` (or `"none"` for no workspace access)
 - tool allow/deny lists that block `write`, `edit`, `bash`, `process`, etc.
 
 We may add a single `readOnlyMode` flag later to simplify this configuration.
 
 ## Sandboxing (recommended)
 
+Dedicated doc: [Sandboxing](/gateway/sandboxing)
+
 Two complementary approaches:
 
 - **Run the full Gateway in Docker** (container boundary): [Docker](/install/docker)
-- **Tool sandbox** (`agent.sandbox`, host gateway + Docker-isolated tools): [Configuration](/gateway/configuration)
+- **Tool sandbox** (`agents.defaults.sandbox`, host gateway + Docker-isolated tools): [Sandboxing](/gateway/sandboxing)
 
-Note: to prevent cross-agent access, keep `sandbox.scope` at `"agent"` (default)
+Note: to prevent cross-agent access, keep `agents.defaults.sandbox.scope` at `"agent"` (default)
 or `"session"` for stricter per-session isolation. `scope: "shared"` uses a
 single container/workspace.
 
 Also consider agent workspace access inside the sandbox:
-- `agent.sandbox.workspaceAccess: "none"` (default) keeps the agent workspace off-limits; tools run against a sandbox workspace under `~/.clawdbot/sandboxes`
-- `workspaceAccess: "ro"` mounts the agent workspace read-only at `/agent` (disables `write`/`edit`)
-- `workspaceAccess: "rw"` mounts the agent workspace read/write at `/workspace`
+- `agents.defaults.sandbox.workspaceAccess: "none"` (default) keeps the agent workspace off-limits; tools run against a sandbox workspace under `~/.clawdbot/sandboxes`
+- `agents.defaults.sandbox.workspaceAccess: "ro"` mounts the agent workspace read-only at `/agent` (disables `write`/`edit`)
+- `agents.defaults.sandbox.workspaceAccess: "rw"` mounts the agent workspace read/write at `/workspace`
 
-Important: `agent.elevated` is an explicit escape hatch that runs bash on the host. Keep `agent.elevated.allowFrom` tight and don’t enable it for strangers.
+Important: `tools.elevated` is a **global**, sender-based escape hatch that runs bash on the host. Keep `tools.elevated.allowFrom` tight and don’t enable it for strangers. See [Elevated Mode](/tools/elevated).
 
 ## Per-agent access profiles (multi-agent)
 
@@ -170,13 +190,14 @@ Common use cases:
 
 ```json5
 {
-  routing: {
-    agents: {
-      personal: {
+  agents: {
+    list: [
+      {
+        id: "personal",
         workspace: "~/clawd-personal",
         sandbox: { mode: "off" }
       }
-    }
+    ]
   }
 }
 ```
@@ -185,9 +206,10 @@ Common use cases:
 
 ```json5
 {
-  routing: {
-    agents: {
-      family: {
+  agents: {
+    list: [
+      {
+        id: "family",
         workspace: "~/clawd-family",
         sandbox: {
           mode: "all",
@@ -199,7 +221,7 @@ Common use cases:
           deny: ["write", "edit", "bash", "process", "browser"]
         }
       }
-    }
+    ]
   }
 }
 ```
@@ -208,9 +230,10 @@ Common use cases:
 
 ```json5
 {
-  routing: {
-    agents: {
-      public: {
+  agents: {
+    list: [
+      {
+        id: "public",
         workspace: "~/clawd-public",
         sandbox: {
           mode: "all",
@@ -222,7 +245,7 @@ Common use cases:
           deny: ["read", "write", "edit", "bash", "process", "browser", "canvas", "nodes", "cron", "gateway", "image"]
         }
       }
-    }
+    ]
   }
 }
 ```

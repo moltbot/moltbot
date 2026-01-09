@@ -111,7 +111,7 @@ import {
   startGatewayConfigReloader,
 } from "./config-reload.js";
 import { normalizeControlUiBasePath } from "./control-ui.js";
-import { resolveHooksConfig } from "./hooks.js";
+import { type HookMessageProvider, resolveHooksConfig } from "./hooks.js";
 import {
   isLoopbackAddress,
   isLoopbackHost,
@@ -183,6 +183,7 @@ const logDiscord = logProviders.child("discord");
 const logSlack = logProviders.child("slack");
 const logSignal = logProviders.child("signal");
 const logIMessage = logProviders.child("imessage");
+const logMSTeams = logProviders.child("msteams");
 const canvasRuntime = runtimeForLogger(logCanvas);
 const whatsappRuntimeEnv = runtimeForLogger(logWhatsApp);
 const telegramRuntimeEnv = runtimeForLogger(logTelegram);
@@ -190,6 +191,7 @@ const discordRuntimeEnv = runtimeForLogger(logDiscord);
 const slackRuntimeEnv = runtimeForLogger(logSlack);
 const signalRuntimeEnv = runtimeForLogger(logSignal);
 const imessageRuntimeEnv = runtimeForLogger(logIMessage);
+const msteamsRuntimeEnv = runtimeForLogger(logMSTeams);
 
 type GatewayModelChoice = ModelCatalogEntry;
 
@@ -227,6 +229,7 @@ const METHODS = [
   "wizard.status",
   "talk.mode",
   "models.list",
+  "agents.list",
   "skills.status",
   "skills.install",
   "skills.update",
@@ -493,14 +496,7 @@ export async function startGatewayServer(
     wakeMode: "now" | "next-heartbeat";
     sessionKey: string;
     deliver: boolean;
-    provider:
-      | "last"
-      | "whatsapp"
-      | "telegram"
-      | "discord"
-      | "slack"
-      | "signal"
-      | "imessage";
+    provider: HookMessageProvider;
     to?: string;
     model?: string;
     thinking?: string;
@@ -683,10 +679,13 @@ export async function startGatewayServer(
     { controller: AbortController; sessionId: string; sessionKey: string }
   >();
   setCommandLaneConcurrency("cron", cfgAtStart.cron?.maxConcurrentRuns ?? 1);
-  setCommandLaneConcurrency("main", cfgAtStart.agent?.maxConcurrent ?? 1);
+  setCommandLaneConcurrency(
+    "main",
+    cfgAtStart.agents?.defaults?.maxConcurrent ?? 1,
+  );
   setCommandLaneConcurrency(
     "subagent",
-    cfgAtStart.agent?.subagents?.maxConcurrent ?? 1,
+    cfgAtStart.agents?.defaults?.subagents?.maxConcurrent ?? 1,
   );
 
   const cronLogger = getChildLogger({
@@ -755,12 +754,14 @@ export async function startGatewayServer(
     logSlack,
     logSignal,
     logIMessage,
+    logMSTeams,
     whatsappRuntimeEnv,
     telegramRuntimeEnv,
     discordRuntimeEnv,
     slackRuntimeEnv,
     signalRuntimeEnv,
     imessageRuntimeEnv,
+    msteamsRuntimeEnv,
   });
   const {
     getRuntimeSnapshot,
@@ -771,12 +772,14 @@ export async function startGatewayServer(
     startSlackProvider,
     startSignalProvider,
     startIMessageProvider,
+    startMSTeamsProvider,
     stopWhatsAppProvider,
     stopTelegramProvider,
     stopDiscordProvider,
     stopSlackProvider,
     stopSignalProvider,
     stopIMessageProvider,
+    stopMSTeamsProvider,
     markWhatsAppLoggedOut,
   } = providerManager;
 
@@ -1090,15 +1093,14 @@ export async function startGatewayServer(
   }
 
   const tailnetDns = await resolveTailnetDnsHint();
+  const sshPortEnv = process.env.CLAWDBOT_SSH_PORT?.trim();
+  const sshPortParsed = sshPortEnv ? Number.parseInt(sshPortEnv, 10) : NaN;
+  const sshPort =
+    Number.isFinite(sshPortParsed) && sshPortParsed > 0
+      ? sshPortParsed
+      : undefined;
 
   try {
-    const sshPortEnv = process.env.CLAWDBOT_SSH_PORT?.trim();
-    const sshPortParsed = sshPortEnv ? Number.parseInt(sshPortEnv, 10) : NaN;
-    const sshPort =
-      Number.isFinite(sshPortParsed) && sshPortParsed > 0
-        ? sshPortParsed
-        : undefined;
-
     const bonjour = await startGatewayBonjourAdvertiser({
       instanceName: formatBonjourInstanceName(machineDisplayName),
       gatewayPort: port,
@@ -1124,10 +1126,13 @@ export async function startGatewayServer(
         const tailnetIPv6 = pickPrimaryTailnetIPv6();
         const result = await writeWideAreaBridgeZone({
           bridgePort: bridge.port,
+          gatewayPort: port,
           displayName: formatBonjourInstanceName(machineDisplayName),
           tailnetIPv4,
           tailnetIPv6: tailnetIPv6 ?? undefined,
           tailnetDns,
+          sshPort,
+          cliPath: resolveBonjourCliPath(),
         });
         logDiscovery.info(
           `wide-area DNS-SD ${result.changed ? "updated" : "unchanged"} (${WIDE_AREA_DISCOVERY_DOMAIN} → ${result.zonePath})`,
@@ -1202,10 +1207,17 @@ export async function startGatewayServer(
   wss.on("connection", (socket, upgradeReq) => {
     let client: Client | null = null;
     let closed = false;
+    const openedAt = Date.now();
     const connId = randomUUID();
     const remoteAddr = (
       socket as WebSocket & { _socket?: { remoteAddress?: string } }
     )._socket?.remoteAddress;
+    const headerValue = (value: string | string[] | undefined) =>
+      Array.isArray(value) ? value[0] : value;
+    const requestHost = headerValue(upgradeReq.headers.host);
+    const requestOrigin = headerValue(upgradeReq.headers.origin);
+    const requestUserAgent = headerValue(upgradeReq.headers["user-agent"]);
+    const forwardedFor = headerValue(upgradeReq.headers["x-forwarded-for"]);
     const canvasHostPortForWs =
       canvasHostServer?.port ?? (canvasHost ? port : undefined);
     const canvasHostOverride =
@@ -1223,6 +1235,19 @@ export async function startGatewayServer(
     const isWebchatConnect = (params: ConnectParams | null | undefined) =>
       params?.client?.mode === "webchat" ||
       params?.client?.name === "webchat-ui";
+    let handshakeState: "pending" | "connected" | "failed" = "pending";
+    let closeCause: string | undefined;
+    let closeMeta: Record<string, unknown> = {};
+    let lastFrameType: string | undefined;
+    let lastFrameMethod: string | undefined;
+    let lastFrameId: string | undefined;
+
+    const setCloseCause = (cause: string, meta?: Record<string, unknown>) => {
+      if (!closeCause) closeCause = cause;
+      if (meta && Object.keys(meta).length > 0) {
+        closeMeta = { ...closeMeta, ...meta };
+      }
+    };
 
     const send = (obj: unknown) => {
       try {
@@ -1251,9 +1276,24 @@ export async function startGatewayServer(
       close();
     });
     socket.once("close", (code, reason) => {
+      const durationMs = Date.now() - openedAt;
+      const closeContext = {
+        cause: closeCause,
+        handshake: handshakeState,
+        durationMs,
+        lastFrameType,
+        lastFrameMethod,
+        lastFrameId,
+        host: requestHost,
+        origin: requestOrigin,
+        userAgent: requestUserAgent,
+        forwardedFor,
+        ...closeMeta,
+      };
       if (!client) {
         logWsControl.warn(
           `closed before connect conn=${connId} remote=${remoteAddr ?? "?"} code=${code ?? "n/a"} reason=${reason?.toString() || "n/a"}`,
+          closeContext,
         );
       }
       if (client && isWebchatConnect(client.connect)) {
@@ -1280,12 +1320,22 @@ export async function startGatewayServer(
         connId,
         code,
         reason: reason?.toString(),
+        durationMs,
+        cause: closeCause,
+        handshake: handshakeState,
+        lastFrameType,
+        lastFrameMethod,
+        lastFrameId,
       });
       close();
     });
 
     const handshakeTimer = setTimeout(() => {
       if (!client) {
+        handshakeState = "failed";
+        setCloseCause("handshake-timeout", {
+          handshakeMs: Date.now() - openedAt,
+        });
         logWsControl.warn(
           `handshake timeout conn=${connId} remote=${remoteAddr ?? "?"}`,
         );
@@ -1298,6 +1348,29 @@ export async function startGatewayServer(
       const text = rawDataToString(data);
       try {
         const parsed = JSON.parse(text);
+        const frameType =
+          parsed && typeof parsed === "object" && "type" in parsed
+            ? typeof (parsed as { type?: unknown }).type === "string"
+              ? String((parsed as { type?: unknown }).type)
+              : undefined
+            : undefined;
+        const frameMethod =
+          parsed && typeof parsed === "object" && "method" in parsed
+            ? typeof (parsed as { method?: unknown }).method === "string"
+              ? String((parsed as { method?: unknown }).method)
+              : undefined
+            : undefined;
+        const frameId =
+          parsed && typeof parsed === "object" && "id" in parsed
+            ? typeof (parsed as { id?: unknown }).id === "string"
+              ? String((parsed as { id?: unknown }).id)
+              : undefined
+            : undefined;
+        if (frameType || frameMethod || frameId) {
+          lastFrameType = frameType;
+          lastFrameMethod = frameMethod;
+          lastFrameId = frameId;
+        }
         if (!client) {
           // Handshake must be a normal request:
           // { type:"req", method:"connect", params: ConnectParams }.
@@ -1324,6 +1397,18 @@ export async function startGatewayServer(
                 `invalid handshake conn=${connId} remote=${remoteAddr ?? "?"}`,
               );
             }
+            handshakeState = "failed";
+            const handshakeError = validateRequestFrame(parsed)
+              ? (parsed as RequestFrame).method === "connect"
+                ? `invalid connect params: ${formatValidationErrors(validateConnectParams.errors)}`
+                : "invalid handshake: first request must be connect"
+              : "invalid request frame";
+            setCloseCause("invalid-handshake", {
+              frameType,
+              frameMethod,
+              frameId,
+              handshakeError,
+            });
             socket.close(1008, "invalid handshake");
             close();
             return;
@@ -1338,9 +1423,18 @@ export async function startGatewayServer(
             maxProtocol < PROTOCOL_VERSION ||
             minProtocol > PROTOCOL_VERSION
           ) {
+            handshakeState = "failed";
             logWsControl.warn(
               `protocol mismatch conn=${connId} remote=${remoteAddr ?? "?"} client=${connectParams.client.name} ${connectParams.client.mode} v${connectParams.client.version}`,
             );
+            setCloseCause("protocol-mismatch", {
+              minProtocol,
+              maxProtocol,
+              expectedProtocol: PROTOCOL_VERSION,
+              client: connectParams.client.name,
+              mode: connectParams.client.mode,
+              version: connectParams.client.version,
+            });
             send({
               type: "res",
               id: frame.id,
@@ -1364,9 +1458,24 @@ export async function startGatewayServer(
             req: upgradeReq,
           });
           if (!authResult.ok) {
+            handshakeState = "failed";
             logWsControl.warn(
               `unauthorized conn=${connId} remote=${remoteAddr ?? "?"} client=${connectParams.client.name} ${connectParams.client.mode} v${connectParams.client.version}`,
             );
+            const authProvided = connectParams.auth?.token
+              ? "token"
+              : connectParams.auth?.password
+                ? "password"
+                : "none";
+            setCloseCause("unauthorized", {
+              authMode: resolvedAuth.mode,
+              authProvided,
+              authReason: authResult.reason,
+              allowTailscale: resolvedAuth.allowTailscale,
+              client: connectParams.client.name,
+              mode: connectParams.client.mode,
+              version: connectParams.client.version,
+            });
             send({
               type: "res",
               id: frame.id,
@@ -1444,6 +1553,7 @@ export async function startGatewayServer(
 
           clearTimeout(handshakeTimer);
           client = { socket, connect: connectParams, connId, presenceKey };
+          handshakeState = "connected";
 
           logWs("out", "hello-ok", {
             connId,
@@ -1851,14 +1961,24 @@ export async function startGatewayServer(
             startIMessageProvider,
           );
         }
+        if (plan.restartProviders.has("msteams")) {
+          await restartProvider(
+            "msteams",
+            stopMSTeamsProvider,
+            startMSTeamsProvider,
+          );
+        }
       }
     }
 
     setCommandLaneConcurrency("cron", nextConfig.cron?.maxConcurrentRuns ?? 1);
-    setCommandLaneConcurrency("main", nextConfig.agent?.maxConcurrent ?? 1);
+    setCommandLaneConcurrency(
+      "main",
+      nextConfig.agents?.defaults?.maxConcurrent ?? 1,
+    );
     setCommandLaneConcurrency(
       "subagent",
-      nextConfig.agent?.subagents?.maxConcurrent ?? 1,
+      nextConfig.agents?.defaults?.subagents?.maxConcurrent ?? 1,
     );
 
     if (plan.hotReasons.length > 0) {
@@ -1947,6 +2067,7 @@ export async function startGatewayServer(
       await stopSlackProvider();
       await stopSignalProvider();
       await stopIMessageProvider();
+      await stopMSTeamsProvider();
       await stopGmailWatcher();
       cron.stop();
       heartbeatRunner.stop();

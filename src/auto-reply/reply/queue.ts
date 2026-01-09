@@ -271,8 +271,9 @@ export function extractQueueDirective(body?: string): {
   const argsStart = start + "/queue".length;
   const args = body.slice(argsStart);
   const parsed = parseQueueDirectiveArgs(args);
-  const cleanedRaw =
-    body.slice(0, start) + body.slice(argsStart + parsed.consumed);
+  const cleanedRaw = `${body.slice(0, start)} ${body.slice(
+    argsStart + parsed.consumed,
+  )}`;
   const cleaned = cleanedRaw.replace(/\s+/g, " ").trim();
   return {
     cleaned,
@@ -552,7 +553,7 @@ export function resolveQueueSettings(params: {
   inlineOptions?: Partial<QueueSettings>;
 }): QueueSettings {
   const providerKey = params.provider?.trim().toLowerCase();
-  const queueCfg = params.cfg.routing?.queue;
+  const queueCfg = params.cfg.messages?.queue;
   const providerModeRaw =
     providerKey && queueCfg?.byProvider
       ? (queueCfg.byProvider as Record<string, string | undefined>)[providerKey]

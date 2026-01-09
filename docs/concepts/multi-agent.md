@@ -17,14 +17,22 @@ An **agent** is a fully scoped brain with its own:
 - **State directory** (`agentDir`) for auth profiles, model registry, and per-agent config.
 - **Session store** (chat history + routing state) under `~/.clawdbot/agents/<agentId>/sessions`.
 
+Skills are per-agent via each workspace’s `skills/` folder, with shared skills
+available from `~/.clawdbot/skills`. See [Skills: per-agent vs shared](/tools/skills#per-agent-vs-shared-skills).
+
 The Gateway can host **one agent** (default) or **many agents** side-by-side.
+
+**Workspace note:** each agent’s workspace is the **default cwd**, not a hard
+sandbox. Relative paths resolve inside the workspace, but absolute paths can
+reach other host locations unless sandboxing is enabled. See
+[Sandboxing](/gateway/sandboxing).
 
 ## Paths (quick map)
 
 - Config: `~/.clawdbot/clawdbot.json` (or `CLAWDBOT_CONFIG_PATH`)
 - State dir: `~/.clawdbot` (or `CLAWDBOT_STATE_DIR`)
 - Workspace: `~/clawd` (or `~/clawd-<agentId>`)
-- Agent dir: `~/.clawdbot/agents/<agentId>/agent` (or `routing.agents.<agentId>.agentDir`)
+- Agent dir: `~/.clawdbot/agents/<agentId>/agent` (or `agents.list[].agentDir`)
 - Sessions: `~/.clawdbot/agents/<agentId>/sessions`
 
 ### Single-agent mode (default)
@@ -44,7 +52,7 @@ Use the agent wizard to add a new isolated agent:
 clawdbot agents add work
 ```
 
-Then add `routing.bindings` (or let the wizard do it) to route inbound messages.
+Then add `bindings` (or let the wizard do it) to route inbound messages.
 
 Verify with:
 
@@ -71,7 +79,7 @@ Bindings are **deterministic** and **most-specific wins**:
 3. `teamId` (Slack)
 4. `accountId` match for a provider
 5. provider-level match (`accountId: "*"`)
-6. fallback to `routing.defaultAgentId` (default: `main`)
+6. fallback to default agent (`agents.list[].default`, else first list entry, default: `main`)
 
 ## Multiple accounts / phone numbers
 
@@ -92,39 +100,42 @@ multiple phone numbers without mixing sessions.
 
 ```js
 {
-  routing: {
-    defaultAgentId: "home",
-
-    agents: {
-      home: {
+  agents: {
+    list: [
+      {
+        id: "home",
+        default: true,
         name: "Home",
         workspace: "~/clawd-home",
         agentDir: "~/.clawdbot/agents/home/agent",
       },
-      work: {
+      {
+        id: "work",
         name: "Work",
         workspace: "~/clawd-work",
         agentDir: "~/.clawdbot/agents/work/agent",
       },
-    },
-
-    // Deterministic routing: first match wins (most-specific first).
-    bindings: [
-      { agentId: "home", match: { provider: "whatsapp", accountId: "personal" } },
-      { agentId: "work", match: { provider: "whatsapp", accountId: "biz" } },
-
-      // Optional per-peer override (example: send a specific group to work agent).
-      {
-        agentId: "work",
-        match: {
-          provider: "whatsapp",
-          accountId: "personal",
-          peer: { kind: "group", id: "1203630...@g.us" },
-        },
-      },
     ],
+  },
 
-    // Off by default: agent-to-agent messaging must be explicitly enabled + allowlisted.
+  // Deterministic routing: first match wins (most-specific first).
+  bindings: [
+    { agentId: "home", match: { provider: "whatsapp", accountId: "personal" } },
+    { agentId: "work", match: { provider: "whatsapp", accountId: "biz" } },
+
+    // Optional per-peer override (example: send a specific group to work agent).
+    {
+      agentId: "work",
+      match: {
+        provider: "whatsapp",
+        accountId: "personal",
+        peer: { kind: "group", id: "1203630...@g.us" },
+      },
+    },
+  ],
+
+  // Off by default: agent-to-agent messaging must be explicitly enabled + allowlisted.
+  tools: {
     agentToAgent: {
       enabled: false,
       allow: ["home", "work"],
@@ -152,16 +163,18 @@ Starting with v2026.1.6, each agent can have its own sandbox and tool restrictio
 
 ```js
 {
-  routing: {
-    agents: {
-      personal: {
+  agents: {
+    list: [
+      {
+        id: "personal",
         workspace: "~/clawd-personal",
         sandbox: {
           mode: "off",  // No sandbox for personal agent
         },
         // No tool restrictions - all tools available
       },
-      family: {
+      {
+        id: "family",
         workspace: "~/clawd-family",
         sandbox: {
           mode: "all",     // Always sandboxed
@@ -176,7 +189,7 @@ Starting with v2026.1.6, each agent can have its own sandbox and tool restrictio
           deny: ["bash", "write", "edit"],    // Deny others
         },
       },
-    },
+    ],
   },
 }
 ```
@@ -185,5 +198,9 @@ Starting with v2026.1.6, each agent can have its own sandbox and tool restrictio
 - **Security isolation**: Restrict tools for untrusted agents
 - **Resource control**: Sandbox specific agents while keeping others on host
 - **Flexible policies**: Different permissions per agent
+
+Note: `tools.elevated` is **global** and sender-based; it is not configurable per agent.
+If you need per-agent boundaries, use `agents.list[].tools` to deny `bash`.
+For group targeting, use `agents.list[].groupChat.mentionPatterns` so @mentions map cleanly to the intended agent.
 
 See [Multi-Agent Sandbox & Tools](/multi-agent-sandbox-tools) for detailed examples.

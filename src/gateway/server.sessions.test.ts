@@ -87,6 +87,14 @@ describe("gateway server sessions", () => {
       ]),
     );
 
+    const resolvedByKey = await rpcReq<{ ok: true; key: string }>(
+      ws,
+      "sessions.resolve",
+      { key: "main" },
+    );
+    expect(resolvedByKey.ok).toBe(true);
+    expect(resolvedByKey.payload?.key).toBe("agent:main:main");
+
     const list1 = await rpcReq<{
       path: string;
       sessions: Array<{
@@ -148,12 +156,29 @@ describe("gateway server sessions", () => {
     expect(sendPolicyPatched.ok).toBe(true);
     expect(sendPolicyPatched.payload?.entry.sendPolicy).toBe("deny");
 
+    const labelPatched = await rpcReq<{
+      ok: true;
+      entry: { label?: string };
+    }>(ws, "sessions.patch", {
+      key: "agent:main:subagent:one",
+      label: "Briefing",
+    });
+    expect(labelPatched.ok).toBe(true);
+    expect(labelPatched.payload?.entry.label).toBe("Briefing");
+
+    const labelPatchedDuplicate = await rpcReq(ws, "sessions.patch", {
+      key: "agent:main:discord:group:dev",
+      label: "Briefing",
+    });
+    expect(labelPatchedDuplicate.ok).toBe(false);
+
     const list2 = await rpcReq<{
       sessions: Array<{
         key: string;
         thinkingLevel?: string;
         verboseLevel?: string;
         sendPolicy?: string;
+        label?: string;
       }>;
     }>(ws, "sessions.list", {});
     expect(list2.ok).toBe(true);
@@ -163,6 +188,30 @@ describe("gateway server sessions", () => {
     expect(main2?.thinkingLevel).toBe("medium");
     expect(main2?.verboseLevel).toBeUndefined();
     expect(main2?.sendPolicy).toBe("deny");
+    const subagent = list2.payload?.sessions.find(
+      (s) => s.key === "agent:main:subagent:one",
+    );
+    expect(subagent?.label).toBe("Briefing");
+
+    const listByLabel = await rpcReq<{
+      sessions: Array<{ key: string }>;
+    }>(ws, "sessions.list", {
+      includeGlobal: false,
+      includeUnknown: false,
+      label: "Briefing",
+    });
+    expect(listByLabel.ok).toBe(true);
+    expect(listByLabel.payload?.sessions.map((s) => s.key)).toEqual([
+      "agent:main:subagent:one",
+    ]);
+
+    const resolvedByLabel = await rpcReq<{ ok: true; key: string }>(
+      ws,
+      "sessions.resolve",
+      { label: "Briefing", agentId: "main" },
+    );
+    expect(resolvedByLabel.ok).toBe(true);
+    expect(resolvedByLabel.payload?.key).toBe("agent:main:subagent:one");
 
     const spawnedOnly = await rpcReq<{
       sessions: Array<{ key: string }>;
@@ -319,5 +368,81 @@ describe("gateway server sessions", () => {
 
     ws.close();
     await server.close();
+  });
+
+  test("filters sessions by agentId", async () => {
+    const dir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "clawdbot-sessions-agents-"),
+    );
+    testState.sessionConfig = {
+      store: path.join(dir, "{agentId}", "sessions.json"),
+    };
+    testState.agentsConfig = {
+      list: [{ id: "home", default: true }, { id: "work" }],
+    };
+    const homeDir = path.join(dir, "home");
+    const workDir = path.join(dir, "work");
+    await fs.mkdir(homeDir, { recursive: true });
+    await fs.mkdir(workDir, { recursive: true });
+    await fs.writeFile(
+      path.join(homeDir, "sessions.json"),
+      JSON.stringify(
+        {
+          "agent:home:main": {
+            sessionId: "sess-home-main",
+            updatedAt: Date.now(),
+          },
+          "agent:home:discord:group:dev": {
+            sessionId: "sess-home-group",
+            updatedAt: Date.now() - 1000,
+          },
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+    await fs.writeFile(
+      path.join(workDir, "sessions.json"),
+      JSON.stringify(
+        {
+          "agent:work:main": {
+            sessionId: "sess-work-main",
+            updatedAt: Date.now(),
+          },
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    const { ws } = await startServerWithClient();
+    await connectOk(ws);
+
+    const homeSessions = await rpcReq<{
+      sessions: Array<{ key: string }>;
+    }>(ws, "sessions.list", {
+      includeGlobal: false,
+      includeUnknown: false,
+      agentId: "home",
+    });
+    expect(homeSessions.ok).toBe(true);
+    expect(homeSessions.payload?.sessions.map((s) => s.key).sort()).toEqual([
+      "agent:home:discord:group:dev",
+      "agent:home:main",
+    ]);
+
+    const workSessions = await rpcReq<{
+      sessions: Array<{ key: string }>;
+    }>(ws, "sessions.list", {
+      includeGlobal: false,
+      includeUnknown: false,
+      agentId: "work",
+    });
+    expect(workSessions.ok).toBe(true);
+    expect(workSessions.payload?.sessions.map((s) => s.key)).toEqual([
+      "agent:work:main",
+    ]);
   });
 });

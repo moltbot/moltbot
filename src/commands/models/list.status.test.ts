@@ -63,9 +63,11 @@ const mocks = vi.hoisted(() => {
       .mockReturnValue(["OPENAI_API_KEY", "ANTHROPIC_OAUTH_TOKEN"]),
     shouldEnableShellEnvFallback: vi.fn().mockReturnValue(true),
     loadConfig: vi.fn().mockReturnValue({
-      agent: {
-        model: { primary: "anthropic/claude-opus-4-5", fallbacks: [] },
-        models: { "anthropic/claude-opus-4-5": { alias: "Opus" } },
+      agents: {
+        defaults: {
+          model: { primary: "anthropic/claude-opus-4-5", fallbacks: [] },
+          models: { "anthropic/claude-opus-4-5": { alias: "Opus" } },
+        },
       },
       models: { providers: {} },
       env: { shellEnv: { enabled: true } },
@@ -77,12 +79,17 @@ vi.mock("../../agents/agent-paths.js", () => ({
   resolveClawdbotAgentDir: mocks.resolveClawdbotAgentDir,
 }));
 
-vi.mock("../../agents/auth-profiles.js", () => ({
-  ensureAuthProfileStore: mocks.ensureAuthProfileStore,
-  listProfilesForProvider: mocks.listProfilesForProvider,
-  resolveAuthProfileDisplayLabel: mocks.resolveAuthProfileDisplayLabel,
-  resolveAuthStorePathForDisplay: mocks.resolveAuthStorePathForDisplay,
-}));
+vi.mock("../../agents/auth-profiles.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../agents/auth-profiles.js")>();
+  return {
+    ...actual,
+    ensureAuthProfileStore: mocks.ensureAuthProfileStore,
+    listProfilesForProvider: mocks.listProfilesForProvider,
+    resolveAuthProfileDisplayLabel: mocks.resolveAuthProfileDisplayLabel,
+    resolveAuthStorePathForDisplay: mocks.resolveAuthStorePathForDisplay,
+  };
+});
 
 vi.mock("../../agents/model-auth.js", () => ({
   resolveEnvApiKey: mocks.resolveEnvApiKey,
@@ -126,6 +133,9 @@ describe("modelsStatusCommand auth overview", () => {
     expect(payload.auth.shellEnvFallback.appliedKeys).toContain(
       "OPENAI_API_KEY",
     );
+    expect(payload.auth.missingProvidersInUse).toEqual([]);
+    expect(payload.auth.oauth.warnAfterMs).toBeGreaterThan(0);
+    expect(payload.auth.oauth.profiles.length).toBeGreaterThan(0);
 
     const providers = payload.auth.providers as Array<{
       provider: string;
@@ -151,5 +161,28 @@ describe("modelsStatusCommand auth overview", () => {
         e.startsWith("openai-codex"),
       ),
     ).toBe(true);
+  });
+
+  it("exits non-zero when auth is missing", async () => {
+    const originalProfiles = { ...mocks.store.profiles };
+    mocks.store.profiles = {};
+    const localRuntime = {
+      log: vi.fn(),
+      error: vi.fn(),
+      exit: vi.fn(),
+    };
+    const originalEnvImpl = mocks.resolveEnvApiKey.getMockImplementation();
+    mocks.resolveEnvApiKey.mockImplementation(() => null);
+
+    try {
+      await modelsStatusCommand(
+        { check: true, plain: true },
+        localRuntime as never,
+      );
+      expect(localRuntime.exit).toHaveBeenCalledWith(1);
+    } finally {
+      mocks.store.profiles = originalProfiles;
+      mocks.resolveEnvApiKey.mockImplementation(originalEnvImpl);
+    }
   });
 });

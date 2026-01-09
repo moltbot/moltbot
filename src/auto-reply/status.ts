@@ -6,6 +6,7 @@ import {
   DEFAULT_MODEL,
   DEFAULT_PROVIDER,
 } from "../agents/defaults.js";
+import { resolveModelAuthMode } from "../agents/model-auth.js";
 import { resolveConfiguredModelRef } from "../agents/model-selection.js";
 import {
   derivePromptTokens,
@@ -20,7 +21,14 @@ import {
   type SessionScope,
 } from "../config/sessions.js";
 import { resolveCommitHash } from "../infra/git-commit.js";
+import {
+  estimateUsageCost,
+  formatTokenCount as formatTokenCountShared,
+  formatUsd,
+  resolveModelCostConfig,
+} from "../utils/usage-format.js";
 import { VERSION } from "../version.js";
+import { listChatCommands } from "./commands-registry.js";
 import type {
   ElevatedLevel,
   ReasoningLevel,
@@ -28,7 +36,11 @@ import type {
   VerboseLevel,
 } from "./thinking.js";
 
-type AgentConfig = NonNullable<ClawdbotConfig["agent"]>;
+type AgentConfig = Partial<
+  NonNullable<NonNullable<ClawdbotConfig["agents"]>["defaults"]>
+>;
+
+export const formatTokenCount = formatTokenCountShared;
 
 type QueueStatus = {
   mode?: string;
@@ -40,6 +52,7 @@ type QueueStatus = {
 };
 
 type StatusArgs = {
+  config?: ClawdbotConfig;
   agent: AgentConfig;
   sessionEntry?: SessionEntry;
   sessionKey?: string;
@@ -56,6 +69,26 @@ type StatusArgs = {
   now?: number;
 };
 
+const formatTokens = (
+  total: number | null | undefined,
+  contextTokens: number | null,
+) => {
+  const ctx = contextTokens ?? null;
+  if (total == null) {
+    const ctxLabel = ctx ? formatTokenCount(ctx) : "?";
+    return `?/${ctxLabel}`;
+  }
+  const pct = ctx ? Math.min(999, Math.round((total / ctx) * 100)) : null;
+  const totalLabel = formatTokenCount(total);
+  const ctxLabel = ctx ? formatTokenCount(ctx) : "?";
+  return `${totalLabel}/${ctxLabel}${pct !== null ? ` (${pct}%)` : ""}`;
+};
+
+export const formatContextUsageShort = (
+  total: number | null | undefined,
+  contextTokens: number | null | undefined,
+) => `Context ${formatTokens(total, contextTokens ?? null)}`;
+
 const formatAge = (ms?: number | null) => {
   if (!ms || ms < 0) return "unknown";
   const minutes = Math.round(ms / 60_000);
@@ -66,31 +99,6 @@ const formatAge = (ms?: number | null) => {
   const days = Math.round(hours / 24);
   return `${days}d ago`;
 };
-
-const formatKTokens = (value: number) =>
-  `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k`;
-
-export const formatTokenCount = (value: number) => formatKTokens(value);
-
-const formatTokens = (
-  total: number | null | undefined,
-  contextTokens: number | null,
-) => {
-  const ctx = contextTokens ?? null;
-  if (total == null) {
-    const ctxLabel = ctx ? formatKTokens(ctx) : "?";
-    return `unknown/${ctxLabel}`;
-  }
-  const pct = ctx ? Math.min(999, Math.round((total / ctx) * 100)) : null;
-  const totalLabel = formatKTokens(total);
-  const ctxLabel = ctx ? formatKTokens(ctx) : "?";
-  return `${totalLabel}/${ctxLabel}${pct !== null ? ` (${pct}%)` : ""}`;
-};
-
-export const formatContextUsageShort = (
-  total: number | null | undefined,
-  contextTokens: number | null | undefined,
-) => `Context ${formatTokens(total, contextTokens ?? null)}`;
 
 const formatQueueDetails = (queue?: QueueStatus) => {
   if (!queue) return "";
@@ -171,11 +179,23 @@ const readUsageFromSessionLog = (
   }
 };
 
+const formatUsagePair = (input?: number | null, output?: number | null) => {
+  if (input == null && output == null) return null;
+  const inputLabel = typeof input === "number" ? formatTokenCount(input) : "?";
+  const outputLabel =
+    typeof output === "number" ? formatTokenCount(output) : "?";
+  return `🧮 Tokens: ${inputLabel} in / ${outputLabel} out`;
+};
+
 export function buildStatusMessage(args: StatusArgs): string {
   const now = args.now ?? Date.now();
   const entry = args.sessionEntry;
   const resolved = resolveConfiguredModelRef({
-    cfg: { agent: args.agent ?? {} },
+    cfg: {
+      agents: {
+        defaults: args.agent ?? {},
+      },
+    } as ClawdbotConfig,
     defaultProvider: DEFAULT_PROVIDER,
     defaultModel: DEFAULT_MODEL,
   });
@@ -188,6 +208,8 @@ export function buildStatusMessage(args: StatusArgs): string {
     lookupContextTokens(model) ??
     DEFAULT_CONTEXT_TOKENS;
 
+  let inputTokens = entry?.inputTokens;
+  let outputTokens = entry?.outputTokens;
   let totalTokens =
     entry?.totalTokens ??
     (entry?.inputTokens ?? 0) + (entry?.outputTokens ?? 0);
@@ -205,6 +227,8 @@ export function buildStatusMessage(args: StatusArgs): string {
       if (!contextTokens && logUsage.model) {
         contextTokens = lookupContextTokens(logUsage.model) ?? contextTokens;
       }
+      if (!inputTokens || inputTokens === 0) inputTokens = logUsage.input;
+      if (!outputTokens || outputTokens === 0) outputTokens = logUsage.output;
     }
   }
 
@@ -278,15 +302,48 @@ export function buildStatusMessage(args: StatusArgs): string {
   ];
   const activationLine = activationParts.filter(Boolean).join(" · ");
 
+  const authMode = resolveModelAuthMode(provider, args.config);
+  const authLabelValue =
+    args.modelAuth ??
+    (authMode && authMode !== "unknown" ? authMode : undefined);
+  const showCost = authLabelValue === "api-key" || authLabelValue === "mixed";
+  const costConfig = showCost
+    ? resolveModelCostConfig({
+        provider,
+        model,
+        config: args.config,
+      })
+    : undefined;
+  const hasUsage =
+    typeof inputTokens === "number" || typeof outputTokens === "number";
+  const cost =
+    showCost && hasUsage
+      ? estimateUsageCost({
+          usage: {
+            input: inputTokens ?? undefined,
+            output: outputTokens ?? undefined,
+          },
+          cost: costConfig,
+        })
+      : undefined;
+  const costLabel = showCost && hasUsage ? formatUsd(cost) : undefined;
+
   const modelLabel = model ? `${provider}/${model}` : "unknown";
-  const authLabel = args.modelAuth ? ` · 🔑 ${args.modelAuth}` : "";
+  const authLabel = authLabelValue ? ` · 🔑 ${authLabelValue}` : "";
   const modelLine = `🧠 Model: ${modelLabel}${authLabel}`;
   const commit = resolveCommitHash();
   const versionLine = `🦞 ClawdBot ${VERSION}${commit ? ` (${commit})` : ""}`;
+  const usagePair = formatUsagePair(inputTokens, outputTokens);
+  const costLine = costLabel ? `💵 Cost: ${costLabel}` : null;
+  const usageCostLine =
+    usagePair && costLine
+      ? `${usagePair} · ${costLine}`
+      : (usagePair ?? costLine);
 
   return [
     versionLine,
     modelLine,
+    usageCostLine,
     `📚 ${contextLine}`,
     args.usageLine,
     `🧵 ${sessionLine}`,
@@ -300,7 +357,34 @@ export function buildStatusMessage(args: StatusArgs): string {
 export function buildHelpMessage(): string {
   return [
     "ℹ️ Help",
-    "Shortcuts: /new reset | /compact [instructions] | /restart relink",
-    "Options: /think <level> | /verbose on|off | /reasoning on|off | /elevated on|off | /model <id>",
+    "Shortcuts: /new reset | /compact [instructions] | /restart relink (if enabled)",
+    "Options: /think <level> | /verbose on|off | /reasoning on|off | /elevated on|off | /model <id> | /cost on|off | /debug show",
+    "More: /commands for all slash commands",
   ].join("\n");
+}
+
+export function buildCommandsMessage(): string {
+  const lines = ["ℹ️ Slash commands"];
+  for (const command of listChatCommands()) {
+    const primary = command.nativeName
+      ? `/${command.nativeName}`
+      : command.textAliases[0]?.trim() || `/${command.key}`;
+    const seen = new Set<string>();
+    const aliases = command.textAliases
+      .map((alias) => alias.trim())
+      .filter(Boolean)
+      .filter((alias) => alias.toLowerCase() !== primary.toLowerCase())
+      .filter((alias) => {
+        const key = alias.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    const aliasLabel = aliases.length
+      ? ` (aliases: ${aliases.join(", ")})`
+      : "";
+    const scopeLabel = command.scope === "text" ? " (text-only)" : "";
+    lines.push(`${primary}${aliasLabel}${scopeLabel} - ${command.description}`);
+  }
+  return lines.join("\n");
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { extractStatusDirective } from "./reply/directives.js";
 import {
   extractElevatedDirective,
   extractQueueDirective,
@@ -119,6 +120,36 @@ describe("directive parsing", () => {
     expect(res.cleaned).toBe("please now");
   });
 
+  it("preserves spacing when stripping think directives before paths", () => {
+    const res = extractThinkDirective("thats not /think high/tmp/hello");
+    expect(res.hasDirective).toBe(true);
+    expect(res.cleaned).toBe("thats not /tmp/hello");
+  });
+
+  it("preserves spacing when stripping verbose directives before paths", () => {
+    const res = extractVerboseDirective("thats not /verbose on/tmp/hello");
+    expect(res.hasDirective).toBe(true);
+    expect(res.cleaned).toBe("thats not /tmp/hello");
+  });
+
+  it("preserves spacing when stripping reasoning directives before paths", () => {
+    const res = extractReasoningDirective("thats not /reasoning on/tmp/hello");
+    expect(res.hasDirective).toBe(true);
+    expect(res.cleaned).toBe("thats not /tmp/hello");
+  });
+
+  it("preserves spacing when stripping status directives before paths", () => {
+    const res = extractStatusDirective("thats not /status:/tmp/hello");
+    expect(res.hasDirective).toBe(true);
+    expect(res.cleaned).toBe("thats not /tmp/hello");
+  });
+
+  it("preserves spacing when stripping usage directives before paths", () => {
+    const res = extractStatusDirective("thats not /usage:/tmp/hello");
+    expect(res.hasDirective).toBe(true);
+    expect(res.cleaned).toBe("thats not /tmp/hello");
+  });
+
   it("parses queue options and modes", () => {
     const res = extractQueueDirective(
       "please /queue steer+backlog debounce:2s cap:5 drop:summarize now",
@@ -137,8 +168,20 @@ describe("directive parsing", () => {
     expect(res.cleaned).toBe("ok");
   });
 
+  it("extracts reply_to_current tag with whitespace", () => {
+    const res = extractReplyToTag("ok [[ reply_to_current ]]", "msg-1");
+    expect(res.replyToId).toBe("msg-1");
+    expect(res.cleaned).toBe("ok");
+  });
+
   it("extracts reply_to id tag", () => {
     const res = extractReplyToTag("see [[reply_to:12345]] now", "msg-1");
+    expect(res.replyToId).toBe("12345");
+    expect(res.cleaned).toBe("see now");
+  });
+
+  it("extracts reply_to id tag with whitespace", () => {
+    const res = extractReplyToTag("see [[ reply_to : 12345 ]] now", "msg-1");
     expect(res.replyToId).toBe("12345");
     expect(res.cleaned).toBe("see now");
   });

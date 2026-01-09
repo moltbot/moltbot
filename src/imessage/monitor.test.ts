@@ -78,9 +78,8 @@ beforeEach(() => {
       groups: { "*": { requireMention: true } },
     },
     session: { mainKey: "main" },
-    routing: {
+    messages: {
       groupChat: { mentionPatterns: ["@clawd"] },
-      allowFrom: [],
     },
   };
   requestMock.mockReset().mockImplementation((method: string) => {
@@ -159,7 +158,7 @@ describe("monitorIMessageProvider", () => {
   it("allows group messages when requireMention is true but no mentionPatterns exist", async () => {
     config = {
       ...config,
-      routing: { groupChat: { mentionPatterns: [] }, allowFrom: [] },
+      messages: { groupChat: { mentionPatterns: [] } },
       imessage: { groups: { "*": { requireMention: true } } },
     };
     const run = monitorIMessageProvider();
@@ -284,6 +283,9 @@ describe("monitorIMessageProvider", () => {
     expect(replyMock).not.toHaveBeenCalled();
     expect(upsertPairingRequestMock).toHaveBeenCalled();
     expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(String(sendMock.mock.calls[0]?.[1] ?? "")).toContain(
+      "Your iMessage sender id: +15550001111",
+    );
     expect(String(sendMock.mock.calls[0]?.[1] ?? "")).toContain(
       "Pairing code: PAIRCODE",
     );

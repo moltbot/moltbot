@@ -1,12 +1,12 @@
 ---
-summary: "Session pruning: opt-in tool-result trimming to reduce context bloat"
+summary: "Session pruning: tool-result trimming to reduce context bloat"
 read_when:
   - You want to reduce LLM context growth from tool outputs
-  - You are tuning agent.contextPruning
+  - You are tuning agents.defaults.contextPruning
 ---
 # Session Pruning
 
-Session pruning trims **old tool results** from the in-memory context right before each LLM call. It is **opt-in** and does **not** rewrite the on-disk session history (`*.jsonl`).
+Session pruning trims **old tool results** from the in-memory context right before each LLM call. It does **not** rewrite the on-disk session history (`*.jsonl`).
 
 ## When it runs
 - Before each LLM request (context hook).
@@ -23,7 +23,7 @@ Session pruning trims **old tool results** from the in-memory context right befo
 Pruning uses an estimated context window (chars ≈ tokens × 4). The window size is resolved in this order:
 1) Model definition `contextWindow` (from the model registry).
 2) `models.providers.*.models[].contextWindow` override.
-3) `agent.contextTokens`.
+3) `agents.defaults.contextTokens`.
 4) Default `200000` tokens.
 
 ## Modes
@@ -44,6 +44,7 @@ Pruning uses an estimated context window (chars ≈ tokens × 4). The window siz
 ## Tool selection
 - `tools.allow` / `tools.deny` support `*` wildcards.
 - Deny wins.
+- Matching is case-insensitive.
 - Empty allow list => all tools allowed.
 
 ## Interaction with other limits
@@ -59,11 +60,20 @@ Pruning uses an estimated context window (chars ≈ tokens × 4). The window siz
 - `hardClear`: `{ enabled: true, placeholder: "[Old tool result content cleared]" }`
 
 ## Examples
-Minimal (adaptive):
+Default (adaptive):
 ```json5
 {
   agent: {
     contextPruning: { mode: "adaptive" }
+  }
+}
+```
+
+To disable:
+```json5
+{
+  agent: {
+    contextPruning: { mode: "off" }
   }
 }
 ```

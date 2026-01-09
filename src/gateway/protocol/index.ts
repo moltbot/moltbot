@@ -3,6 +3,12 @@ import {
   type AgentEvent,
   AgentEventSchema,
   AgentParamsSchema,
+  type AgentSummary,
+  AgentSummarySchema,
+  type AgentsListParams,
+  AgentsListParamsSchema,
+  type AgentsListResult,
+  AgentsListResultSchema,
   type AgentWaitParams,
   AgentWaitParamsSchema,
   type ChatAbortParams,
@@ -97,6 +103,8 @@ import {
   SessionsPatchParamsSchema,
   type SessionsResetParams,
   SessionsResetParamsSchema,
+  type SessionsResolveParams,
+  SessionsResolveParamsSchema,
   type ShutdownEvent,
   ShutdownEventSchema,
   type SkillsInstallParams,
@@ -163,6 +171,9 @@ export const validateAgentWaitParams = ajv.compile<AgentWaitParams>(
   AgentWaitParamsSchema,
 );
 export const validateWakeParams = ajv.compile<WakeParams>(WakeParamsSchema);
+export const validateAgentsListParams = ajv.compile<AgentsListParams>(
+  AgentsListParamsSchema,
+);
 export const validateNodePairRequestParams = ajv.compile<NodePairRequestParams>(
   NodePairRequestParamsSchema,
 );
@@ -191,6 +202,9 @@ export const validateNodeInvokeParams = ajv.compile<NodeInvokeParams>(
 );
 export const validateSessionsListParams = ajv.compile<SessionsListParams>(
   SessionsListParamsSchema,
+);
+export const validateSessionsResolveParams = ajv.compile<SessionsResolveParams>(
+  SessionsResolveParamsSchema,
 );
 export const validateSessionsPatchParams = ajv.compile<SessionsPatchParams>(
   SessionsPatchParamsSchema,
@@ -332,6 +346,9 @@ export {
   ProvidersStatusParamsSchema,
   WebLoginStartParamsSchema,
   WebLoginWaitParamsSchema,
+  AgentSummarySchema,
+  AgentsListParamsSchema,
+  AgentsListResultSchema,
   ModelsListParamsSchema,
   SkillsStatusParamsSchema,
   SkillsInstallParamsSchema,
@@ -394,6 +411,9 @@ export type {
   ProvidersStatusParams,
   WebLoginStartParams,
   WebLoginWaitParams,
+  AgentSummary,
+  AgentsListParams,
+  AgentsListResult,
   SkillsStatusParams,
   SkillsInstallParams,
   SkillsUpdateParams,
@@ -402,6 +422,7 @@ export type {
   NodeListParams,
   NodeInvokeParams,
   SessionsListParams,
+  SessionsResolveParams,
   SessionsPatchParams,
   SessionsResetParams,
   SessionsDeleteParams,

@@ -1,42 +1,10 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildStatusMessage } from "./status.js";
-
-const HOME_ENV_KEYS = ["HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH"] as const;
-type HomeEnvSnapshot = Record<
-  (typeof HOME_ENV_KEYS)[number],
-  string | undefined
->;
-
-const snapshotHomeEnv = (): HomeEnvSnapshot => ({
-  HOME: process.env.HOME,
-  USERPROFILE: process.env.USERPROFILE,
-  HOMEDRIVE: process.env.HOMEDRIVE,
-  HOMEPATH: process.env.HOMEPATH,
-});
-
-const restoreHomeEnv = (snapshot: HomeEnvSnapshot) => {
-  for (const key of HOME_ENV_KEYS) {
-    const value = snapshot[key];
-    if (value === undefined) {
-      delete process.env[key];
-    } else {
-      process.env[key] = value;
-    }
-  }
-};
-
-const setTempHome = (tempHome: string) => {
-  process.env.HOME = tempHome;
-  if (process.platform === "win32") {
-    process.env.USERPROFILE = tempHome;
-    const root = path.parse(tempHome).root;
-    process.env.HOMEDRIVE = root.replace(/\\$/, "");
-    process.env.HOMEPATH = tempHome.slice(root.length - 1);
-  }
-};
+import { normalizeTestText } from "../../test/helpers/normalize-text.js";
+import { withTempHome } from "../../test/helpers/temp-home.js";
+import type { ClawdbotConfig } from "../config/config.js";
+import { buildCommandsMessage, buildStatusMessage } from "./status.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -45,6 +13,26 @@ afterEach(() => {
 describe("buildStatusMessage", () => {
   it("summarizes agent readiness and context usage", () => {
     const text = buildStatusMessage({
+      config: {
+        models: {
+          providers: {
+            anthropic: {
+              apiKey: "test-key",
+              models: [
+                {
+                  id: "pi:opus",
+                  cost: {
+                    input: 1,
+                    output: 1,
+                    cacheRead: 0,
+                    cacheWrite: 0,
+                  },
+                },
+              ],
+            },
+          },
+        },
+      } as ClawdbotConfig,
       agent: {
         model: "anthropic/pi:opus",
         contextTokens: 32_000,
@@ -52,6 +40,8 @@ describe("buildStatusMessage", () => {
       sessionEntry: {
         sessionId: "abc",
         updatedAt: 0,
+        inputTokens: 1200,
+        outputTokens: 800,
         totalTokens: 16_000,
         contextTokens: 32_000,
         thinkingLevel: "low",
@@ -63,20 +53,41 @@ describe("buildStatusMessage", () => {
       resolvedThink: "medium",
       resolvedVerbose: "off",
       queue: { mode: "collect", depth: 0 },
+      modelAuth: "api-key",
       now: 10 * 60_000, // 10 minutes later
     });
+    const normalized = normalizeTestText(text);
 
-    expect(text).toContain("🦞 ClawdBot");
-    expect(text).toContain("🧠 Model:");
-    expect(text).toContain("Runtime: direct");
-    expect(text).toContain("Context: 16k/32k (50%)");
-    expect(text).toContain("🧹 Compactions: 2");
-    expect(text).toContain("Session: agent:main:main");
-    expect(text).toContain("updated 10m ago");
-    expect(text).toContain("Think: medium");
-    expect(text).toContain("Verbose: off");
+    expect(normalized).toContain("ClawdBot");
+    expect(normalized).toContain("Model: anthropic/pi:opus");
+    expect(normalized).toContain("api-key");
+    expect(normalized).toContain("Tokens: 1.2k in / 800 out");
+    expect(normalized).toContain("Cost: $0.0020");
+    expect(normalized).toContain("Context: 16k/32k (50%)");
+    expect(normalized).toContain("Compactions: 2");
+    expect(normalized).toContain("Session: agent:main:main");
+    expect(normalized).toContain("updated 10m ago");
+    expect(normalized).toContain("Runtime: direct");
+    expect(normalized).toContain("Think: medium");
+    expect(normalized).toContain("Verbose: off");
+    expect(normalized).toContain("Elevated: on");
+    expect(normalized).toContain("Queue: collect");
+  });
+
+  it("shows verbose/elevated labels only when enabled", () => {
+    const text = buildStatusMessage({
+      agent: { model: "anthropic/claude-opus-4-5" },
+      sessionEntry: { sessionId: "v1", updatedAt: 0 },
+      sessionKey: "agent:main:main",
+      sessionScope: "per-sender",
+      resolvedThink: "low",
+      resolvedVerbose: "on",
+      resolvedElevated: "on",
+      queue: { mode: "collect", depth: 0 },
+    });
+
+    expect(text).toContain("Verbose: on");
     expect(text).toContain("Elevated: on");
-    expect(text).toContain("Queue: collect");
   });
 
   it("prefers model overrides over last-run model", () => {
@@ -97,21 +108,39 @@ describe("buildStatusMessage", () => {
       sessionKey: "agent:main:main",
       sessionScope: "per-sender",
       queue: { mode: "collect", depth: 0 },
+      modelAuth: "api-key",
     });
 
-    expect(text).toContain("🧠 Model: openai/gpt-4.1-mini");
+    expect(normalizeTestText(text)).toContain("Model: openai/gpt-4.1-mini");
+  });
+
+  it("keeps provider prefix from configured model", () => {
+    const text = buildStatusMessage({
+      agent: {
+        model: "google-antigravity/claude-sonnet-4-5",
+      },
+      sessionScope: "per-sender",
+      queue: { mode: "collect", depth: 0 },
+      modelAuth: "api-key",
+    });
+
+    expect(normalizeTestText(text)).toContain(
+      "Model: google-antigravity/claude-sonnet-4-5",
+    );
   });
 
   it("handles missing agent config gracefully", () => {
     const text = buildStatusMessage({
       agent: {},
       sessionScope: "per-sender",
-      webLinked: false,
+      queue: { mode: "collect", depth: 0 },
+      modelAuth: "api-key",
     });
 
-    expect(text).toContain("🧠 Model:");
-    expect(text).toContain("Context:");
-    expect(text).toContain("Queue:");
+    const normalized = normalizeTestText(text);
+    expect(normalized).toContain("Model:");
+    expect(normalized).toContain("Context:");
+    expect(normalized).toContain("Queue: collect");
   });
 
   it("includes group activation for group sessions", () => {
@@ -126,6 +155,7 @@ describe("buildStatusMessage", () => {
       sessionKey: "agent:main:whatsapp:group:123@g.us",
       sessionScope: "per-sender",
       queue: { mode: "collect", depth: 0 },
+      modelAuth: "api-key",
     });
 
     expect(text).toContain("Activation: always");
@@ -145,6 +175,7 @@ describe("buildStatusMessage", () => {
         dropPolicy: "old",
         showDetails: true,
       },
+      modelAuth: "api-key",
     });
 
     expect(text).toContain(
@@ -160,77 +191,121 @@ describe("buildStatusMessage", () => {
       sessionScope: "per-sender",
       queue: { mode: "collect", depth: 0 },
       usageLine: "📊 Usage: Claude 80% left (5h)",
+      modelAuth: "api-key",
     });
 
-    const lines = text.split("\n");
-    const contextIndex = lines.findIndex((line) => line.startsWith("📚 "));
+    const lines = normalizeTestText(text).split("\n");
+    const contextIndex = lines.findIndex((line) => line.includes("Context:"));
     expect(contextIndex).toBeGreaterThan(-1);
-    expect(lines[contextIndex + 1]).toBe("📊 Usage: Claude 80% left (5h)");
+    expect(lines[contextIndex + 1]).toContain("Usage: Claude 80% left (5h)");
+  });
+
+  it("hides cost when not using an API key", () => {
+    const text = buildStatusMessage({
+      config: {
+        models: {
+          providers: {
+            anthropic: {
+              models: [
+                {
+                  id: "claude-opus-4-5",
+                  cost: {
+                    input: 1,
+                    output: 1,
+                    cacheRead: 0,
+                    cacheWrite: 0,
+                  },
+                },
+              ],
+            },
+          },
+        },
+      } as ClawdbotConfig,
+      agent: { model: "anthropic/claude-opus-4-5" },
+      sessionEntry: { sessionId: "c1", updatedAt: 0, inputTokens: 10 },
+      sessionKey: "agent:main:main",
+      sessionScope: "per-sender",
+      queue: { mode: "collect", depth: 0 },
+      modelAuth: "oauth",
+    });
+
+    expect(text).not.toContain("💵 Cost:");
   });
 
   it("prefers cached prompt tokens from the session log", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clawdbot-status-"));
-    const previousHome = snapshotHomeEnv();
-    setTempHome(dir);
-    try {
-      vi.resetModules();
-      const { buildStatusMessage: buildStatusMessageDynamic } = await import(
-        "./status.js"
-      );
+    await withTempHome(
+      async (dir) => {
+        vi.resetModules();
+        const { buildStatusMessage: buildStatusMessageDynamic } = await import(
+          "./status.js"
+        );
 
-      const sessionId = "sess-1";
-      const logPath = path.join(
-        dir,
-        ".clawdbot",
-        "agents",
-        "main",
-        "sessions",
-        `${sessionId}.jsonl`,
-      );
-      fs.mkdirSync(path.dirname(logPath), { recursive: true });
+        const sessionId = "sess-1";
+        const logPath = path.join(
+          dir,
+          ".clawdbot",
+          "agents",
+          "main",
+          "sessions",
+          `${sessionId}.jsonl`,
+        );
+        fs.mkdirSync(path.dirname(logPath), { recursive: true });
 
-      fs.writeFileSync(
-        logPath,
-        [
-          JSON.stringify({
-            type: "message",
-            message: {
-              role: "assistant",
-              model: "claude-opus-4-5",
-              usage: {
-                input: 1,
-                output: 2,
-                cacheRead: 1000,
-                cacheWrite: 0,
-                totalTokens: 1003,
+        fs.writeFileSync(
+          logPath,
+          [
+            JSON.stringify({
+              type: "message",
+              message: {
+                role: "assistant",
+                model: "claude-opus-4-5",
+                usage: {
+                  input: 1,
+                  output: 2,
+                  cacheRead: 1000,
+                  cacheWrite: 0,
+                  totalTokens: 1003,
+                },
               },
-            },
-          }),
-        ].join("\n"),
-        "utf-8",
-      );
+            }),
+          ].join("\n"),
+          "utf-8",
+        );
 
-      const text = buildStatusMessageDynamic({
-        agent: {
-          model: "anthropic/claude-opus-4-5",
-          contextTokens: 32_000,
-        },
-        sessionEntry: {
-          sessionId,
-          updatedAt: 0,
-          totalTokens: 3, // would be wrong if cached prompt tokens exist
-          contextTokens: 32_000,
-        },
-        sessionKey: "agent:main:main",
-        sessionScope: "per-sender",
-        queue: { mode: "collect", depth: 0 },
-        includeTranscriptUsage: true,
-      });
+        const text = buildStatusMessageDynamic({
+          agent: {
+            model: "anthropic/claude-opus-4-5",
+            contextTokens: 32_000,
+          },
+          sessionEntry: {
+            sessionId,
+            updatedAt: 0,
+            totalTokens: 3, // would be wrong if cached prompt tokens exist
+            contextTokens: 32_000,
+          },
+          sessionKey: "agent:main:main",
+          sessionScope: "per-sender",
+          queue: { mode: "collect", depth: 0 },
+          includeTranscriptUsage: true,
+          modelAuth: "api-key",
+        });
 
-      expect(text).toContain("Context: 1.0k/32k");
-    } finally {
-      restoreHomeEnv(previousHome);
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
+        expect(normalizeTestText(text)).toContain("Context: 1.0k/32k");
+      },
+      { prefix: "clawdbot-status-" },
+    );
+  });
+});
+
+describe("buildCommandsMessage", () => {
+  it("lists commands with aliases and text-only hints", () => {
+    const text = buildCommandsMessage();
+    expect(text).toContain("/commands - List all slash commands.");
+    expect(text).toContain(
+      "/think (aliases: /thinking, /t) - Set thinking level.",
+    );
+    expect(text).toContain(
+      "/compact (text-only) - Compact the session context.",
+    );
   });
 });

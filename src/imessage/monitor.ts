@@ -1,3 +1,4 @@
+import { resolveEffectiveMessagesConfig } from "../agents/identity.js";
 import { chunkText, resolveTextChunkLimit } from "../auto-reply/chunk.js";
 import { hasControlCommand } from "../auto-reply/command-detection.js";
 import { formatAgentEnvelope } from "../auto-reply/envelope.js";
@@ -17,12 +18,14 @@ import {
 import { resolveStorePath, updateLastRoute } from "../config/sessions.js";
 import { danger, logVerbose, shouldLogVerbose } from "../globals.js";
 import { mediaKindFromMime } from "../media/constants.js";
+import { buildPairingReply } from "../pairing/pairing-messages.js";
 import {
   readProviderAllowFromStore,
   upsertProviderPairingRequest,
 } from "../pairing/pairing-store.js";
 import { resolveAgentRoute } from "../routing/resolve-route.js";
 import type { RuntimeEnv } from "../runtime.js";
+import { truncateUtf16Safe } from "../utils.js";
 import { resolveIMessageAccount } from "./accounts.js";
 import { createIMessageRpcClient } from "./client.js";
 import { sendMessageIMessage } from "./send.js";
@@ -149,7 +152,6 @@ export async function monitorIMessageProvider(
   );
   const groupPolicy = imessageCfg.groupPolicy ?? "open";
   const dmPolicy = imessageCfg.dmPolicy ?? "pairing";
-  const mentionRegexes = buildMentionRegexes(cfg);
   const includeAttachments =
     opts.includeAttachments ?? imessageCfg.includeAttachments ?? false;
   const mediaMaxBytes =
@@ -257,14 +259,11 @@ export async function monitorIMessageProvider(
             try {
               await sendMessageIMessage(
                 sender,
-                [
-                  "Clawdbot: access not configured.",
-                  "",
-                  `Pairing code: ${code}`,
-                  "",
-                  "Ask the bot owner to approve with:",
-                  "clawdbot pairing approve --provider imessage <code>",
-                ].join("\n"),
+                buildPairingReply({
+                  provider: "imessage",
+                  idLine: `Your iMessage sender id: ${senderId}`,
+                  code,
+                }),
                 {
                   client,
                   maxBytes: mediaMaxBytes,
@@ -287,6 +286,18 @@ export async function monitorIMessageProvider(
       }
     }
 
+    const route = resolveAgentRoute({
+      cfg,
+      provider: "imessage",
+      accountId: accountInfo.accountId,
+      peer: {
+        kind: isGroup ? "group" : "dm",
+        id: isGroup
+          ? String(chatId ?? "unknown")
+          : normalizeIMessageHandle(sender),
+      },
+    });
+    const mentionRegexes = buildMentionRegexes(cfg, route.agentId);
     const messageText = (message.text ?? "").trim();
     const mentioned = isGroup
       ? matchesMentionPatterns(messageText, mentionRegexes)
@@ -317,6 +328,7 @@ export async function monitorIMessageProvider(
       !mentioned &&
       commandAuthorized &&
       hasControlCommand(messageText);
+    const effectiveWasMentioned = mentioned || shouldBypassMention;
     if (
       isGroup &&
       requireMention &&
@@ -357,17 +369,6 @@ export async function monitorIMessageProvider(
       body: bodyText,
     });
 
-    const route = resolveAgentRoute({
-      cfg,
-      provider: "imessage",
-      accountId: accountInfo.accountId,
-      peer: {
-        kind: isGroup ? "group" : "dm",
-        id: isGroup
-          ? String(chatId ?? "unknown")
-          : normalizeIMessageHandle(sender),
-      },
-    });
     const imessageTo = chatTarget || `imessage:${sender}`;
     const ctxPayload = {
       Body: body,
@@ -389,7 +390,7 @@ export async function monitorIMessageProvider(
       MediaPath: mediaPath,
       MediaType: mediaType,
       MediaUrl: mediaPath,
-      WasMentioned: mentioned,
+      WasMentioned: effectiveWasMentioned,
       CommandAuthorized: commandAuthorized,
       // Originating channel for reply routing.
       OriginatingChannel: "imessage" as const,
@@ -414,14 +415,15 @@ export async function monitorIMessageProvider(
     }
 
     if (shouldLogVerbose()) {
-      const preview = body.slice(0, 200).replace(/\n/g, "\\n");
+      const preview = truncateUtf16Safe(body, 200).replace(/\n/g, "\\n");
       logVerbose(
         `imessage inbound: chatId=${chatId ?? "unknown"} from=${ctxPayload.From} len=${body.length} preview="${preview}"`,
       );
     }
 
     const dispatcher = createReplyDispatcher({
-      responsePrefix: cfg.messages?.responsePrefix,
+      responsePrefix: resolveEffectiveMessagesConfig(cfg, route.agentId)
+        .responsePrefix,
       deliver: async (payload) => {
         await deliverReplies({
           replies: [payload],

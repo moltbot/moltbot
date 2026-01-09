@@ -1,5 +1,13 @@
 import path from "node:path";
-import { intro, note, outro } from "@clack/prompts";
+import {
+  intro as clackIntro,
+  note as clackNote,
+  outro as clackOutro,
+} from "@clack/prompts";
+import {
+  resolveAgentWorkspaceDir,
+  resolveDefaultAgentId,
+} from "../agents/agent-scope.js";
 import { buildWorkspaceSkillStatus } from "../agents/skills-status.js";
 import type { ClawdbotConfig } from "../config/config.js";
 import {
@@ -12,24 +20,32 @@ import {
 import { GATEWAY_LAUNCH_AGENT_LABEL } from "../daemon/constants.js";
 import { readLastGatewayErrorLine } from "../daemon/diagnostics.js";
 import { resolveGatewayProgramArguments } from "../daemon/program-args.js";
+import { resolvePreferredNodePath } from "../daemon/runtime-paths.js";
 import { resolveGatewayService } from "../daemon/service.js";
-import { buildGatewayConnectionDetails } from "../gateway/call.js";
+import { buildServiceEnvironment } from "../daemon/service-env.js";
+import { buildGatewayConnectionDetails, callGateway } from "../gateway/call.js";
 import { formatPortDiagnostics, inspectPortUsage } from "../infra/ports.js";
+import { collectProvidersStatusIssues } from "../infra/providers-status-issues.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { defaultRuntime } from "../runtime.js";
-import { resolveUserPath, sleep } from "../utils.js";
+import { stylePromptTitle } from "../terminal/prompt-style.js";
+import { sleep } from "../utils.js";
 import {
   DEFAULT_GATEWAY_DAEMON_RUNTIME,
   GATEWAY_DAEMON_RUNTIME_OPTIONS,
   type GatewayDaemonRuntime,
 } from "./daemon-runtime.js";
-import { maybeRepairAnthropicOAuthProfileId } from "./doctor-auth.js";
+import {
+  maybeRepairAnthropicOAuthProfileId,
+  noteAuthProfileHealth,
+} from "./doctor-auth.js";
 import {
   buildGatewayRuntimeHints,
   formatGatewayRuntimeSummary,
 } from "./doctor-format.js";
 import {
   maybeMigrateLegacyGatewayService,
+  maybeRepairGatewayServiceConfig,
   maybeScanExtraGatewayServices,
 } from "./doctor-gateway-services.js";
 import {
@@ -57,12 +73,15 @@ import {
   shouldSuggestMemorySystem,
 } from "./doctor-workspace.js";
 import { healthCommand } from "./health.js";
-import {
-  applyWizardMetadata,
-  DEFAULT_WORKSPACE,
-  printWizardHeader,
-} from "./onboard-helpers.js";
+import { applyWizardMetadata, printWizardHeader } from "./onboard-helpers.js";
 import { ensureSystemdUserLingerInteractive } from "./systemd-linger.js";
+
+const intro = (message: string) =>
+  clackIntro(stylePromptTitle(message) ?? message);
+const outro = (message: string) =>
+  clackOutro(stylePromptTitle(message) ?? message);
+const note = (message: string, title?: string) =>
+  clackNote(message, stylePromptTitle(title));
 
 function resolveMode(cfg: ClawdbotConfig): "local" | "remote" {
   return cfg.gateway?.mode === "remote" ? "remote" : "local";
@@ -95,10 +114,13 @@ export async function doctorCommand(
         .join("\n"),
       "Legacy config keys detected",
     );
-    const migrate = await prompter.confirm({
-      message: "Migrate legacy config entries now?",
-      initialValue: true,
-    });
+    const migrate =
+      options.nonInteractive === true
+        ? true
+        : await prompter.confirm({
+            message: "Migrate legacy config entries now?",
+            initialValue: true,
+          });
     if (migrate) {
       // Legacy migration (2026-01-02, commit: 16420e5b) — normalize per-provider allowlists; move WhatsApp gating into whatsapp.allowFrom.
       const { config: migrated, changes } = migrateLegacyConfig(
@@ -120,6 +142,12 @@ export async function doctorCommand(
   }
 
   cfg = await maybeRepairAnthropicOAuthProfileId(cfg, prompter);
+  await noteAuthProfileHealth({
+    cfg,
+    prompter,
+    allowKeychainPrompt:
+      options.nonInteractive !== true && Boolean(process.stdin.isTTY),
+  });
   const gatewayDetails = buildGatewayConnectionDetails({ config: cfg });
   if (gatewayDetails.remoteFallbackNote) {
     note(gatewayDetails.remoteFallbackNote, "Gateway");
@@ -128,10 +156,13 @@ export async function doctorCommand(
   const legacyState = await detectLegacyStateMigrations({ cfg });
   if (legacyState.preview.length > 0) {
     note(legacyState.preview.join("\n"), "Legacy state detected");
-    const migrate = await prompter.confirm({
-      message: "Migrate legacy state (sessions/agent/WhatsApp auth) now?",
-      initialValue: true,
-    });
+    const migrate =
+      options.nonInteractive === true
+        ? true
+        : await prompter.confirm({
+            message: "Migrate legacy state (sessions/agent/WhatsApp auth) now?",
+            initialValue: true,
+          });
     if (migrate) {
       const migrated = await runLegacyStateMigrations({
         detected: legacyState,
@@ -145,7 +176,11 @@ export async function doctorCommand(
     }
   }
 
-  await noteStateIntegrity(cfg, prompter);
+  await noteStateIntegrity(
+    cfg,
+    prompter,
+    snapshot.path ?? CONFIG_PATH_CLAWDBOT,
+  );
 
   cfg = await maybeRepairSandboxImages(cfg, runtime, prompter);
   noteSandboxScopeWarnings(cfg);
@@ -157,6 +192,12 @@ export async function doctorCommand(
     prompter,
   );
   await maybeScanExtraGatewayServices(options);
+  await maybeRepairGatewayServiceConfig(
+    cfg,
+    resolveMode(cfg),
+    runtime,
+    prompter,
+  );
 
   await noteSecurityWarnings(cfg);
 
@@ -186,8 +227,9 @@ export async function doctorCommand(
     }
   }
 
-  const workspaceDir = resolveUserPath(
-    cfg.agent?.workspace ?? DEFAULT_WORKSPACE,
+  const workspaceDir = resolveAgentWorkspaceDir(
+    cfg,
+    resolveDefaultAgentId(cfg),
   );
   const legacyWorkspace = detectLegacyWorkspaceDirs({ workspaceDir });
   if (legacyWorkspace.legacyDirs.length > 0) {
@@ -220,6 +262,30 @@ export async function doctorCommand(
       note(gatewayDetails.message, "Gateway connection");
     } else {
       runtime.error(`Health check failed: ${message}`);
+    }
+  }
+
+  if (healthOk) {
+    try {
+      const status = await callGateway<Record<string, unknown>>({
+        method: "providers.status",
+        params: { probe: true, timeoutMs: 5000 },
+        timeoutMs: 6000,
+      });
+      const issues = collectProvidersStatusIssues(status);
+      if (issues.length > 0) {
+        note(
+          issues
+            .map(
+              (issue) =>
+                `- ${issue.provider} ${issue.accountId}: ${issue.message}${issue.fix ? ` (${issue.fix})` : ""}`,
+            )
+            .join("\n"),
+          "Provider warnings",
+        );
+      }
+    } catch {
+      // ignore: doctor already reported gateway health
     }
   }
 
@@ -266,25 +332,27 @@ export async function doctorCommand(
             process.argv[1]?.includes(`${path.sep}src${path.sep}`) &&
             process.argv[1]?.endsWith(".ts");
           const port = resolveGatewayPort(cfg, process.env);
+          const nodePath = await resolvePreferredNodePath({
+            env: process.env,
+            runtime: daemonRuntime,
+          });
           const { programArguments, workingDirectory } =
             await resolveGatewayProgramArguments({
               port,
               dev: devMode,
               runtime: daemonRuntime,
+              nodePath,
             });
-          const environment: Record<string, string | undefined> = {
-            PATH: process.env.PATH,
-            CLAWDBOT_PROFILE: process.env.CLAWDBOT_PROFILE,
-            CLAWDBOT_STATE_DIR: process.env.CLAWDBOT_STATE_DIR,
-            CLAWDBOT_CONFIG_PATH: process.env.CLAWDBOT_CONFIG_PATH,
-            CLAWDBOT_GATEWAY_PORT: String(port),
-            CLAWDBOT_GATEWAY_TOKEN:
+          const environment = buildServiceEnvironment({
+            env: process.env,
+            port,
+            token:
               cfg.gateway?.auth?.token ?? process.env.CLAWDBOT_GATEWAY_TOKEN,
-            CLAWDBOT_LAUNCHD_LABEL:
+            launchdLabel:
               process.platform === "darwin"
                 ? GATEWAY_LAUNCH_AGENT_LABEL
                 : undefined,
-          };
+          });
           await service.install({
             env: process.env,
             stdout: process.stdout,
@@ -351,8 +419,9 @@ export async function doctorCommand(
   runtime.log(`Updated ${CONFIG_PATH_CLAWDBOT}`);
 
   if (options.workspaceSuggestions !== false) {
-    const workspaceDir = resolveUserPath(
-      cfg.agent?.workspace ?? DEFAULT_WORKSPACE,
+    const workspaceDir = resolveAgentWorkspaceDir(
+      cfg,
+      resolveDefaultAgentId(cfg),
     );
     noteWorkspaceBackupTip(workspaceDir);
     if (await shouldSuggestMemorySystem(workspaceDir)) {

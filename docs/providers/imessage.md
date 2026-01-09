@@ -6,7 +6,6 @@ read_when:
 ---
 # iMessage (imsg)
 
-Updated: 2026-01-08
 
 Status: external CLI integration. Gateway spawns `imsg rpc` (JSON-RPC over stdio).
 
@@ -67,7 +66,8 @@ DMs:
 Groups:
 - `imessage.groupPolicy = open | allowlist | disabled`.
 - `imessage.groupAllowFrom` controls who can trigger in groups when `allowlist` is set.
-- Mention gating uses `routing.groupChat.mentionPatterns` (iMessage has no native mention metadata).
+- Mention gating uses `agents.list[].groupChat.mentionPatterns` (or `messages.groupChat.mentionPatterns`) because iMessage has no native mention metadata.
+- Multi-agent override: set per-agent patterns on `agents.list[].groupChat.mentionPatterns`.
 
 ## How it works (behavior)
 - `imsg` streams message events; the gateway normalizes them into the shared provider envelope.
@@ -112,5 +112,5 @@ Provider options:
 - `imessage.textChunkLimit`: outbound chunk size (chars).
 
 Related global options:
-- `routing.groupChat.mentionPatterns`.
+- `agents.list[].groupChat.mentionPatterns` (or `messages.groupChat.mentionPatterns`).
 - `messages.responsePrefix`.

@@ -8,19 +8,19 @@ read_when:
 CLAWDBOT is now **web-only** (Baileys). This document captures the current media handling rules for send, gateway, and agent replies.
 
 ## Goals
-- Send media with optional captions via `clawdbot send --media`.
+- Send media with optional captions via `clawdbot message send --media`.
 - Allow auto-replies from the web inbox to include media alongside text.
 - Keep per-type limits sane and predictable.
 
 ## CLI Surface
-- `clawdbot send --media <path-or-url> [--message <caption>]`
+- `clawdbot message send --media <path-or-url> [--message <caption>]`
   - `--media` optional; caption can be empty for media-only sends.
   - `--dry-run` prints the resolved payload; `--json` emits `{ provider, to, messageId, mediaUrl, caption }`.
 
 ## Web Provider Behavior
 - Input: local file path **or** HTTP(S) URL.
 - Flow: load into a Buffer, detect media kind, and build the correct payload:
-  - **Images:** resize & recompress to JPEG (max side 2048px) targeting `agent.mediaMaxMb` (default 5 MB), capped at 6 MB.
+  - **Images:** resize & recompress to JPEG (max side 2048px) targeting `agents.defaults.mediaMaxMb` (default 5 MB), capped at 6 MB.
   - **Audio/Voice/Video:** pass-through up to 16 MB; audio is sent as a voice note (`ptt: true`).
   - **Documents:** anything else, up to 100 MB, with filename preserved when available.
 - WhatsApp GIF-style playback: send an MP4 with `gifPlayback: true` (CLI: `--gif-playback`) so mobile clients loop inline.
@@ -30,7 +30,7 @@ CLAWDBOT is now **web-only** (Baileys). This document captures the current media
 
 ## Auto-Reply Pipeline
 - `getReplyFromConfig` returns `{ text?, mediaUrl?, mediaUrls? }`.
-- When media is present, the web sender resolves local paths or URLs using the same pipeline as `clawdbot send`.
+- When media is present, the web sender resolves local paths or URLs using the same pipeline as `clawdbot message send`.
 - Multiple media entries are sent sequentially if provided.
 
 ## Inbound Media to Commands (Pi)

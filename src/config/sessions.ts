@@ -11,7 +11,7 @@ import {
   DEFAULT_AGENT_ID,
   DEFAULT_MAIN_KEY,
   normalizeAgentId,
-  parseAgentSessionKey,
+  resolveAgentIdFromSessionKey,
 } from "../routing/session-key.js";
 import { normalizeE164 } from "../utils.js";
 import {
@@ -87,6 +87,7 @@ export type SessionEntry = {
   verboseLevel?: string;
   reasoningLevel?: string;
   elevatedLevel?: string;
+  responseUsage?: "on" | "off";
   providerOverride?: string;
   modelOverride?: string;
   authProfileOverride?: string;
@@ -111,6 +112,8 @@ export type SessionEntry = {
   model?: string;
   contextTokens?: number;
   compactionCount?: number;
+  claudeCliSessionId?: string;
+  label?: string;
   displayName?: string;
   provider?: string;
   subject?: string;
@@ -215,23 +218,21 @@ export function resolveStorePath(store?: string, opts?: { agentId?: string }) {
 
 export function resolveMainSessionKey(cfg?: {
   session?: { scope?: SessionScope; mainKey?: string };
-  routing?: { defaultAgentId?: string };
+  agents?: { list?: Array<{ id?: string; default?: boolean }> };
 }): string {
   if (cfg?.session?.scope === "global") return "global";
-  const agentId = normalizeAgentId(
-    cfg?.routing?.defaultAgentId ?? DEFAULT_AGENT_ID,
-  );
+  const agents = cfg?.agents?.list ?? [];
+  const defaultAgentId =
+    agents.find((agent) => agent?.default)?.id ??
+    agents[0]?.id ??
+    DEFAULT_AGENT_ID;
+  const agentId = normalizeAgentId(defaultAgentId);
   const mainKey =
     (cfg?.session?.mainKey ?? DEFAULT_MAIN_KEY).trim() || DEFAULT_MAIN_KEY;
   return buildAgentMainSessionKey({ agentId, mainKey });
 }
 
-export function resolveAgentIdFromSessionKey(
-  sessionKey?: string | null,
-): string {
-  const parsed = parseAgentSessionKey(sessionKey);
-  return normalizeAgentId(parsed?.agentId ?? DEFAULT_AGENT_ID);
-}
+export { resolveAgentIdFromSessionKey };
 
 export function resolveAgentMainSessionKey(params: {
   cfg?: { session?: { mainKey?: string } };

@@ -12,9 +12,9 @@ We now serialize command-based auto-replies (WhatsApp Web listener) through a ti
 - Serializing avoids competing for terminal/stdin, keeps logs readable, and reduces the chance of rate limits from upstream tools.
 
 ## How it works
-- [`src/process/command-queue.ts`](https://github.com/clawdbot/clawdbot/blob/main/src/process/command-queue.ts) holds a lane-aware FIFO queue and drains each lane synchronously.
+- A lane-aware FIFO queue drains each lane synchronously.
 - `runEmbeddedPiAgent` enqueues by **session key** (lane `session:<key>`) to guarantee only one active run per session.
-- Each session run is then queued into a **global lane** (`main` by default) so overall parallelism is capped by `agent.maxConcurrent`.
+- Each session run is then queued into a **global lane** (`main` by default) so overall parallelism is capped by `agents.defaults.maxConcurrent`.
 - When verbose logging is enabled, queued commands emit a short notice if they waited more than ~2s before starting.
 - Typing indicators (`onReplyStart`) still fire immediately on enqueue so user experience is unchanged while we wait our turn.
 
@@ -30,16 +30,16 @@ Inbound messages can steer the current run, wait for a followup turn, or do both
 Steer-backlog means you can get a followup response after the steered run, so
 streaming surfaces can look like duplicates. Prefer `collect`/`steer` if you want
 one response per inbound message.
-Send `/queue collect` as a standalone command (per-session) or set `routing.queue.byProvider.discord: "collect"`.
+Send `/queue collect` as a standalone command (per-session) or set `messages.queue.byProvider.discord: "collect"`.
 
 Defaults (when unset in config):
 - All surfaces → `collect`
 
-Configure globally or per provider via `routing.queue`:
+Configure globally or per provider via `messages.queue`:
 
 ```json5
 {
-  routing: {
+  messages: {
     queue: {
       mode: "collect",
       debounceMs: 1000,
@@ -67,11 +67,11 @@ Defaults: `debounceMs: 1000`, `cap: 20`, `drop: summarize`.
 
 ## Scope and guarantees
 - Applies only to config-driven command replies; plain text replies are unaffected.
-- Default lane (`main`) is process-wide for inbound + main heartbeats; set `agent.maxConcurrent` to allow multiple sessions in parallel.
+- Default lane (`main`) is process-wide for inbound + main heartbeats; set `agents.defaults.maxConcurrent` to allow multiple sessions in parallel.
 - Additional lanes may exist (e.g. `cron`) so background jobs can run in parallel without blocking inbound replies.
 - Per-session lanes guarantee that only one agent run touches a given session at a time.
 - No external dependencies or background worker threads; pure TypeScript + promises.
 
 ## Troubleshooting
 - If commands seem stuck, enable verbose logs and look for “queued for …ms” lines to confirm the queue is draining.
-- `enqueueCommand` exposes a lightweight `getQueueSize()` helper if you need to surface queue depth in future diagnostics.
+- If you need queue depth, enable verbose logs and watch for queue timing lines.

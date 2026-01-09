@@ -6,7 +6,6 @@ read_when:
 ---
 # Signal (signal-cli)
 
-Updated: 2026-01-06
 
 Status: external CLI integration. Gateway talks to `signal-cli` over HTTP JSON-RPC + SSE.
 
@@ -49,6 +48,7 @@ DMs:
   - `clawdbot pairing list --provider signal`
   - `clawdbot pairing approve --provider signal <CODE>`
 - Pairing is the default token exchange for Signal DMs. Details: [Pairing](/start/pairing)
+- UUID-only senders (from `sourceUuid`) are stored as `uuid:<id>` in `signal.allowFrom`.
 
 Groups:
 - `signal.groupPolicy = open | allowlist | disabled`.
@@ -85,12 +85,13 @@ Provider options:
 - `signal.ignoreStories`: ignore stories from the daemon.
 - `signal.sendReadReceipts`: forward read receipts.
 - `signal.dmPolicy`: `pairing | allowlist | open | disabled` (default: pairing).
-- `signal.allowFrom`: DM allowlist (E.164). `open` requires `"*"`.
+- `signal.allowFrom`: DM allowlist (E.164 or `uuid:<id>`). `open` requires `"*"`.
 - `signal.groupPolicy`: `open | allowlist | disabled` (default: open).
 - `signal.groupAllowFrom`: group sender allowlist.
 - `signal.textChunkLimit`: outbound chunk size (chars).
 - `signal.mediaMaxMb`: inbound/outbound media cap (MB).
 
 Related global options:
-- `routing.groupChat.mentionPatterns` (Signal does not support native mentions).
+- `agents.list[].groupChat.mentionPatterns` (Signal does not support native mentions).
+- `messages.groupChat.mentionPatterns` (global fallback).
 - `messages.responsePrefix`.

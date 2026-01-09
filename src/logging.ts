@@ -57,6 +57,7 @@ let cachedConsoleSettings: ConsoleSettings | null = null;
 let overrideSettings: LoggerSettings | null = null;
 let consolePatched = false;
 let forceConsoleToStderr = false;
+let consoleSubsystemFilter: string[] | null = null;
 let rawConsole: {
   log: typeof console.log;
   info: typeof console.info;
@@ -256,6 +257,26 @@ export function resetLogger() {
 // This keeps stdout clean for RPC/JSON modes.
 export function routeLogsToStderr(): void {
   forceConsoleToStderr = true;
+}
+
+export function setConsoleSubsystemFilter(filters?: string[] | null): void {
+  if (!filters || filters.length === 0) {
+    consoleSubsystemFilter = null;
+    return;
+  }
+  const normalized = filters
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+  consoleSubsystemFilter = normalized.length > 0 ? normalized : null;
+}
+
+export function shouldLogSubsystemToConsole(subsystem: string): boolean {
+  if (!consoleSubsystemFilter || consoleSubsystemFilter.length === 0) {
+    return true;
+  }
+  return consoleSubsystemFilter.some(
+    (prefix) => subsystem === prefix || subsystem.startsWith(`${prefix}/`),
+  );
 }
 
 const SUPPRESSED_CONSOLE_PREFIXES = [
@@ -482,13 +503,19 @@ function formatConsoleLine(opts: {
 }
 
 function writeConsoleLine(level: Level, line: string) {
+  const sanitized =
+    process.platform === "win32" && process.env.GITHUB_ACTIONS === "true"
+      ? line
+          .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, "?")
+          .replace(/[\uD800-\uDFFF]/g, "?")
+      : line;
   const sink = rawConsole ?? console;
   if (forceConsoleToStderr || level === "error" || level === "fatal") {
-    (sink.error ?? console.error)(line);
+    (sink.error ?? console.error)(sanitized);
   } else if (level === "warn") {
-    (sink.warn ?? console.warn)(line);
+    (sink.warn ?? console.warn)(sanitized);
   } else {
-    (sink.log ?? console.log)(line);
+    (sink.log ?? console.log)(sanitized);
   }
 }
 
@@ -536,6 +563,7 @@ export function createSubsystemLogger(subsystem: string): SubsystemLogger {
     }
     logToFile(getFileLogger(), level, message, fileMeta);
     if (!shouldLogToConsole(level, consoleSettings)) return;
+    if (!shouldLogSubsystemToConsole(subsystem)) return;
     const line = formatConsoleLine({
       level,
       subsystem,
@@ -559,7 +587,9 @@ export function createSubsystemLogger(subsystem: string): SubsystemLogger {
     fatal: (message, meta) => emit("fatal", message, meta),
     raw: (message) => {
       logToFile(getFileLogger(), "info", message, { raw: true });
-      writeConsoleLine("info", message);
+      if (shouldLogSubsystemToConsole(subsystem)) {
+        writeConsoleLine("info", message);
+      }
     },
     child: (name) => createSubsystemLogger(`${subsystem}/${name}`),
   };

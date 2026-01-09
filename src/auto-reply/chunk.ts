@@ -17,7 +17,8 @@ export type TextChunkProvider =
   | "slack"
   | "signal"
   | "imessage"
-  | "webchat";
+  | "webchat"
+  | "msteams";
 
 const DEFAULT_CHUNK_LIMIT_BY_PROVIDER: Record<TextChunkProvider, number> = {
   whatsapp: 4000,
@@ -27,6 +28,7 @@ const DEFAULT_CHUNK_LIMIT_BY_PROVIDER: Record<TextChunkProvider, number> = {
   signal: 4000,
   imessage: 4000,
   webchat: 4000,
+  msteams: 4000,
 };
 
 export function resolveTextChunkLimit(
@@ -70,6 +72,9 @@ export function resolveTextChunkLimit(
         cfg?.imessage?.textChunkLimit
       );
     }
+    if (provider === "msteams") {
+      return cfg?.msteams?.textChunkLimit;
+    }
     return undefined;
   })();
   if (typeof providerOverride === "number" && providerOverride > 0) {
@@ -90,18 +95,11 @@ export function chunkText(text: string, limit: number): string[] {
   while (remaining.length > limit) {
     const window = remaining.slice(0, limit);
 
-    // 1) Prefer a newline break inside the window.
-    let breakIdx = window.lastIndexOf("\n");
+    // 1) Prefer a newline break inside the window (outside parentheses).
+    const { lastNewline, lastWhitespace } = scanParenAwareBreakpoints(window);
 
     // 2) Otherwise prefer the last whitespace (word boundary) inside the window.
-    if (breakIdx <= 0) {
-      for (let i = window.length - 1; i >= 0; i--) {
-        if (/\s/.test(window[i])) {
-          breakIdx = i;
-          break;
-        }
-      }
-    }
+    let breakIdx = lastNewline > 0 ? lastNewline : lastWhitespace;
 
     // 3) Fallback: hard break exactly at the limit.
     if (breakIdx <= 0) breakIdx = limit;
@@ -234,15 +232,39 @@ function pickSafeBreakIndex(
   window: string,
   spans: ReturnType<typeof parseFenceSpans>,
 ): number {
-  let newlineIdx = window.lastIndexOf("\n");
-  while (newlineIdx > 0) {
-    if (isSafeFenceBreak(spans, newlineIdx)) return newlineIdx;
-    newlineIdx = window.lastIndexOf("\n", newlineIdx - 1);
-  }
+  const { lastNewline, lastWhitespace } = scanParenAwareBreakpoints(
+    window,
+    (index) => isSafeFenceBreak(spans, index),
+  );
 
-  for (let i = window.length - 1; i > 0; i--) {
-    if (/\s/.test(window[i]) && isSafeFenceBreak(spans, i)) return i;
-  }
-
+  if (lastNewline > 0) return lastNewline;
+  if (lastWhitespace > 0) return lastWhitespace;
   return -1;
+}
+
+function scanParenAwareBreakpoints(
+  window: string,
+  isAllowed: (index: number) => boolean = () => true,
+): { lastNewline: number; lastWhitespace: number } {
+  let lastNewline = -1;
+  let lastWhitespace = -1;
+  let depth = 0;
+
+  for (let i = 0; i < window.length; i++) {
+    if (!isAllowed(i)) continue;
+    const char = window[i];
+    if (char === "(") {
+      depth += 1;
+      continue;
+    }
+    if (char === ")" && depth > 0) {
+      depth -= 1;
+      continue;
+    }
+    if (depth !== 0) continue;
+    if (char === "\n") lastNewline = i;
+    else if (/\s/.test(char)) lastWhitespace = i;
+  }
+
+  return { lastNewline, lastWhitespace };
 }

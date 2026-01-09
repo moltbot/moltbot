@@ -426,6 +426,8 @@ public struct AgentParams: Codable, Sendable {
     public let lane: String?
     public let extrasystemprompt: String?
     public let idempotencykey: String
+    public let label: String?
+    public let spawnedby: String?
 
     public init(
         message: String,
@@ -438,7 +440,9 @@ public struct AgentParams: Codable, Sendable {
         timeout: Int?,
         lane: String?,
         extrasystemprompt: String?,
-        idempotencykey: String
+        idempotencykey: String,
+        label: String?,
+        spawnedby: String?
     ) {
         self.message = message
         self.to = to
@@ -451,6 +455,8 @@ public struct AgentParams: Codable, Sendable {
         self.lane = lane
         self.extrasystemprompt = extrasystemprompt
         self.idempotencykey = idempotencykey
+        self.label = label
+        self.spawnedby = spawnedby
     }
     private enum CodingKeys: String, CodingKey {
         case message
@@ -464,6 +470,8 @@ public struct AgentParams: Codable, Sendable {
         case lane
         case extrasystemprompt = "extraSystemPrompt"
         case idempotencykey = "idempotencyKey"
+        case label
+        case spawnedby = "spawnedBy"
     }
 }
 
@@ -663,35 +671,78 @@ public struct SessionsListParams: Codable, Sendable {
     public let activeminutes: Int?
     public let includeglobal: Bool?
     public let includeunknown: Bool?
+    public let label: String?
     public let spawnedby: String?
+    public let agentid: String?
 
     public init(
         limit: Int?,
         activeminutes: Int?,
         includeglobal: Bool?,
         includeunknown: Bool?,
-        spawnedby: String?
+        label: String?,
+        spawnedby: String?,
+        agentid: String?
     ) {
         self.limit = limit
         self.activeminutes = activeminutes
         self.includeglobal = includeglobal
         self.includeunknown = includeunknown
+        self.label = label
         self.spawnedby = spawnedby
+        self.agentid = agentid
     }
     private enum CodingKeys: String, CodingKey {
         case limit
         case activeminutes = "activeMinutes"
         case includeglobal = "includeGlobal"
         case includeunknown = "includeUnknown"
+        case label
         case spawnedby = "spawnedBy"
+        case agentid = "agentId"
+    }
+}
+
+public struct SessionsResolveParams: Codable, Sendable {
+    public let key: String?
+    public let label: String?
+    public let agentid: String?
+    public let spawnedby: String?
+    public let includeglobal: Bool?
+    public let includeunknown: Bool?
+
+    public init(
+        key: String?,
+        label: String?,
+        agentid: String?,
+        spawnedby: String?,
+        includeglobal: Bool?,
+        includeunknown: Bool?
+    ) {
+        self.key = key
+        self.label = label
+        self.agentid = agentid
+        self.spawnedby = spawnedby
+        self.includeglobal = includeglobal
+        self.includeunknown = includeunknown
+    }
+    private enum CodingKeys: String, CodingKey {
+        case key
+        case label
+        case agentid = "agentId"
+        case spawnedby = "spawnedBy"
+        case includeglobal = "includeGlobal"
+        case includeunknown = "includeUnknown"
     }
 }
 
 public struct SessionsPatchParams: Codable, Sendable {
     public let key: String
+    public let label: AnyCodable?
     public let thinkinglevel: AnyCodable?
     public let verboselevel: AnyCodable?
     public let reasoninglevel: AnyCodable?
+    public let responseusage: AnyCodable?
     public let elevatedlevel: AnyCodable?
     public let model: AnyCodable?
     public let spawnedby: AnyCodable?
@@ -700,9 +751,11 @@ public struct SessionsPatchParams: Codable, Sendable {
 
     public init(
         key: String,
+        label: AnyCodable?,
         thinkinglevel: AnyCodable?,
         verboselevel: AnyCodable?,
         reasoninglevel: AnyCodable?,
+        responseusage: AnyCodable?,
         elevatedlevel: AnyCodable?,
         model: AnyCodable?,
         spawnedby: AnyCodable?,
@@ -710,9 +763,11 @@ public struct SessionsPatchParams: Codable, Sendable {
         groupactivation: AnyCodable?
     ) {
         self.key = key
+        self.label = label
         self.thinkinglevel = thinkinglevel
         self.verboselevel = verboselevel
         self.reasoninglevel = reasoninglevel
+        self.responseusage = responseusage
         self.elevatedlevel = elevatedlevel
         self.model = model
         self.spawnedby = spawnedby
@@ -721,9 +776,11 @@ public struct SessionsPatchParams: Codable, Sendable {
     }
     private enum CodingKeys: String, CodingKey {
         case key
+        case label
         case thinkinglevel = "thinkingLevel"
         case verboselevel = "verboseLevel"
         case reasoninglevel = "reasoningLevel"
+        case responseusage = "responseUsage"
         case elevatedlevel = "elevatedLevel"
         case model
         case spawnedby = "spawnedBy"
@@ -1097,6 +1154,51 @@ public struct WebLoginWaitParams: Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case timeoutms = "timeoutMs"
         case accountid = "accountId"
+    }
+}
+
+public struct AgentSummary: Codable, Sendable {
+    public let id: String
+    public let name: String?
+
+    public init(
+        id: String,
+        name: String?
+    ) {
+        self.id = id
+        self.name = name
+    }
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+    }
+}
+
+public struct AgentsListParams: Codable, Sendable {
+}
+
+public struct AgentsListResult: Codable, Sendable {
+    public let defaultid: String
+    public let mainkey: String
+    public let scope: AnyCodable
+    public let agents: [AgentSummary]
+
+    public init(
+        defaultid: String,
+        mainkey: String,
+        scope: AnyCodable,
+        agents: [AgentSummary]
+    ) {
+        self.defaultid = defaultid
+        self.mainkey = mainkey
+        self.scope = scope
+        self.agents = agents
+    }
+    private enum CodingKeys: String, CodingKey {
+        case defaultid = "defaultId"
+        case mainkey = "mainKey"
+        case scope
+        case agents
     }
 }
 

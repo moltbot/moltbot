@@ -6,18 +6,17 @@ import type { SandboxDockerConfig } from "./sandbox.js";
 describe("Agent-specific tool filtering", () => {
   it("should apply global tool policy when no agent-specific policy exists", () => {
     const cfg: ClawdbotConfig = {
-      agent: {
-        tools: {
-          allow: ["read", "write"],
-          deny: ["bash"],
-        },
+      tools: {
+        allow: ["read", "write"],
+        deny: ["bash"],
       },
-      routing: {
-        agents: {
-          main: {
+      agents: {
+        list: [
+          {
+            id: "main",
             workspace: "~/clawd",
           },
-        },
+        ],
       },
     };
 
@@ -29,29 +28,28 @@ describe("Agent-specific tool filtering", () => {
     });
 
     const toolNames = tools.map((t) => t.name);
-    expect(toolNames).toContain("read");
-    expect(toolNames).toContain("write");
-    expect(toolNames).not.toContain("bash");
+    expect(toolNames).toContain("Read");
+    expect(toolNames).toContain("Write");
+    expect(toolNames).not.toContain("Bash");
   });
 
   it("should apply agent-specific tool policy", () => {
     const cfg: ClawdbotConfig = {
-      agent: {
-        tools: {
-          allow: ["read", "write", "bash"],
-          deny: [],
-        },
+      tools: {
+        allow: ["read", "write", "bash"],
+        deny: [],
       },
-      routing: {
-        agents: {
-          restricted: {
+      agents: {
+        list: [
+          {
+            id: "restricted",
             workspace: "~/clawd-restricted",
             tools: {
               allow: ["read"], // Agent override: only read
               deny: ["bash", "write", "edit"],
             },
           },
-        },
+        ],
       },
     };
 
@@ -63,28 +61,30 @@ describe("Agent-specific tool filtering", () => {
     });
 
     const toolNames = tools.map((t) => t.name);
-    expect(toolNames).toContain("read");
-    expect(toolNames).not.toContain("bash");
-    expect(toolNames).not.toContain("write");
-    expect(toolNames).not.toContain("edit");
+    expect(toolNames).toContain("Read");
+    expect(toolNames).not.toContain("Bash");
+    expect(toolNames).not.toContain("Write");
+    expect(toolNames).not.toContain("Edit");
   });
 
   it("should allow different tool policies for different agents", () => {
     const cfg: ClawdbotConfig = {
-      routing: {
-        agents: {
-          main: {
+      agents: {
+        list: [
+          {
+            id: "main",
             workspace: "~/clawd",
             // No tools restriction - all tools available
           },
-          family: {
+          {
+            id: "family",
             workspace: "~/clawd-family",
             tools: {
               allow: ["read"],
               deny: ["bash", "write", "edit", "process"],
             },
           },
-        },
+        ],
       },
     };
 
@@ -96,9 +96,9 @@ describe("Agent-specific tool filtering", () => {
       agentDir: "/tmp/agent-main",
     });
     const mainToolNames = mainTools.map((t) => t.name);
-    expect(mainToolNames).toContain("bash");
-    expect(mainToolNames).toContain("write");
-    expect(mainToolNames).toContain("edit");
+    expect(mainToolNames).toContain("Bash");
+    expect(mainToolNames).toContain("Write");
+    expect(mainToolNames).toContain("Edit");
 
     // family agent: restricted
     const familyTools = createClawdbotCodingTools({
@@ -108,28 +108,27 @@ describe("Agent-specific tool filtering", () => {
       agentDir: "/tmp/agent-family",
     });
     const familyToolNames = familyTools.map((t) => t.name);
-    expect(familyToolNames).toContain("read");
-    expect(familyToolNames).not.toContain("bash");
-    expect(familyToolNames).not.toContain("write");
-    expect(familyToolNames).not.toContain("edit");
+    expect(familyToolNames).toContain("Read");
+    expect(familyToolNames).not.toContain("Bash");
+    expect(familyToolNames).not.toContain("Write");
+    expect(familyToolNames).not.toContain("Edit");
   });
 
   it("should prefer agent-specific tool policy over global", () => {
     const cfg: ClawdbotConfig = {
-      agent: {
-        tools: {
-          deny: ["browser"], // Global deny
-        },
+      tools: {
+        deny: ["browser"], // Global deny
       },
-      routing: {
-        agents: {
-          work: {
+      agents: {
+        list: [
+          {
+            id: "work",
             workspace: "~/clawd-work",
             tools: {
               deny: ["bash", "process"], // Agent deny (override)
             },
           },
-        },
+        ],
       },
     };
 
@@ -143,25 +142,22 @@ describe("Agent-specific tool filtering", () => {
     const toolNames = tools.map((t) => t.name);
     // Agent policy overrides global: browser is allowed again
     expect(toolNames).toContain("browser");
-    expect(toolNames).not.toContain("bash");
+    expect(toolNames).not.toContain("Bash");
     expect(toolNames).not.toContain("process");
   });
 
   it("should work with sandbox tools filtering", () => {
     const cfg: ClawdbotConfig = {
-      agent: {
-        sandbox: {
-          mode: "all",
-          scope: "agent",
-          tools: {
-            allow: ["read", "write", "bash"], // Sandbox allows these
-            deny: [],
+      agents: {
+        defaults: {
+          sandbox: {
+            mode: "all",
+            scope: "agent",
           },
         },
-      },
-      routing: {
-        agents: {
-          restricted: {
+        list: [
+          {
+            id: "restricted",
             workspace: "~/clawd-restricted",
             sandbox: {
               mode: "all",
@@ -171,6 +167,14 @@ describe("Agent-specific tool filtering", () => {
               allow: ["read"], // Agent further restricts to only read
               deny: ["bash", "write"],
             },
+          },
+        ],
+      },
+      tools: {
+        sandbox: {
+          tools: {
+            allow: ["read", "write", "bash"], // Sandbox allows these
+            deny: [],
           },
         },
       },
@@ -209,17 +213,15 @@ describe("Agent-specific tool filtering", () => {
     // Agent policy should be applied first, then sandbox
     // Agent allows only "read", sandbox allows ["read", "write", "bash"]
     // Result: only "read" (most restrictive wins)
-    expect(toolNames).toContain("read");
-    expect(toolNames).not.toContain("bash");
-    expect(toolNames).not.toContain("write");
+    expect(toolNames).toContain("Read");
+    expect(toolNames).not.toContain("Bash");
+    expect(toolNames).not.toContain("Write");
   });
 
   it("should run bash synchronously when process is denied", async () => {
     const cfg: ClawdbotConfig = {
-      agent: {
-        tools: {
-          deny: ["process"],
-        },
+      tools: {
+        deny: ["process"],
       },
     };
 
@@ -229,7 +231,7 @@ describe("Agent-specific tool filtering", () => {
       workspaceDir: "/tmp/test-main",
       agentDir: "/tmp/agent-main",
     });
-    const bash = tools.find((tool) => tool.name === "bash");
+    const bash = tools.find((tool) => tool.name === "Bash");
     expect(bash).toBeDefined();
 
     const result = await bash?.execute("call1", {

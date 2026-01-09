@@ -1,9 +1,9 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { withTempHome as withTempHomeBase } from "../../test/helpers/temp-home.js";
 import type { CliDeps } from "../cli/deps.js";
 import type { ClawdbotConfig } from "../config/config.js";
 import type { CronJob } from "./types.js";
@@ -20,21 +20,10 @@ vi.mock("../agents/model-catalog.js", () => ({
 
 import { loadModelCatalog } from "../agents/model-catalog.js";
 import { runEmbeddedPiAgent } from "../agents/pi-embedded.js";
-import {
-  parseTelegramTarget,
-  runCronIsolatedAgentTurn,
-} from "./isolated-agent.js";
+import { runCronIsolatedAgentTurn } from "./isolated-agent.js";
 
 async function withTempHome<T>(fn: (home: string) => Promise<T>): Promise<T> {
-  const base = await fs.mkdtemp(path.join(os.tmpdir(), "clawdbot-cron-"));
-  const previousHome = process.env.HOME;
-  process.env.HOME = base;
-  try {
-    return await fn(base);
-  } finally {
-    process.env.HOME = previousHome;
-    await fs.rm(base, { recursive: true, force: true });
-  }
+  return withTempHomeBase(fn, { prefix: "clawdbot-cron-" });
 }
 
 async function writeSessionStore(home: string) {
@@ -66,9 +55,11 @@ function makeCfg(
   overrides: Partial<ClawdbotConfig> = {},
 ): ClawdbotConfig {
   const base: ClawdbotConfig = {
-    agent: {
-      model: "anthropic/claude-opus-4-5",
-      workspace: path.join(home, "clawd"),
+    agents: {
+      defaults: {
+        model: "anthropic/claude-opus-4-5",
+        workspace: path.join(home, "clawd"),
+      },
     },
     session: { store: storePath, mainKey: "main" },
   } as ClawdbotConfig;
@@ -408,6 +399,96 @@ describe("runCronIsolatedAgentTurn", () => {
     });
   });
 
+  it("delivers telegram topic targets with messageThreadId", async () => {
+    await withTempHome(async (home) => {
+      const storePath = await writeSessionStore(home);
+      const deps: CliDeps = {
+        sendMessageWhatsApp: vi.fn(),
+        sendMessageTelegram: vi.fn().mockResolvedValue({
+          messageId: "t1",
+          chatId: "-1001234567890",
+        }),
+        sendMessageDiscord: vi.fn(),
+        sendMessageSignal: vi.fn(),
+        sendMessageIMessage: vi.fn(),
+      };
+      vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
+        payloads: [{ text: "hello from cron" }],
+        meta: {
+          durationMs: 5,
+          agentMeta: { sessionId: "s", provider: "p", model: "m" },
+        },
+      });
+
+      const res = await runCronIsolatedAgentTurn({
+        cfg: makeCfg(home, storePath),
+        deps,
+        job: makeJob({
+          kind: "agentTurn",
+          message: "do it",
+          deliver: true,
+          provider: "telegram",
+          to: "telegram:group:-1001234567890:topic:321",
+        }),
+        message: "do it",
+        sessionKey: "cron:job-1",
+        lane: "cron",
+      });
+
+      expect(res.status).toBe("ok");
+      expect(deps.sendMessageTelegram).toHaveBeenCalledWith(
+        "-1001234567890",
+        "hello from cron",
+        expect.objectContaining({ messageThreadId: 321 }),
+      );
+    });
+  });
+
+  it("delivers telegram shorthand topic suffixes with messageThreadId", async () => {
+    await withTempHome(async (home) => {
+      const storePath = await writeSessionStore(home);
+      const deps: CliDeps = {
+        sendMessageWhatsApp: vi.fn(),
+        sendMessageTelegram: vi.fn().mockResolvedValue({
+          messageId: "t1",
+          chatId: "-1001234567890",
+        }),
+        sendMessageDiscord: vi.fn(),
+        sendMessageSignal: vi.fn(),
+        sendMessageIMessage: vi.fn(),
+      };
+      vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
+        payloads: [{ text: "hello from cron" }],
+        meta: {
+          durationMs: 5,
+          agentMeta: { sessionId: "s", provider: "p", model: "m" },
+        },
+      });
+
+      const res = await runCronIsolatedAgentTurn({
+        cfg: makeCfg(home, storePath),
+        deps,
+        job: makeJob({
+          kind: "agentTurn",
+          message: "do it",
+          deliver: true,
+          provider: "telegram",
+          to: "-1001234567890:321",
+        }),
+        message: "do it",
+        sessionKey: "cron:job-1",
+        lane: "cron",
+      });
+
+      expect(res.status).toBe("ok");
+      expect(deps.sendMessageTelegram).toHaveBeenCalledWith(
+        "-1001234567890",
+        "hello from cron",
+        expect.objectContaining({ messageThreadId: 321 }),
+      );
+    });
+  });
+
   it("delivers via discord when configured", async () => {
     await withTempHome(async (home) => {
       const storePath = await writeSessionStore(home);
@@ -651,7 +732,13 @@ describe("runCronIsolatedAgentTurn", () => {
       });
 
       const cfg = makeCfg(home, storePath);
-      cfg.agent = { ...cfg.agent, heartbeat: { ackMaxChars: 0 } };
+      cfg.agents = {
+        ...cfg.agents,
+        defaults: {
+          ...cfg.agents?.defaults,
+          heartbeat: { ackMaxChars: 0 },
+        },
+      };
 
       const res = await runCronIsolatedAgentTurn({
         cfg,
@@ -670,50 +757,6 @@ describe("runCronIsolatedAgentTurn", () => {
 
       expect(res.status).toBe("ok");
       expect(deps.sendMessageTelegram).toHaveBeenCalled();
-    });
-  });
-});
-
-describe("parseTelegramTarget", () => {
-  it("parses plain chatId", () => {
-    expect(parseTelegramTarget("-1001234567890")).toEqual({
-      chatId: "-1001234567890",
-      topicId: undefined,
-    });
-  });
-
-  it("parses @username", () => {
-    expect(parseTelegramTarget("@mychannel")).toEqual({
-      chatId: "@mychannel",
-      topicId: undefined,
-    });
-  });
-
-  it("parses chatId:topicId format", () => {
-    expect(parseTelegramTarget("-1001234567890:123")).toEqual({
-      chatId: "-1001234567890",
-      topicId: 123,
-    });
-  });
-
-  it("parses chatId:topic:topicId format", () => {
-    expect(parseTelegramTarget("-1001234567890:topic:456")).toEqual({
-      chatId: "-1001234567890",
-      topicId: 456,
-    });
-  });
-
-  it("trims whitespace", () => {
-    expect(parseTelegramTarget("  -1001234567890:99  ")).toEqual({
-      chatId: "-1001234567890",
-      topicId: 99,
-    });
-  });
-
-  it("does not treat non-numeric suffix as topicId", () => {
-    expect(parseTelegramTarget("-1001234567890:abc")).toEqual({
-      chatId: "-1001234567890:abc",
-      topicId: undefined,
     });
   });
 });

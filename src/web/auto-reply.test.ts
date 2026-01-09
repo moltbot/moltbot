@@ -875,7 +875,7 @@ describe("web auto-reply", () => {
 
       for (const fmt of formats) {
         // Force a small cap to ensure compression is exercised for every format.
-        setLoadConfigMock(() => ({ agent: { mediaMaxMb: 1 } }));
+        setLoadConfigMock(() => ({ agents: { defaults: { mediaMaxMb: 1 } } }));
         const sendMedia = vi.fn();
         const reply = vi.fn().mockResolvedValue(undefined);
         const sendComposing = vi.fn();
@@ -940,7 +940,7 @@ describe("web auto-reply", () => {
   );
 
   it("honors mediaMaxMb from config", async () => {
-    setLoadConfigMock(() => ({ agent: { mediaMaxMb: 1 } }));
+    setLoadConfigMock(() => ({ agents: { defaults: { mediaMaxMb: 1 } } }));
     const sendMedia = vi.fn();
     const reply = vi.fn().mockResolvedValue(undefined);
     const sendComposing = vi.fn();
@@ -1132,6 +1132,128 @@ describe("web auto-reply", () => {
     expect(payload.Body).toContain("[from: Bob (+222)]");
   });
 
+  it("sets OriginatingTo to the sender for queued routing", async () => {
+    const sendMedia = vi.fn();
+    const reply = vi.fn().mockResolvedValue(undefined);
+    const sendComposing = vi.fn();
+    const resolver = vi.fn().mockResolvedValue({ text: "ok" });
+
+    let capturedOnMessage:
+      | ((msg: import("./inbound.js").WebInboundMessage) => Promise<void>)
+      | undefined;
+    const listenerFactory = async (opts: {
+      onMessage: (
+        msg: import("./inbound.js").WebInboundMessage,
+      ) => Promise<void>;
+    }) => {
+      capturedOnMessage = opts.onMessage;
+      return { close: vi.fn() };
+    };
+
+    await monitorWebProvider(false, listenerFactory, false, resolver);
+    expect(capturedOnMessage).toBeDefined();
+
+    await capturedOnMessage?.({
+      body: "hello",
+      from: "+15551234567",
+      to: "+19998887777",
+      id: "m-originating",
+      sendComposing,
+      reply,
+      sendMedia,
+    });
+
+    expect(resolver).toHaveBeenCalledTimes(1);
+    const payload = resolver.mock.calls[0][0];
+    expect(payload.OriginatingChannel).toBe("whatsapp");
+    expect(payload.OriginatingTo).toBe("+15551234567");
+    expect(payload.To).toBe("+19998887777");
+    expect(payload.OriginatingTo).not.toBe(payload.To);
+  });
+
+  it("uses per-agent mention patterns for group gating", async () => {
+    const sendMedia = vi.fn();
+    const reply = vi.fn().mockResolvedValue(undefined);
+    const sendComposing = vi.fn();
+    const resolver = vi.fn().mockResolvedValue({ text: "ok" });
+
+    setLoadConfigMock(() => ({
+      whatsapp: {
+        allowFrom: ["*"],
+        groups: { "*": { requireMention: true } },
+      },
+      messages: {
+        groupChat: { mentionPatterns: ["@global"] },
+      },
+      agents: {
+        list: [
+          {
+            id: "work",
+            groupChat: { mentionPatterns: ["@workbot"] },
+          },
+        ],
+      },
+      bindings: [
+        {
+          agentId: "work",
+          match: {
+            provider: "whatsapp",
+            peer: { kind: "group", id: "123@g.us" },
+          },
+        },
+      ],
+    }));
+
+    let capturedOnMessage:
+      | ((msg: import("./inbound.js").WebInboundMessage) => Promise<void>)
+      | undefined;
+    const listenerFactory = async (opts: {
+      onMessage: (
+        msg: import("./inbound.js").WebInboundMessage,
+      ) => Promise<void>;
+    }) => {
+      capturedOnMessage = opts.onMessage;
+      return { close: vi.fn() };
+    };
+
+    await monitorWebProvider(false, listenerFactory, false, resolver);
+    expect(capturedOnMessage).toBeDefined();
+
+    await capturedOnMessage?.({
+      body: "@global ping",
+      from: "123@g.us",
+      conversationId: "123@g.us",
+      chatId: "123@g.us",
+      chatType: "group",
+      to: "+2",
+      id: "g1",
+      senderE164: "+111",
+      senderName: "Alice",
+      selfE164: "+999",
+      sendComposing,
+      reply,
+      sendMedia,
+    });
+    expect(resolver).not.toHaveBeenCalled();
+
+    await capturedOnMessage?.({
+      body: "@workbot ping",
+      from: "123@g.us",
+      conversationId: "123@g.us",
+      chatId: "123@g.us",
+      chatType: "group",
+      to: "+2",
+      id: "g2",
+      senderE164: "+222",
+      senderName: "Bob",
+      selfE164: "+999",
+      sendComposing,
+      reply,
+      sendMedia,
+    });
+    expect(resolver).toHaveBeenCalledTimes(1);
+  });
+
   it("allows group messages when whatsapp groups default disables mention gating", async () => {
     const sendMedia = vi.fn();
     const reply = vi.fn().mockResolvedValue(undefined);
@@ -1143,7 +1265,7 @@ describe("web auto-reply", () => {
         allowFrom: ["*"],
         groups: { "*": { requireMention: false } },
       },
-      routing: { groupChat: { mentionPatterns: ["@clawd"] } },
+      messages: { groupChat: { mentionPatterns: ["@clawd"] } },
     }));
 
     let capturedOnMessage:
@@ -1192,7 +1314,7 @@ describe("web auto-reply", () => {
         allowFrom: ["*"],
         groups: { "999@g.us": { requireMention: false } },
       },
-      routing: { groupChat: { mentionPatterns: ["@clawd"] } },
+      messages: { groupChat: { mentionPatterns: ["@clawd"] } },
     }));
 
     let capturedOnMessage:
@@ -1246,7 +1368,7 @@ describe("web auto-reply", () => {
           "123@g.us": { requireMention: false },
         },
       },
-      routing: { groupChat: { mentionPatterns: ["@clawd"] } },
+      messages: { groupChat: { mentionPatterns: ["@clawd"] } },
     }));
 
     let capturedOnMessage:
@@ -1302,7 +1424,7 @@ describe("web auto-reply", () => {
     });
 
     setLoadConfigMock(() => ({
-      routing: {
+      messages: {
         groupChat: { mentionPatterns: ["@clawd"] },
       },
       session: { store: storePath },
@@ -1381,7 +1503,7 @@ describe("web auto-reply", () => {
         allowFrom: ["+999"],
         groups: { "*": { requireMention: true } },
       },
-      routing: {
+      messages: {
         groupChat: {
           mentionPatterns: ["\\bclawd\\b"],
         },
@@ -1835,6 +1957,127 @@ describe("web auto-reply", () => {
 
     const replies = reply.mock.calls.map((call) => call[0]);
     expect(replies).toEqual(["🦞 🧩 tool1", "🦞 🧩 tool2", "🦞 final"]);
+    resetLoadConfigMock();
+  });
+
+  it("uses identity.name for messagePrefix when set", async () => {
+    setLoadConfigMock(() => ({
+      agents: {
+        list: [
+          {
+            id: "main",
+            default: true,
+            identity: { name: "Mainbot", emoji: "🦞", theme: "space lobster" },
+          },
+          {
+            id: "rich",
+            identity: { name: "Richbot", emoji: "🦁", theme: "lion bot" },
+          },
+        ],
+      },
+      bindings: [
+        {
+          agentId: "rich",
+          match: {
+            provider: "whatsapp",
+            peer: { kind: "dm", id: "+1555" },
+          },
+        },
+      ],
+    }));
+
+    let capturedOnMessage:
+      | ((msg: import("./inbound.js").WebInboundMessage) => Promise<void>)
+      | undefined;
+    const reply = vi.fn();
+    const listenerFactory = async (opts: {
+      onMessage: (
+        msg: import("./inbound.js").WebInboundMessage,
+      ) => Promise<void>;
+    }) => {
+      capturedOnMessage = opts.onMessage;
+      return { close: vi.fn() };
+    };
+
+    const resolver = vi.fn().mockResolvedValue({ text: "hello" });
+
+    await monitorWebProvider(false, listenerFactory, false, resolver);
+    expect(capturedOnMessage).toBeDefined();
+
+    await capturedOnMessage?.({
+      body: "hi",
+      from: "+1555",
+      to: "+2666",
+      id: "msg1",
+      sendComposing: vi.fn(),
+      reply,
+      sendMedia: vi.fn(),
+    });
+
+    // Check that resolver received the message with identity-based prefix
+    expect(resolver).toHaveBeenCalled();
+    const resolverArg = resolver.mock.calls[0][0];
+    expect(resolverArg.Body).toContain("[Richbot]");
+    expect(resolverArg.Body).not.toContain("[clawdbot]");
+    resetLoadConfigMock();
+  });
+
+  it("uses identity.name for responsePrefix when set", async () => {
+    setLoadConfigMock(() => ({
+      agents: {
+        list: [
+          {
+            id: "main",
+            default: true,
+            identity: { name: "Mainbot", emoji: "🦞", theme: "space lobster" },
+          },
+          {
+            id: "rich",
+            identity: { name: "Richbot", emoji: "🦁", theme: "lion bot" },
+          },
+        ],
+      },
+      bindings: [
+        {
+          agentId: "rich",
+          match: {
+            provider: "whatsapp",
+            peer: { kind: "dm", id: "+1555" },
+          },
+        },
+      ],
+    }));
+
+    let capturedOnMessage:
+      | ((msg: import("./inbound.js").WebInboundMessage) => Promise<void>)
+      | undefined;
+    const reply = vi.fn();
+    const listenerFactory = async (opts: {
+      onMessage: (
+        msg: import("./inbound.js").WebInboundMessage,
+      ) => Promise<void>;
+    }) => {
+      capturedOnMessage = opts.onMessage;
+      return { close: vi.fn() };
+    };
+
+    const resolver = vi.fn().mockResolvedValue({ text: "hello there" });
+
+    await monitorWebProvider(false, listenerFactory, false, resolver);
+    expect(capturedOnMessage).toBeDefined();
+
+    await capturedOnMessage?.({
+      body: "hi",
+      from: "+1555",
+      to: "+2666",
+      id: "msg1",
+      sendComposing: vi.fn(),
+      reply,
+      sendMedia: vi.fn(),
+    });
+
+    // Reply should have identity-based responsePrefix prepended
+    expect(reply).toHaveBeenCalledWith("[Richbot] hello there");
     resetLoadConfigMock();
   });
 });

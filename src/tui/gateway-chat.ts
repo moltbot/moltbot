@@ -44,7 +44,12 @@ export type GatewaySessionList = {
     sendPolicy?: string;
     model?: string;
     contextTokens?: number | null;
+    inputTokens?: number | null;
+    outputTokens?: number | null;
     totalTokens?: number | null;
+    responseUsage?: "on" | "off";
+    modelProvider?: string;
+    label?: string;
     displayName?: string;
     provider?: string;
     room?: string;
@@ -54,6 +59,16 @@ export type GatewaySessionList = {
     lastProvider?: string;
     lastTo?: string;
     lastAccountId?: string;
+  }>;
+};
+
+export type GatewayAgentsList = {
+  defaultId: string;
+  mainKey: string;
+  scope: "per-sender" | "global";
+  agents: Array<{
+    id: string;
+    name?: string;
   }>;
 };
 
@@ -165,7 +180,12 @@ export class GatewayChatClient {
       activeMinutes: opts?.activeMinutes,
       includeGlobal: opts?.includeGlobal,
       includeUnknown: opts?.includeUnknown,
+      agentId: opts?.agentId,
     });
+  }
+
+  async listAgents() {
+    return await this.client.request<GatewayAgentsList>("agents.list", {});
   }
 
   async patchSession(opts: SessionsPatchParams) {

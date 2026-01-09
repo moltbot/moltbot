@@ -41,8 +41,8 @@ Payload:
 { "text": "System line", "mode": "now" }
 ```
 
-- `text` required (string)
-- `mode` optional: `now` | `next-heartbeat` (default `now`)
+- `text` **required** (string): The description of the event (e.g., "New email received").
+- `mode` optional (`now` | `next-heartbeat`): Whether to trigger an immediate heartbeat (default `now`) or wait for the next periodic check.
 
 Effect:
 - Enqueues a system event for the **main** session
@@ -57,7 +57,7 @@ Payload:
   "name": "Email",
   "sessionKey": "hook:email:msg-123",
   "wakeMode": "now",
-  "deliver": false,
+  "deliver": true,
   "provider": "last",
   "to": "+15551234567",
   "model": "openai/gpt-5.2-mini",
@@ -66,16 +66,16 @@ Payload:
 }
 ```
 
-- `message` required (string)
-- `name` optional (used in the summary prefix)
-- `sessionKey` optional (default random `hook:<uuid>`)
-- `wakeMode` optional: `now` | `next-heartbeat` (default `now`)
-- `deliver` optional (default `false`)
-- `provider` optional: `last` | `whatsapp` | `telegram`
-- `to` optional (provider-specific target)
-- `model` optional (model override, `provider/model` or alias; must be allowed if `agent.models` is set)
-- `thinking` optional (override)
-- `timeoutSeconds` optional
+- `message` **required** (string): The prompt or message for the agent to process.
+- `name` optional (string): Human-readable name for the hook (e.g., "GitHub"), used as a prefix in session summaries.
+- `sessionKey` optional (string): The key used to identify the agent's session. Defaults to a random `hook:<uuid>`. Using a consistent key allows for a multi-turn conversation within the hook context.
+- `wakeMode` optional (`now` | `next-heartbeat`): Whether to trigger an immediate heartbeat (default `now`) or wait for the next periodic check.
+- `deliver` optional (boolean): If `true`, the agent's response will be sent to the messaging provider. Defaults to `true`. Responses that are only heartbeat acknowledgments are automatically skipped.
+- `provider` optional (string): The messaging service for delivery. One of: `last`, `whatsapp`, `telegram`, `discord`, `slack`, `signal`, `imessage`, `msteams`. Defaults to `last`.
+- `to` optional (string): The recipient identifier for the provider (e.g., phone number for WhatsApp/Signal, chat ID for Telegram, channel ID for Discord/Slack). Defaults to the last recipient in the main session.
+- `model` optional (string): Model override (e.g., `anthropic/claude-3-5-sonnet` or an alias). Must be in the allowed model list if restricted.
+- `thinking` optional (string): Thinking level override (e.g., `low`, `medium`, `high`).
+- `timeoutSeconds` optional (number): Maximum duration for the agent run in seconds.
 
 Effect:
 - Runs an **isolated** agent turn (own session key)
@@ -134,7 +134,7 @@ curl -X POST http://127.0.0.1:18789/hooks/agent \
   -d '{"message":"Summarize inbox","name":"Email","model":"openai/gpt-5.2-mini"}'
 ```
 
-If you enforce `agent.models`, make sure the override model is included there.
+If you enforce `agents.defaults.models`, make sure the override model is included there.
 
 ```bash
 curl -X POST http://127.0.0.1:18789/hooks/gmail \
