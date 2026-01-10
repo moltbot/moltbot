@@ -339,15 +339,7 @@ export async function runGatewayUpdate(
         timeoutMs,
       ),
     );
-    steps.push(
-      await runStep(
-        runCommand,
-        "clawdbot doctor",
-        managerScriptArgs(manager, "clawdbot", ["doctor"]),
-        gitRoot,
-        timeoutMs,
-      ),
-    );
+
 
     const failedStep = steps.find((step) => step.exitCode !== 0);
     const afterShaStep = await runStep(
