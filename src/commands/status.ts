@@ -223,7 +223,9 @@ async function getDaemonShortLine(): Promise<string | null> {
   try {
     const service = resolveGatewayService();
     const [loaded, runtime] = await Promise.all([
-      service.isLoaded({ env: process.env }).catch(() => false),
+      service
+        .isLoaded({ profile: process.env.CLAWDBOT_PROFILE })
+        .catch(() => false),
       service.readRuntime(process.env).catch(() => undefined),
     ]);
     const loadedText = loaded ? service.loadedText : service.notLoadedText;

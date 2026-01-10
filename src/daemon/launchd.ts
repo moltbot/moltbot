@@ -29,7 +29,7 @@ function resolveLaunchAgentPlistPathForLabel(
 export function resolveLaunchAgentPlistPath(
   env: Record<string, string | undefined>,
 ): string {
-  const label = resolveGatewayLaunchAgentLabel(env);
+  const label = resolveGatewayLaunchAgentLabel(env.CLAWDBOT_PROFILE);
   return resolveLaunchAgentPlistPathForLabel(env, label);
 }
 
@@ -267,14 +267,9 @@ export function parseLaunchctlPrint(output: string): LaunchctlPrintInfo {
   return info;
 }
 
-export async function isLaunchAgentLoaded(
-  env: Record<string, string | undefined> = process.env as Record<
-    string,
-    string | undefined
-  >,
-): Promise<boolean> {
+export async function isLaunchAgentLoaded(profile?: string): Promise<boolean> {
   const domain = resolveGuiDomain();
-  const label = resolveGatewayLaunchAgentLabel(env);
+  const label = resolveGatewayLaunchAgentLabel(profile);
   const res = await execLaunchctl(["print", `${domain}/${label}`]);
   return res.code === 0;
 }
@@ -295,7 +290,7 @@ export async function readLaunchAgentRuntime(
   env: Record<string, string | undefined>,
 ): Promise<GatewayServiceRuntime> {
   const domain = resolveGuiDomain();
-  const label = resolveGatewayLaunchAgentLabel(env);
+  const label = resolveGatewayLaunchAgentLabel(env.CLAWDBOT_PROFILE);
   const res = await execLaunchctl(["print", `${domain}/${label}`]);
   if (res.code !== 0) {
     return {
@@ -404,7 +399,7 @@ export async function uninstallLaunchAgent({
   stdout: NodeJS.WritableStream;
 }): Promise<void> {
   const domain = resolveGuiDomain();
-  const label = resolveGatewayLaunchAgentLabel(env);
+  const label = resolveGatewayLaunchAgentLabel(env.CLAWDBOT_PROFILE);
   const plistPath = resolveLaunchAgentPlistPath(env);
   await execLaunchctl(["bootout", domain, plistPath]);
   await execLaunchctl(["unload", plistPath]);
@@ -443,13 +438,13 @@ function isLaunchctlNotLoaded(res: {
 
 export async function stopLaunchAgent({
   stdout,
-  env = process.env as Record<string, string | undefined>,
+  profile,
 }: {
   stdout: NodeJS.WritableStream;
-  env?: Record<string, string | undefined>;
+  profile?: string;
 }): Promise<void> {
   const domain = resolveGuiDomain();
-  const label = resolveGatewayLaunchAgentLabel(env);
+  const label = resolveGatewayLaunchAgentLabel(profile);
   const res = await execLaunchctl(["bootout", `${domain}/${label}`]);
   if (res.code !== 0 && !isLaunchctlNotLoaded(res)) {
     throw new Error(
@@ -476,7 +471,7 @@ export async function installLaunchAgent({
   await fs.mkdir(logDir, { recursive: true });
 
   const domain = resolveGuiDomain();
-  const label = resolveGatewayLaunchAgentLabel(env);
+  const label = resolveGatewayLaunchAgentLabel(env.CLAWDBOT_PROFILE);
   for (const legacyLabel of LEGACY_GATEWAY_LAUNCH_AGENT_LABELS) {
     const legacyPlistPath = resolveLaunchAgentPlistPathForLabel(
       env,
@@ -522,13 +517,13 @@ export async function installLaunchAgent({
 
 export async function restartLaunchAgent({
   stdout,
-  env = process.env as Record<string, string | undefined>,
+  profile,
 }: {
   stdout: NodeJS.WritableStream;
-  env?: Record<string, string | undefined>;
+  profile?: string;
 }): Promise<void> {
   const domain = resolveGuiDomain();
-  const label = resolveGatewayLaunchAgentLabel(env);
+  const label = resolveGatewayLaunchAgentLabel(profile);
   const res = await execLaunchctl(["kickstart", "-k", `${domain}/${label}`]);
   if (res.code !== 0) {
     throw new Error(

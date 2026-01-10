@@ -4,7 +4,6 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import {
-  GATEWAY_WINDOWS_TASK_NAME,
   LEGACY_GATEWAY_WINDOWS_TASK_NAMES,
   resolveGatewayWindowsTaskName,
 } from "./constants.js";
@@ -213,7 +212,7 @@ export async function installScheduledTask({
   });
   await fs.writeFile(scriptPath, script, "utf8");
 
-  const taskName = resolveGatewayWindowsTaskName(env);
+  const taskName = resolveGatewayWindowsTaskName(env.CLAWDBOT_PROFILE);
   const quotedScript = quoteCmdArg(scriptPath);
   const create = await execSchtasks([
     "/Create",
@@ -247,7 +246,7 @@ export async function uninstallScheduledTask({
   stdout: NodeJS.WritableStream;
 }): Promise<void> {
   await assertSchtasksAvailable();
-  const taskName = resolveGatewayWindowsTaskName(env);
+  const taskName = resolveGatewayWindowsTaskName(env.CLAWDBOT_PROFILE);
   await execSchtasks(["/Delete", "/F", "/TN", taskName]);
 
   const scriptPath = resolveTaskScriptPath(env);
@@ -270,13 +269,13 @@ function isTaskNotRunning(res: {
 
 export async function stopScheduledTask({
   stdout,
-  env = process.env as Record<string, string | undefined>,
+  profile,
 }: {
   stdout: NodeJS.WritableStream;
-  env?: Record<string, string | undefined>;
+  profile?: string;
 }): Promise<void> {
   await assertSchtasksAvailable();
-  const taskName = resolveGatewayWindowsTaskName(env);
+  const taskName = resolveGatewayWindowsTaskName(profile);
   const res = await execSchtasks(["/End", "/TN", taskName]);
   if (res.code !== 0 && !isTaskNotRunning(res)) {
     throw new Error(`schtasks end failed: ${res.stderr || res.stdout}`.trim());
@@ -286,13 +285,13 @@ export async function stopScheduledTask({
 
 export async function restartScheduledTask({
   stdout,
-  env = process.env as Record<string, string | undefined>,
+  profile,
 }: {
   stdout: NodeJS.WritableStream;
-  env?: Record<string, string | undefined>;
+  profile?: string;
 }): Promise<void> {
   await assertSchtasksAvailable();
-  const taskName = resolveGatewayWindowsTaskName(env);
+  const taskName = resolveGatewayWindowsTaskName(profile);
   await execSchtasks(["/End", "/TN", taskName]);
   const res = await execSchtasks(["/Run", "/TN", taskName]);
   if (res.code !== 0) {
@@ -302,13 +301,10 @@ export async function restartScheduledTask({
 }
 
 export async function isScheduledTaskInstalled(
-  env: Record<string, string | undefined> = process.env as Record<
-    string,
-    string | undefined
-  >,
+  profile?: string,
 ): Promise<boolean> {
   await assertSchtasksAvailable();
-  const taskName = resolveGatewayWindowsTaskName(env);
+  const taskName = resolveGatewayWindowsTaskName(profile);
   const res = await execSchtasks(["/Query", "/TN", taskName]);
   return res.code === 0;
 }
@@ -327,7 +323,7 @@ export async function readScheduledTaskRuntime(
       detail: String(err),
     };
   }
-  const taskName = resolveGatewayWindowsTaskName(env);
+  const taskName = resolveGatewayWindowsTaskName(env.CLAWDBOT_PROFILE);
   const res = await execSchtasks([
     "/Query",
     "/TN",

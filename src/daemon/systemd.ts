@@ -5,7 +5,6 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { runCommandWithTimeout, runExec } from "../process/exec.js";
 import {
-  GATEWAY_SYSTEMD_SERVICE_NAME,
   LEGACY_GATEWAY_SYSTEMD_SERVICE_NAMES,
   resolveGatewaySystemdServiceName,
 } from "./constants.js";
@@ -31,7 +30,7 @@ function resolveSystemdUnitPathForName(
 function resolveSystemdUnitPath(
   env: Record<string, string | undefined>,
 ): string {
-  const serviceName = resolveGatewaySystemdServiceName(env);
+  const serviceName = resolveGatewaySystemdServiceName(env.CLAWDBOT_PROFILE);
   return resolveSystemdUnitPathForName(env, serviceName);
 }
 
@@ -377,7 +376,7 @@ export async function installSystemdService({
   });
   await fs.writeFile(unitPath, unit, "utf8");
 
-  const serviceName = resolveGatewaySystemdServiceName(env);
+  const serviceName = resolveGatewaySystemdServiceName(env.CLAWDBOT_PROFILE);
   const unitName = `${serviceName}.service`;
   const reload = await execSystemctl(["--user", "daemon-reload"]);
   if (reload.code !== 0) {
@@ -412,7 +411,7 @@ export async function uninstallSystemdService({
   stdout: NodeJS.WritableStream;
 }): Promise<void> {
   await assertSystemdAvailable();
-  const serviceName = resolveGatewaySystemdServiceName(env);
+  const serviceName = resolveGatewaySystemdServiceName(env.CLAWDBOT_PROFILE);
   const unitName = `${serviceName}.service`;
   await execSystemctl(["--user", "disable", "--now", unitName]);
 
@@ -427,13 +426,13 @@ export async function uninstallSystemdService({
 
 export async function stopSystemdService({
   stdout,
-  env = process.env as Record<string, string | undefined>,
+  profile,
 }: {
   stdout: NodeJS.WritableStream;
-  env?: Record<string, string | undefined>;
+  profile?: string;
 }): Promise<void> {
   await assertSystemdAvailable();
-  const serviceName = resolveGatewaySystemdServiceName(env);
+  const serviceName = resolveGatewaySystemdServiceName(profile);
   const unitName = `${serviceName}.service`;
   const res = await execSystemctl(["--user", "stop", unitName]);
   if (res.code !== 0) {
@@ -446,13 +445,13 @@ export async function stopSystemdService({
 
 export async function restartSystemdService({
   stdout,
-  env = process.env as Record<string, string | undefined>,
+  profile,
 }: {
   stdout: NodeJS.WritableStream;
-  env?: Record<string, string | undefined>;
+  profile?: string;
 }): Promise<void> {
   await assertSystemdAvailable();
-  const serviceName = resolveGatewaySystemdServiceName(env);
+  const serviceName = resolveGatewaySystemdServiceName(profile);
   const unitName = `${serviceName}.service`;
   const res = await execSystemctl(["--user", "restart", unitName]);
   if (res.code !== 0) {
@@ -464,13 +463,10 @@ export async function restartSystemdService({
 }
 
 export async function isSystemdServiceEnabled(
-  env: Record<string, string | undefined> = process.env as Record<
-    string,
-    string | undefined
-  >,
+  profile?: string,
 ): Promise<boolean> {
   await assertSystemdAvailable();
-  const serviceName = resolveGatewaySystemdServiceName(env);
+  const serviceName = resolveGatewaySystemdServiceName(profile);
   const unitName = `${serviceName}.service`;
   const res = await execSystemctl(["--user", "is-enabled", unitName]);
   return res.code === 0;
@@ -490,7 +486,7 @@ export async function readSystemdServiceRuntime(
       detail: String(err),
     };
   }
-  const serviceName = resolveGatewaySystemdServiceName(env);
+  const serviceName = resolveGatewaySystemdServiceName(env.CLAWDBOT_PROFILE);
   const unitName = `${serviceName}.service`;
   const res = await execSystemctl([
     "--user",

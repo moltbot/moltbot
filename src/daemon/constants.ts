@@ -4,34 +4,28 @@ export const GATEWAY_SYSTEMD_SERVICE_NAME = "clawdbot-gateway";
 export const GATEWAY_WINDOWS_TASK_NAME = "Clawdbot Gateway";
 
 // Profile-aware label resolution
-export function resolveGatewayLaunchAgentLabel(
-  env: Record<string, string | undefined>,
-): string {
-  const profile = env.CLAWDBOT_PROFILE?.trim();
-  if (!profile || profile.toLowerCase() === "default") {
+export function resolveGatewayLaunchAgentLabel(profile?: string): string {
+  const trimmed = profile?.trim();
+  if (!trimmed || trimmed.toLowerCase() === "default") {
     return GATEWAY_LAUNCH_AGENT_LABEL;
   }
-  return `com.clawdbot.${profile}`;
+  return `com.clawdbot.${trimmed}`;
 }
 
-export function resolveGatewaySystemdServiceName(
-  env: Record<string, string | undefined>,
-): string {
-  const profile = env.CLAWDBOT_PROFILE?.trim();
-  if (!profile || profile.toLowerCase() === "default") {
+export function resolveGatewaySystemdServiceName(profile?: string): string {
+  const trimmed = profile?.trim();
+  if (!trimmed || trimmed.toLowerCase() === "default") {
     return GATEWAY_SYSTEMD_SERVICE_NAME;
   }
-  return `clawdbot-gateway-${profile}`;
+  return `clawdbot-gateway-${trimmed}`;
 }
 
-export function resolveGatewayWindowsTaskName(
-  env: Record<string, string | undefined>,
-): string {
-  const profile = env.CLAWDBOT_PROFILE?.trim();
-  if (!profile || profile.toLowerCase() === "default") {
+export function resolveGatewayWindowsTaskName(profile?: string): string {
+  const trimmed = profile?.trim();
+  if (!trimmed || trimmed.toLowerCase() === "default") {
     return GATEWAY_WINDOWS_TASK_NAME;
   }
-  return `Clawdbot Gateway (${profile})`;
+  return `Clawdbot Gateway (${trimmed})`;
 }
 
 export const LEGACY_GATEWAY_LAUNCH_AGENT_LABELS = [

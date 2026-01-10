@@ -209,7 +209,9 @@ export async function doctorCommand(
     const service = resolveGatewayService();
     let loaded = false;
     try {
-      loaded = await service.isLoaded({ env: process.env });
+      loaded = await service.isLoaded({
+        profile: process.env.CLAWDBOT_PROFILE,
+      });
     } catch {
       loaded = false;
     }
@@ -291,7 +293,9 @@ export async function doctorCommand(
 
   if (!healthOk) {
     const service = resolveGatewayService();
-    const loaded = await service.isLoaded({ env: process.env });
+    const loaded = await service.isLoaded({
+      profile: process.env.CLAWDBOT_PROFILE,
+    });
     let serviceRuntime:
       | Awaited<ReturnType<typeof service.readRuntime>>
       | undefined;
@@ -380,7 +384,10 @@ export async function doctorCommand(
           initialValue: true,
         });
         if (start) {
-          await service.restart({ stdout: process.stdout });
+          await service.restart({
+            profile: process.env.CLAWDBOT_PROFILE,
+            stdout: process.stdout,
+          });
           await sleep(1500);
         }
       }
@@ -396,7 +403,10 @@ export async function doctorCommand(
           initialValue: true,
         });
         if (restart) {
-          await service.restart({ stdout: process.stdout });
+          await service.restart({
+            profile: process.env.CLAWDBOT_PROFILE,
+            stdout: process.stdout,
+          });
           await sleep(1500);
           try {
             await healthCommand({ json: false, timeoutMs: 10_000 }, runtime);
