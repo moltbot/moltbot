@@ -1,4 +1,4 @@
-import { exec } from "child_process";
+import { exec, spawn } from "child_process";
 import { promisify } from "util";
 const execAsync = promisify(exec);
 import {
@@ -599,42 +599,78 @@ export async function handleCommands(params: {
 
 
   // Custom clawd-* commands that run shell scripts
-  const clawdScriptCommands: Record<string, string> = {
-    "/clawd-update": "~/clawd-scripts/clawd_update.sh",
-    "/clawd-restart": "~/clawd-scripts/clawd_restart.sh",
-    "/clawd-revert": "~/clawd-scripts/clawd_revert.sh",
-    "/clawd-push": "~/clawd-scripts/clawd_push.sh",
-    "/clawd-git-status": "~/clawd-scripts/clawd_git_status.sh",
+  const clawdScriptCommands: Record<string, { path: string; restart: boolean }> = {
+    "/clawd-update": { path: "~/clawd-scripts/clawd_update.sh", restart: true },
+    "/clawd-restart": { path: "~/clawd-scripts/clawd_restart.sh", restart: true },
+    "/clawd-revert": { path: "~/clawd-scripts/clawd_revert.sh", restart: true },
+    "/clawd-push": { path: "~/clawd-scripts/clawd_push.sh", restart: false },
+    "/clawd-git-status": { path: "~/clawd-scripts/clawd_git_status.sh", restart: false },
   };
 
-  const clawdScriptPath = clawdScriptCommands[command.commandBodyNormalized];
-  if (allowTextCommands && clawdScriptPath) {
+  const scriptDef = clawdScriptCommands[command.commandBodyNormalized];
+  if (allowTextCommands && scriptDef) {
     if (!command.isAuthorizedSender) {
       logVerbose(
         `Ignoring ${command.commandBodyNormalized} from unauthorized sender: ${command.senderE164 || "<unknown>"}`,
       );
       return { shouldContinue: false };
     }
-    try {
-      const expandedPath = clawdScriptPath.replace("~", process.env.HOME || "/home/azureuser");
-      const { stdout, stderr } = await execAsync(expandedPath, { timeout: 300000 });
-      const output = (stdout + (stderr ? `\n${stderr}` : "")).trim();
-      const cleanOutput = output.replace(/\x1b\[[0-9;]*m/g, "").slice(0, 4000);
-      return {
-        shouldContinue: false,
-        reply: { text: cleanOutput || "✅ Command completed (no output)." },
-      };
-    } catch (err: unknown) {
-      const error = err as { stdout?: string; stderr?: string; message?: string };
-      const errorOutput = (error.stdout || "") + (error.stderr || "") || error.message || "Unknown error";
-      const cleanError = errorOutput.replace(/\x1b\[[0-9;]*m/g, "").slice(0, 4000);
-      return {
-        shouldContinue: false,
-        reply: { text: `❌ Command failed:\n${cleanError}` },
-      };
+    
+    const expandedPath = scriptDef.path.replace("~", process.env.HOME || "/home/azureuser");
+    const lockFile = "/tmp/clawd-command.lock";
+    const fs = await import("fs");
+
+    if (scriptDef.restart) {
+      try {
+        const stat = fs.statSync(lockFile);
+        const ageMs = Date.now() - stat.mtimeMs;
+        if (ageMs < 300000) {
+          return {
+            shouldContinue: false,
+            reply: { text: "⏳ A restart operation is already in progress. Please wait." },
+          };
+        }
+      } catch { /* lock file does not exist, proceed */ }
+
+      fs.writeFileSync(lockFile, `${command.commandBodyNormalized} started at ${new Date().toISOString()}`);
+
+      try {
+        const subprocess = spawn(expandedPath, [], {
+          detached: true,
+          stdio: "ignore",
+        });
+        subprocess.unref();
+        return {
+          shouldContinue: false,
+          reply: { text: "🔄 Process initiated in background. You will receive a Telegram notification when complete." },
+        };
+      } catch (err) {
+        fs.unlinkSync(lockFile);
+        return {
+          shouldContinue: false,
+          reply: { text: "❌ Failed to spawn background process." },
+        };
+      }
+    } else {
+      try {
+        const { stdout, stderr } = await execAsync(expandedPath, { timeout: 300000 });
+        const output = (stdout + (stderr ? `\n${stderr}` : "")).trim();
+        const cleanOutput = output.replace(/\x1b\[[0-9;]*m/g, "").slice(0, 4000);
+        return {
+          shouldContinue: false,
+          reply: { text: cleanOutput || "✅ Command completed (no output)." },
+        };
+      } catch (err: unknown) {
+        const error = err as { stdout?: string; stderr?: string; message?: string };
+        const errorOutput = (error.stdout || "") + (error.stderr || "") || error.message || "Unknown error";
+        const cleanError = errorOutput.replace(/\x1b\[[0-9;]*m/g, "").slice(0, 4000);
+        return {
+          shouldContinue: false,
+          reply: { text: `❌ Command failed:\n${cleanError}` },
+        };
+      }
     }
   }
-
   const helpRequested = command.commandBodyNormalized === "/help";
   if (allowTextCommands && helpRequested) {
     if (!command.isAuthorizedSender) {
