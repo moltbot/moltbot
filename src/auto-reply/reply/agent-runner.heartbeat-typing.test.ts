@@ -164,6 +164,25 @@ describe("runReplyAgent typing (heartbeat)", () => {
     expect(typing.startTypingLoop).not.toHaveBeenCalled();
   });
 
+  it("suppresses partial streaming for NO_REPLY", async () => {
+    const onPartialReply = vi.fn();
+    runEmbeddedPiAgentMock.mockImplementationOnce(
+      async (params: EmbeddedPiAgentParams) => {
+        await params.onPartialReply?.({ text: "NO_REPLY" });
+        return { payloads: [{ text: "NO_REPLY" }], meta: {} };
+      },
+    );
+
+    const { run, typing } = createMinimalRun({
+      opts: { isHeartbeat: false, onPartialReply },
+    });
+    await run();
+
+    expect(onPartialReply).not.toHaveBeenCalled();
+    expect(typing.startTypingOnText).not.toHaveBeenCalled();
+    expect(typing.startTypingLoop).not.toHaveBeenCalled();
+  });
+
   it("starts typing only on deltas in message mode", async () => {
     runEmbeddedPiAgentMock.mockImplementationOnce(async () => ({
       payloads: [{ text: "final" }],
@@ -347,6 +366,57 @@ describe("runReplyAgent typing (heartbeat)", () => {
 
       const persisted = JSON.parse(await fs.readFile(storePath, "utf-8"));
       expect(persisted.main).toBeDefined();
+    } finally {
+      if (prevStateDir) {
+        process.env.CLAWDBOT_STATE_DIR = prevStateDir;
+      } else {
+        delete process.env.CLAWDBOT_STATE_DIR;
+      }
+    }
+  });
+
+  it("retries after compaction failure by resetting the session", async () => {
+    const prevStateDir = process.env.CLAWDBOT_STATE_DIR;
+    const stateDir = await fs.mkdtemp(
+      path.join(tmpdir(), "clawdbot-session-compaction-reset-"),
+    );
+    process.env.CLAWDBOT_STATE_DIR = stateDir;
+    try {
+      const sessionId = "session";
+      const storePath = path.join(stateDir, "sessions", "sessions.json");
+      const sessionEntry = { sessionId, updatedAt: Date.now() };
+      const sessionStore = { main: sessionEntry };
+
+      await fs.mkdir(path.dirname(storePath), { recursive: true });
+      await fs.writeFile(storePath, JSON.stringify(sessionStore), "utf-8");
+
+      runEmbeddedPiAgentMock
+        .mockImplementationOnce(async () => {
+          throw new Error(
+            'Context overflow: Summarization failed: 400 {"message":"prompt is too long"}',
+          );
+        })
+        .mockImplementationOnce(async () => ({
+          payloads: [{ text: "ok" }],
+          meta: {},
+        }));
+
+      const callsBefore = runEmbeddedPiAgentMock.mock.calls.length;
+      const { run } = createMinimalRun({
+        sessionEntry,
+        sessionStore,
+        sessionKey: "main",
+        storePath,
+      });
+      const res = await run();
+
+      expect(runEmbeddedPiAgentMock.mock.calls.length - callsBefore).toBe(2);
+      const payload = Array.isArray(res) ? res[0] : res;
+      expect(payload).toMatchObject({ text: "ok" });
+      expect(sessionStore.main.sessionId).not.toBe(sessionId);
+
+      const persisted = JSON.parse(await fs.readFile(storePath, "utf-8"));
+      expect(persisted.main.sessionId).toBe(sessionStore.main.sessionId);
     } finally {
       if (prevStateDir) {
         process.env.CLAWDBOT_STATE_DIR = prevStateDir;

@@ -6,6 +6,8 @@ import path from "node:path";
 import type { Skill } from "@mariozechner/pi-coding-agent";
 import JSON5 from "json5";
 import type { MsgContext } from "../auto-reply/templating.js";
+import type { ProviderId } from "../providers/plugins/types.js";
+import { PROVIDER_IDS } from "../providers/registry.js";
 import {
   buildAgentMainSessionKey,
   DEFAULT_AGENT_ID,
@@ -63,15 +65,9 @@ export function clearSessionStoreCacheForTest(): void {
 
 export type SessionScope = "per-sender" | "global";
 
-const GROUP_SURFACES = new Set([
-  "whatsapp",
-  "telegram",
-  "discord",
-  "signal",
-  "imessage",
-  "webchat",
-  "slack",
-]);
+export type SessionProviderId = ProviderId | "webchat";
+
+const GROUP_SURFACES = new Set<string>([...PROVIDER_IDS, "webchat"]);
 
 export type SessionChatType = "direct" | "group" | "room";
 
@@ -113,6 +109,8 @@ export type SessionEntry = {
   model?: string;
   contextTokens?: number;
   compactionCount?: number;
+  memoryFlushAt?: number;
+  memoryFlushCompactionCount?: number;
   cliSessionIds?: Record<string, string>;
   claudeCliSessionId?: string;
   label?: string;
@@ -121,14 +119,7 @@ export type SessionEntry = {
   subject?: string;
   room?: string;
   space?: string;
-  lastProvider?:
-    | "whatsapp"
-    | "telegram"
-    | "discord"
-    | "slack"
-    | "signal"
-    | "imessage"
-    | "webchat";
+  lastProvider?: SessionProviderId;
   lastTo?: string;
   lastAccountId?: string;
   skillsSnapshot?: SessionSkillSnapshot;
@@ -259,6 +250,33 @@ export function resolveAgentMainSessionKey(params: {
 }): string {
   const mainKey = normalizeMainKey(params.cfg?.session?.mainKey);
   return buildAgentMainSessionKey({ agentId: params.agentId, mainKey });
+}
+
+export function canonicalizeMainSessionAlias(params: {
+  cfg?: { session?: { scope?: SessionScope; mainKey?: string } };
+  agentId: string;
+  sessionKey: string;
+}): string {
+  const raw = params.sessionKey.trim();
+  if (!raw) return raw;
+
+  const agentId = normalizeAgentId(params.agentId);
+  const mainKey = normalizeMainKey(params.cfg?.session?.mainKey);
+  const agentMainSessionKey = buildAgentMainSessionKey({ agentId, mainKey });
+  const agentMainAliasKey = buildAgentMainSessionKey({
+    agentId,
+    mainKey: "main",
+  });
+
+  const isMainAlias =
+    raw === "main" ||
+    raw === mainKey ||
+    raw === agentMainSessionKey ||
+    raw === agentMainAliasKey;
+
+  if (params.cfg?.session?.scope === "global" && isMainAlias) return "global";
+  if (isMainAlias) return agentMainSessionKey;
+  return raw;
 }
 
 function normalizeGroupLabel(raw?: string) {

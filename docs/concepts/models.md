@@ -23,6 +23,7 @@ Clawdbot selects models in this order:
 Related:
 - `agents.defaults.models` is the allowlist/catalog of models Clawdbot can use (plus aliases).
 - `agents.defaults.imageModel` is used **only when** the primary model can’t accept images.
+- Per-agent defaults can override `agents.defaults.model` via `agents.list[].model` plus bindings (see [/concepts/multi-agent](/concepts/multi-agent)).
 
 ## Quick model picks (anecdotal)
 
@@ -84,6 +85,25 @@ Example allowlist config:
   }
 }
 ```
+
+## Switching models in chat (`/model`)
+
+You can switch models for the current session without restarting:
+
+```
+/model
+/model list
+/model 3
+/model openai/gpt-5.2
+/model status
+```
+
+Notes:
+- `/model` (and `/model list`) is a compact, numbered picker (model family + available providers).
+- `/model <#>` selects from that picker.
+- `/model status` is the detailed view (auth candidates and, when configured, provider endpoint `baseUrl` + `api` mode).
+
+Full command behavior/config: [Slash commands](/tools/slash-commands).
 
 ## CLI commands
 

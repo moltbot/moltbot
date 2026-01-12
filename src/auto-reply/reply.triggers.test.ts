@@ -27,6 +27,30 @@ const usageMocks = vi.hoisted(() => ({
 
 vi.mock("../infra/provider-usage.js", () => usageMocks);
 
+const modelCatalogMocks = vi.hoisted(() => ({
+  loadModelCatalog: vi.fn().mockResolvedValue([
+    {
+      provider: "anthropic",
+      id: "claude-opus-4-5",
+      name: "Claude Opus 4.5",
+      contextWindow: 200000,
+    },
+    {
+      provider: "openrouter",
+      id: "anthropic/claude-opus-4-5",
+      name: "Claude Opus 4.5 (OpenRouter)",
+      contextWindow: 200000,
+    },
+    { provider: "openai", id: "gpt-4.1-mini", name: "GPT-4.1 mini" },
+    { provider: "openai", id: "gpt-5.2", name: "GPT-5.2" },
+    { provider: "openai-codex", id: "gpt-5.2", name: "GPT-5.2 (Codex)" },
+    { provider: "minimax", id: "MiniMax-M2.1", name: "MiniMax M2.1" },
+  ]),
+  resetModelCatalogCacheForTest: vi.fn(),
+}));
+
+vi.mock("../agents/model-catalog.js", () => modelCatalogMocks);
+
 import { resolveAgentWorkspaceDir } from "../agents/agent-scope.js";
 import {
   abortEmbeddedPiRun,
@@ -104,6 +128,92 @@ describe("trigger handling", () => {
       expect(usageMocks.loadProviderUsageSummary).toHaveBeenCalledWith(
         expect.objectContaining({ providers: ["anthropic"] }),
       );
+    });
+  });
+
+  it("emits /status once (no duplicate inline + final)", async () => {
+    await withTempHome(async (home) => {
+      const blockReplies: Array<{ text?: string }> = [];
+      const res = await getReplyFromConfig(
+        {
+          Body: "/status",
+          From: "+1000",
+          To: "+2000",
+          Provider: "whatsapp",
+          SenderE164: "+1000",
+        },
+        {
+          onBlockReply: async (payload) => {
+            blockReplies.push(payload);
+          },
+        },
+        makeCfg(home),
+      );
+      const replies = res ? (Array.isArray(res) ? res : [res]) : [];
+      expect(blockReplies.length).toBe(0);
+      expect(replies.length).toBe(1);
+      expect(String(replies[0]?.text ?? "")).toContain("Model:");
+    });
+  });
+
+  it("emits /usage once (alias of /status)", async () => {
+    await withTempHome(async (home) => {
+      const blockReplies: Array<{ text?: string }> = [];
+      const res = await getReplyFromConfig(
+        {
+          Body: "/usage",
+          From: "+1000",
+          To: "+2000",
+          Provider: "whatsapp",
+          SenderE164: "+1000",
+        },
+        {
+          onBlockReply: async (payload) => {
+            blockReplies.push(payload);
+          },
+        },
+        makeCfg(home),
+      );
+      const replies = res ? (Array.isArray(res) ? res : [res]) : [];
+      expect(blockReplies.length).toBe(0);
+      expect(replies.length).toBe(1);
+      expect(String(replies[0]?.text ?? "")).toContain("Model:");
+    });
+  });
+
+  it("sends one inline status and still returns agent reply for mixed text", async () => {
+    await withTempHome(async (home) => {
+      vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
+        payloads: [{ text: "agent says hi" }],
+        meta: {
+          durationMs: 1,
+          agentMeta: { sessionId: "s", provider: "p", model: "m" },
+        },
+      });
+      const blockReplies: Array<{ text?: string }> = [];
+      const res = await getReplyFromConfig(
+        {
+          Body: "here we go /status now",
+          From: "+1002",
+          To: "+2000",
+          Provider: "whatsapp",
+          SenderE164: "+1002",
+        },
+        {
+          onBlockReply: async (payload) => {
+            blockReplies.push(payload);
+          },
+        },
+        makeCfg(home),
+      );
+      const replies = res ? (Array.isArray(res) ? res : [res]) : [];
+      expect(blockReplies.length).toBe(1);
+      expect(String(blockReplies[0]?.text ?? "")).toContain("Model:");
+      expect(replies.length).toBe(1);
+      expect(replies[0]?.text).toBe("agent says hi");
+      const prompt =
+        vi.mocked(runEmbeddedPiAgent).mock.calls[0]?.[0]?.prompt ?? "";
+      expect(prompt).not.toContain("/status");
     });
   });
 
@@ -264,6 +374,203 @@ describe("trigger handling", () => {
     });
   });
 
+  it("shows a quick /model picker grouped by model with providers", async () => {
+    await withTempHome(async (home) => {
+      const cfg = makeCfg(home);
+      const res = await getReplyFromConfig(
+        {
+          Body: "/model",
+          From: "telegram:111",
+          To: "telegram:111",
+          ChatType: "direct",
+          Provider: "telegram",
+          Surface: "telegram",
+          SessionKey: "telegram:slash:111",
+        },
+        {},
+        cfg,
+      );
+
+      const text = Array.isArray(res) ? res[0]?.text : res?.text;
+      const normalized = normalizeTestText(text ?? "");
+      expect(normalized).toContain(
+        "Pick: /model <#> or /model <provider/model>",
+      );
+      expect(normalized).toContain(
+        "1) claude-opus-4-5 — anthropic, openrouter",
+      );
+      expect(normalized).toContain("3) gpt-5.2 — openai, openai-codex");
+      expect(normalized).toContain("More: /model status");
+      expect(normalized).not.toContain("reasoning");
+      expect(normalized).not.toContain("image");
+    });
+  });
+
+  it("rejects invalid /model <#> selections", async () => {
+    await withTempHome(async (home) => {
+      const cfg = makeCfg(home);
+      const sessionKey = "telegram:slash:111";
+
+      const res = await getReplyFromConfig(
+        {
+          Body: "/model 99",
+          From: "telegram:111",
+          To: "telegram:111",
+          ChatType: "direct",
+          Provider: "telegram",
+          Surface: "telegram",
+          SessionKey: sessionKey,
+        },
+        {},
+        cfg,
+      );
+
+      const text = Array.isArray(res) ? res[0]?.text : res?.text;
+      expect(normalizeTestText(text ?? "")).toContain(
+        'Invalid model selection "99". Use /model to list.',
+      );
+
+      const store = loadSessionStore(cfg.session.store);
+      expect(store[sessionKey]?.providerOverride).toBeUndefined();
+      expect(store[sessionKey]?.modelOverride).toBeUndefined();
+    });
+  });
+
+  it("prefers the current provider when selecting /model <#>", async () => {
+    await withTempHome(async (home) => {
+      const cfg = makeCfg(home);
+      const sessionKey = "telegram:slash:111";
+
+      await fs.writeFile(
+        cfg.session.store,
+        JSON.stringify(
+          {
+            [sessionKey]: {
+              sessionId: "session-openrouter",
+              updatedAt: Date.now(),
+              providerOverride: "openrouter",
+              modelOverride: "anthropic/claude-opus-4-5",
+            },
+          },
+          null,
+          2,
+        ),
+      );
+
+      const res = await getReplyFromConfig(
+        {
+          Body: "/model 1",
+          From: "telegram:111",
+          To: "telegram:111",
+          ChatType: "direct",
+          Provider: "telegram",
+          Surface: "telegram",
+          SessionKey: sessionKey,
+        },
+        {},
+        cfg,
+      );
+
+      const text = Array.isArray(res) ? res[0]?.text : res?.text;
+      expect(normalizeTestText(text ?? "")).toContain(
+        "Model set to openrouter/anthropic/claude-opus-4-5",
+      );
+
+      const store = loadSessionStore(cfg.session.store);
+      expect(store[sessionKey]?.providerOverride).toBe("openrouter");
+      expect(store[sessionKey]?.modelOverride).toBe(
+        "anthropic/claude-opus-4-5",
+      );
+    });
+  });
+
+  it("selects a model by index via /model <#>", async () => {
+    await withTempHome(async (home) => {
+      const cfg = makeCfg(home);
+      const sessionKey = "telegram:slash:111";
+
+      const res = await getReplyFromConfig(
+        {
+          Body: "/model 3",
+          From: "telegram:111",
+          To: "telegram:111",
+          ChatType: "direct",
+          Provider: "telegram",
+          Surface: "telegram",
+          SessionKey: sessionKey,
+        },
+        {},
+        cfg,
+      );
+
+      const text = Array.isArray(res) ? res[0]?.text : res?.text;
+      expect(normalizeTestText(text ?? "")).toContain(
+        "Model set to openai/gpt-5.2",
+      );
+
+      const store = loadSessionStore(cfg.session.store);
+      expect(store[sessionKey]?.providerOverride).toBe("openai");
+      expect(store[sessionKey]?.modelOverride).toBe("gpt-5.2");
+    });
+  });
+
+  it("shows endpoint default in /model status when not configured", async () => {
+    await withTempHome(async (home) => {
+      const cfg = makeCfg(home);
+      const res = await getReplyFromConfig(
+        {
+          Body: "/model status",
+          From: "telegram:111",
+          To: "telegram:111",
+          ChatType: "direct",
+          Provider: "telegram",
+          Surface: "telegram",
+          SessionKey: "telegram:slash:111",
+        },
+        {},
+        cfg,
+      );
+
+      const text = Array.isArray(res) ? res[0]?.text : res?.text;
+      expect(normalizeTestText(text ?? "")).toContain("endpoint: default");
+    });
+  });
+
+  it("includes endpoint details in /model status when configured", async () => {
+    await withTempHome(async (home) => {
+      const cfg = {
+        ...makeCfg(home),
+        models: {
+          providers: {
+            minimax: {
+              baseUrl: "https://api.minimax.io/anthropic",
+              api: "anthropic-messages",
+            },
+          },
+        },
+      };
+      const res = await getReplyFromConfig(
+        {
+          Body: "/model status",
+          From: "telegram:111",
+          To: "telegram:111",
+          ChatType: "direct",
+          Provider: "telegram",
+          Surface: "telegram",
+          SessionKey: "telegram:slash:111",
+        },
+        {},
+        cfg,
+      );
+
+      const text = Array.isArray(res) ? res[0]?.text : res?.text;
+      const normalized = normalizeTestText(text ?? "");
+      expect(normalized).toContain(
+        "[minimax] endpoint: https://api.minimax.io/anthropic api: anthropic-messages auth:",
+      );
+    });
+  });
+
   it("rejects /restart by default", async () => {
     await withTempHome(async (home) => {
       const res = await getReplyFromConfig(
@@ -400,7 +707,7 @@ describe("trigger handling", () => {
     });
   });
 
-  it("ignores inline /status and runs the agent", async () => {
+  it("strips inline /status and still runs the agent", async () => {
     await withTempHome(async (home) => {
       vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
         payloads: [{ text: "ok" }],
@@ -409,18 +716,277 @@ describe("trigger handling", () => {
           agentMeta: { sessionId: "s", provider: "p", model: "m" },
         },
       });
-      const res = await getReplyFromConfig(
+      const blockReplies: Array<{ text?: string }> = [];
+      await getReplyFromConfig(
         {
           Body: "please /status now",
           From: "+1002",
           To: "+2000",
+          Provider: "whatsapp",
+          Surface: "whatsapp",
+          SenderE164: "+1002",
         },
-        {},
+        {
+          onBlockReply: async (payload) => {
+            blockReplies.push(payload);
+          },
+        },
+        makeCfg(home),
+      );
+      expect(runEmbeddedPiAgent).toHaveBeenCalled();
+      // Allowlisted senders: inline /status runs immediately (like /help) and is
+      // stripped from the prompt; the remaining text continues through the agent.
+      expect(blockReplies.length).toBe(1);
+      expect(String(blockReplies[0]?.text ?? "").length).toBeGreaterThan(0);
+      const prompt =
+        vi.mocked(runEmbeddedPiAgent).mock.calls[0]?.[0]?.prompt ?? "";
+      expect(prompt).not.toContain("/status");
+    });
+  });
+
+  it("handles inline /help and strips it before the agent", async () => {
+    await withTempHome(async (home) => {
+      vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
+        payloads: [{ text: "ok" }],
+        meta: {
+          durationMs: 1,
+          agentMeta: { sessionId: "s", provider: "p", model: "m" },
+        },
+      });
+      const blockReplies: Array<{ text?: string }> = [];
+      const res = await getReplyFromConfig(
+        {
+          Body: "please /help now",
+          From: "+1002",
+          To: "+2000",
+        },
+        {
+          onBlockReply: async (payload) => {
+            blockReplies.push(payload);
+          },
+        },
         makeCfg(home),
       );
       const text = Array.isArray(res) ? res[0]?.text : res?.text;
-      expect(text).not.toContain("Status");
+      expect(blockReplies.length).toBe(1);
+      expect(blockReplies[0]?.text).toContain("Help");
       expect(runEmbeddedPiAgent).toHaveBeenCalled();
+      const prompt =
+        vi.mocked(runEmbeddedPiAgent).mock.calls[0]?.[0]?.prompt ?? "";
+      expect(prompt).not.toContain("/help");
+      expect(text).toBe("ok");
+    });
+  });
+
+  it("handles inline /commands and strips it before the agent", async () => {
+    await withTempHome(async (home) => {
+      vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
+        payloads: [{ text: "ok" }],
+        meta: {
+          durationMs: 1,
+          agentMeta: { sessionId: "s", provider: "p", model: "m" },
+        },
+      });
+      const blockReplies: Array<{ text?: string }> = [];
+      const res = await getReplyFromConfig(
+        {
+          Body: "please /commands now",
+          From: "+1002",
+          To: "+2000",
+        },
+        {
+          onBlockReply: async (payload) => {
+            blockReplies.push(payload);
+          },
+        },
+        makeCfg(home),
+      );
+      const text = Array.isArray(res) ? res[0]?.text : res?.text;
+      expect(blockReplies.length).toBe(1);
+      expect(blockReplies[0]?.text).toContain("Slash commands");
+      expect(runEmbeddedPiAgent).toHaveBeenCalled();
+      const prompt =
+        vi.mocked(runEmbeddedPiAgent).mock.calls[0]?.[0]?.prompt ?? "";
+      expect(prompt).not.toContain("/commands");
+      expect(text).toBe("ok");
+    });
+  });
+
+  it("handles inline /whoami and strips it before the agent", async () => {
+    await withTempHome(async (home) => {
+      vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
+        payloads: [{ text: "ok" }],
+        meta: {
+          durationMs: 1,
+          agentMeta: { sessionId: "s", provider: "p", model: "m" },
+        },
+      });
+      const blockReplies: Array<{ text?: string }> = [];
+      const res = await getReplyFromConfig(
+        {
+          Body: "please /whoami now",
+          From: "+1002",
+          To: "+2000",
+          SenderId: "12345",
+        },
+        {
+          onBlockReply: async (payload) => {
+            blockReplies.push(payload);
+          },
+        },
+        makeCfg(home),
+      );
+      const text = Array.isArray(res) ? res[0]?.text : res?.text;
+      expect(blockReplies.length).toBe(1);
+      expect(blockReplies[0]?.text).toContain("Identity");
+      expect(runEmbeddedPiAgent).toHaveBeenCalled();
+      const prompt =
+        vi.mocked(runEmbeddedPiAgent).mock.calls[0]?.[0]?.prompt ?? "";
+      expect(prompt).not.toContain("/whoami");
+      expect(text).toBe("ok");
+    });
+  });
+
+  it("drops /status for unauthorized senders", async () => {
+    await withTempHome(async (home) => {
+      const cfg = {
+        agents: {
+          defaults: {
+            model: "anthropic/claude-opus-4-5",
+            workspace: join(home, "clawd"),
+          },
+        },
+        whatsapp: {
+          allowFrom: ["+1000"],
+        },
+        session: { store: join(home, "sessions.json") },
+      };
+      const res = await getReplyFromConfig(
+        {
+          Body: "/status",
+          From: "+2001",
+          To: "+2000",
+          Provider: "whatsapp",
+          SenderE164: "+2001",
+        },
+        {},
+        cfg,
+      );
+      expect(res).toBeUndefined();
+      expect(runEmbeddedPiAgent).not.toHaveBeenCalled();
+    });
+  });
+
+  it("drops /whoami for unauthorized senders", async () => {
+    await withTempHome(async (home) => {
+      const cfg = {
+        agents: {
+          defaults: {
+            model: "anthropic/claude-opus-4-5",
+            workspace: join(home, "clawd"),
+          },
+        },
+        whatsapp: {
+          allowFrom: ["+1000"],
+        },
+        session: { store: join(home, "sessions.json") },
+      };
+      const res = await getReplyFromConfig(
+        {
+          Body: "/whoami",
+          From: "+2001",
+          To: "+2000",
+          Provider: "whatsapp",
+          SenderE164: "+2001",
+        },
+        {},
+        cfg,
+      );
+      expect(res).toBeUndefined();
+      expect(runEmbeddedPiAgent).not.toHaveBeenCalled();
+    });
+  });
+
+  it("keeps inline /status for unauthorized senders", async () => {
+    await withTempHome(async (home) => {
+      vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
+        payloads: [{ text: "ok" }],
+        meta: {
+          durationMs: 1,
+          agentMeta: { sessionId: "s", provider: "p", model: "m" },
+        },
+      });
+      const cfg = {
+        agents: {
+          defaults: {
+            model: "anthropic/claude-opus-4-5",
+            workspace: join(home, "clawd"),
+          },
+        },
+        whatsapp: {
+          allowFrom: ["+1000"],
+        },
+        session: { store: join(home, "sessions.json") },
+      };
+      const res = await getReplyFromConfig(
+        {
+          Body: "please /status now",
+          From: "+2001",
+          To: "+2000",
+          Provider: "whatsapp",
+          SenderE164: "+2001",
+        },
+        {},
+        cfg,
+      );
+      const text = Array.isArray(res) ? res[0]?.text : res?.text;
+      expect(text).toBe("ok");
+      expect(runEmbeddedPiAgent).toHaveBeenCalled();
+      const prompt =
+        vi.mocked(runEmbeddedPiAgent).mock.calls[0]?.[0]?.prompt ?? "";
+      // Not allowlisted: inline /status is treated as plain text and is not stripped.
+      expect(prompt).toContain("/status");
+    });
+  });
+
+  it("keeps inline /help for unauthorized senders", async () => {
+    await withTempHome(async (home) => {
+      vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
+        payloads: [{ text: "ok" }],
+        meta: {
+          durationMs: 1,
+          agentMeta: { sessionId: "s", provider: "p", model: "m" },
+        },
+      });
+      const cfg = {
+        agents: {
+          defaults: {
+            model: "anthropic/claude-opus-4-5",
+            workspace: join(home, "clawd"),
+          },
+        },
+        whatsapp: {
+          allowFrom: ["+1000"],
+        },
+        session: { store: join(home, "sessions.json") },
+      };
+      const res = await getReplyFromConfig(
+        {
+          Body: "please /help now",
+          From: "+2001",
+          To: "+2000",
+          Provider: "whatsapp",
+          SenderE164: "+2001",
+        },
+        {},
+        cfg,
+      );
+      const text = Array.isArray(res) ? res[0]?.text : res?.text;
+      expect(text).toBe("ok");
+      expect(runEmbeddedPiAgent).toHaveBeenCalled();
+      const prompt =
+        vi.mocked(runEmbeddedPiAgent).mock.calls[0]?.[0]?.prompt ?? "";
+      expect(prompt).toContain("/help");
     });
   });
 
@@ -800,7 +1366,7 @@ describe("trigger handling", () => {
     });
   });
 
-  it("falls back to discord dm allowFrom for elevated approval", async () => {
+  it("uses tools.elevated.allowFrom.discord for elevated approval", async () => {
     await withTempHome(async (home) => {
       const cfg = {
         agents: {
@@ -809,11 +1375,7 @@ describe("trigger handling", () => {
             workspace: join(home, "clawd"),
           },
         },
-        discord: {
-          dm: {
-            allowFrom: ["steipete"],
-          },
-        },
+        tools: { elevated: { allowFrom: { discord: ["steipete"] } } },
         session: { store: join(home, "sessions.json") },
       };
 
@@ -854,11 +1416,6 @@ describe("trigger handling", () => {
         tools: {
           elevated: {
             allowFrom: { discord: [] },
-          },
-        },
-        discord: {
-          dm: {
-            allowFrom: ["steipete"],
           },
         },
         session: { store: join(home, "sessions.json") },
@@ -1370,86 +1927,90 @@ describe("trigger handling", () => {
     });
   });
 
-  it("stages inbound media into the sandbox workspace", async () => {
-    await withTempHome(async (home) => {
-      const inboundDir = join(home, ".clawdbot", "media", "inbound");
-      await fs.mkdir(inboundDir, { recursive: true });
-      const mediaPath = join(inboundDir, "photo.jpg");
-      await fs.writeFile(mediaPath, "test");
+  it(
+    "stages inbound media into the sandbox workspace",
+    { timeout: 15_000 },
+    async () => {
+      await withTempHome(async (home) => {
+        const inboundDir = join(home, ".clawdbot", "media", "inbound");
+        await fs.mkdir(inboundDir, { recursive: true });
+        const mediaPath = join(inboundDir, "photo.jpg");
+        await fs.writeFile(mediaPath, "test");
 
-      vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
-        payloads: [{ text: "ok" }],
-        meta: {
-          durationMs: 1,
-          agentMeta: { sessionId: "s", provider: "p", model: "m" },
-        },
-      });
+        vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
+          payloads: [{ text: "ok" }],
+          meta: {
+            durationMs: 1,
+            agentMeta: { sessionId: "s", provider: "p", model: "m" },
+          },
+        });
 
-      const cfg = {
-        agents: {
-          defaults: {
-            model: "anthropic/claude-opus-4-5",
-            workspace: join(home, "clawd"),
-            sandbox: {
-              mode: "non-main" as const,
-              workspaceRoot: join(home, "sandboxes"),
+        const cfg = {
+          agents: {
+            defaults: {
+              model: "anthropic/claude-opus-4-5",
+              workspace: join(home, "clawd"),
+              sandbox: {
+                mode: "non-main" as const,
+                workspaceRoot: join(home, "sandboxes"),
+              },
             },
           },
-        },
-        whatsapp: {
-          allowFrom: ["*"],
-        },
-        session: {
-          store: join(home, "sessions.json"),
-        },
-      };
+          whatsapp: {
+            allowFrom: ["*"],
+          },
+          session: {
+            store: join(home, "sessions.json"),
+          },
+        };
 
-      const ctx = {
-        Body: "hi",
-        From: "group:whatsapp:demo",
-        To: "+2000",
-        ChatType: "group" as const,
-        Provider: "whatsapp" as const,
-        MediaPath: mediaPath,
-        MediaType: "image/jpeg",
-        MediaUrl: mediaPath,
-      };
+        const ctx = {
+          Body: "hi",
+          From: "group:whatsapp:demo",
+          To: "+2000",
+          ChatType: "group" as const,
+          Provider: "whatsapp" as const,
+          MediaPath: mediaPath,
+          MediaType: "image/jpeg",
+          MediaUrl: mediaPath,
+        };
 
-      const res = await getReplyFromConfig(ctx, {}, cfg);
-      const text = Array.isArray(res) ? res[0]?.text : res?.text;
-      expect(text).toBe("ok");
-      expect(runEmbeddedPiAgent).toHaveBeenCalledOnce();
+        const res = await getReplyFromConfig(ctx, {}, cfg);
+        const text = Array.isArray(res) ? res[0]?.text : res?.text;
+        expect(text).toBe("ok");
+        expect(runEmbeddedPiAgent).toHaveBeenCalledOnce();
 
-      const prompt =
-        vi.mocked(runEmbeddedPiAgent).mock.calls[0]?.[0]?.prompt ?? "";
-      const stagedPath = `media/inbound/${basename(mediaPath)}`;
-      expect(prompt).toContain(stagedPath);
-      expect(prompt).not.toContain(mediaPath);
+        const prompt =
+          vi.mocked(runEmbeddedPiAgent).mock.calls[0]?.[0]?.prompt ?? "";
+        const stagedPath = `media/inbound/${basename(mediaPath)}`;
+        expect(prompt).toContain(stagedPath);
+        expect(prompt).not.toContain(mediaPath);
 
-      const sessionKey = resolveSessionKey(
-        cfg.session?.scope ?? "per-sender",
-        ctx,
-        cfg.session?.mainKey,
-      );
-      const agentId = resolveAgentIdFromSessionKey(sessionKey);
-      const sandbox = await ensureSandboxWorkspaceForSession({
-        config: cfg,
-        sessionKey,
-        workspaceDir: resolveAgentWorkspaceDir(cfg, agentId),
+        const sessionKey = resolveSessionKey(
+          cfg.session?.scope ?? "per-sender",
+          ctx,
+          cfg.session?.mainKey,
+        );
+        const agentId = resolveAgentIdFromSessionKey(sessionKey);
+        const sandbox = await ensureSandboxWorkspaceForSession({
+          config: cfg,
+          sessionKey,
+          workspaceDir: resolveAgentWorkspaceDir(cfg, agentId),
+        });
+        expect(sandbox).not.toBeNull();
+        if (!sandbox) {
+          throw new Error("Expected sandbox to be set");
+        }
+        const stagedFullPath = join(
+          sandbox.workspaceDir,
+          "media",
+          "inbound",
+          basename(mediaPath),
+        );
+        await expect(fs.stat(stagedFullPath)).resolves.toBeTruthy();
       });
-      expect(sandbox).not.toBeNull();
-      if (!sandbox) {
-        throw new Error("Expected sandbox to be set");
-      }
-      const stagedFullPath = join(
-        sandbox.workspaceDir,
-        "media",
-        "inbound",
-        basename(mediaPath),
-      );
-      await expect(fs.stat(stagedFullPath)).resolves.toBeTruthy();
-    });
-  });
+    },
+  );
 });
 
 describe("group intro prompts", () => {

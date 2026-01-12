@@ -6,10 +6,18 @@ read_when:
 ---
 # Slash commands
 
-Commands are handled by the Gateway. Send them as a **standalone** message that starts with `/`.
-Inline text like `hello /status` is ignored for commands.
+Commands are handled by the Gateway. Most commands must be sent as a **standalone** message that starts with `/`.
 
-Directives (`/think`, `/verbose`, `/reasoning`, `/elevated`) are parsed even when inline and are stripped from the message before the model sees it.
+There are two related systems:
+
+- **Commands**: standalone `/...` messages.
+- **Directives**: `/think`, `/verbose`, `/reasoning`, `/elevated`, `/model`, `/queue`.
+  - Directives are stripped from the message before the model sees it.
+  - In normal chat messages (not directive-only), they are treated as “inline hints” and do **not** persist session settings.
+  - In directive-only messages (the message contains only directives), they persist to the session and reply with an acknowledgement.
+
+There are also a few **inline shortcuts** (allowlisted/authorized senders only): `/help`, `/commands`, `/status` (`/usage`), `/whoami` (`/id`).
+They run immediately, are stripped before the model sees the message, and the remaining text continues through the normal flow.
 
 ## Config
 
@@ -40,11 +48,9 @@ Directives (`/think`, `/verbose`, `/reasoning`, `/elevated`) are parsed even whe
 Text + native (when enabled):
 - `/help`
 - `/commands`
-- `/whoami` (alias: `/id`)
-- `/status`
-- `/status` (show current status; includes a short usage line when available)
+- `/status` (show current status; includes a short provider usage/quota line when available)
 - `/usage` (alias: `/status`)
-- `/whoami` (alias: `/id`)
+- `/whoami` (show your sender id; alias: `/id`)
 - `/config show|get|set|unset` (persist config to disk, owner-only; requires `commands.config: true`)
 - `/debug show|set|unset|reset` (runtime overrides, owner-only; requires `commands.debug: true`)
 - `/cost on|off` (toggle per-response usage line)
@@ -70,6 +76,35 @@ Notes:
 - `/restart` is disabled by default; set `commands.restart: true` to enable it.
 - `/verbose` is meant for debugging and extra visibility; keep it **off** in normal use.
 - `/reasoning` (and `/verbose`) are risky in group settings: they may reveal internal reasoning or tool output you did not intend to expose. Prefer leaving them off, especially in group chats.
+- **Fast path:** command-only messages from allowlisted senders are handled immediately (bypass queue + model).
+- **Inline shortcuts (allowlisted senders only):** `/help`, `/commands`, `/status` (`/usage`), `/whoami` (`/id`) also work when embedded in text.
+- Unauthorized command-only messages are silently ignored, and inline `/...` tokens are treated as plain text.
+
+## Usage vs cost (what shows where)
+
+- **Provider usage/quota** (example: “Claude 80% left”) shows up in `/status` when provider usage tracking is enabled.
+- **Per-response tokens/cost** is controlled by `/cost on|off` (appended to normal replies).
+- `/model status` is about **models/auth/endpoints**, not usage.
+
+## Model selection (`/model`)
+
+`/model` is implemented as a directive.
+
+Examples:
+
+```
+/model
+/model list
+/model 3
+/model openai/gpt-5.2
+/model opus@anthropic:claude-cli
+/model status
+```
+
+Notes:
+- `/model` and `/model list` show a compact, numbered picker (model family + available providers).
+- `/model <#>` selects from that picker (and prefers the current provider when possible).
+- `/model status` shows the detailed view, including configured provider endpoint (`baseUrl`) and API mode (`api`) when available.
 
 ## Debug overrides
 

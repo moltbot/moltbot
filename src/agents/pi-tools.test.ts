@@ -4,6 +4,7 @@ import path from "node:path";
 
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
+import type { ClawdbotConfig } from "../config/config.js";
 import { __testing, createClawdbotCodingTools } from "./pi-tools.js";
 import { createBrowserTool } from "./tools/browser-tool.js";
 
@@ -153,10 +154,59 @@ describe("createClawdbotCodingTools", () => {
     }
   });
 
-  it("includes bash and process tools", () => {
+  it("includes exec and process tools by default", () => {
     const tools = createClawdbotCodingTools();
-    expect(tools.some((tool) => tool.name === "bash")).toBe(true);
+    expect(tools.some((tool) => tool.name === "exec")).toBe(true);
     expect(tools.some((tool) => tool.name === "process")).toBe(true);
+    expect(tools.some((tool) => tool.name === "apply_patch")).toBe(false);
+  });
+
+  it("gates apply_patch behind tools.exec.applyPatch for OpenAI models", () => {
+    const config: ClawdbotConfig = {
+      tools: {
+        exec: {
+          applyPatch: { enabled: true },
+        },
+      },
+    };
+    const openAiTools = createClawdbotCodingTools({
+      config,
+      modelProvider: "openai",
+      modelId: "gpt-5.2",
+    });
+    expect(openAiTools.some((tool) => tool.name === "apply_patch")).toBe(true);
+
+    const anthropicTools = createClawdbotCodingTools({
+      config,
+      modelProvider: "anthropic",
+      modelId: "claude-opus-4-5",
+    });
+    expect(anthropicTools.some((tool) => tool.name === "apply_patch")).toBe(
+      false,
+    );
+  });
+
+  it("respects apply_patch allowModels", () => {
+    const config: ClawdbotConfig = {
+      tools: {
+        exec: {
+          applyPatch: { enabled: true, allowModels: ["gpt-5.2"] },
+        },
+      },
+    };
+    const allowed = createClawdbotCodingTools({
+      config,
+      modelProvider: "openai",
+      modelId: "gpt-5.2",
+    });
+    expect(allowed.some((tool) => tool.name === "apply_patch")).toBe(true);
+
+    const denied = createClawdbotCodingTools({
+      config,
+      modelProvider: "openai",
+      modelId: "gpt-5-mini",
+    });
+    expect(denied.some((tool) => tool.name === "apply_patch")).toBe(false);
   });
 
   it("keeps canonical tool names for Anthropic OAuth (pi-ai remaps on the wire)", () => {
@@ -165,10 +215,11 @@ describe("createClawdbotCodingTools", () => {
       modelAuthMode: "oauth",
     });
     const names = new Set(tools.map((tool) => tool.name));
-    expect(names.has("bash")).toBe(true);
+    expect(names.has("exec")).toBe(true);
     expect(names.has("read")).toBe(true);
     expect(names.has("write")).toBe(true);
     expect(names.has("edit")).toBe(true);
+    expect(names.has("apply_patch")).toBe(false);
   });
 
   it("provides top-level object schemas for all tools", () => {
@@ -210,8 +261,9 @@ describe("createClawdbotCodingTools", () => {
     expect(names.has("sessions_spawn")).toBe(false);
 
     expect(names.has("read")).toBe(true);
-    expect(names.has("bash")).toBe(true);
+    expect(names.has("exec")).toBe(true);
     expect(names.has("process")).toBe(true);
+    expect(names.has("apply_patch")).toBe(false);
   });
 
   it("supports allow-only sub-agent tool policy", () => {
@@ -330,7 +382,7 @@ describe("createClawdbotCodingTools", () => {
       browserAllowHostControl: false,
     };
     const tools = createClawdbotCodingTools({ sandbox });
-    expect(tools.some((tool) => tool.name === "bash")).toBe(true);
+    expect(tools.some((tool) => tool.name === "exec")).toBe(true);
     expect(tools.some((tool) => tool.name === "read")).toBe(false);
     expect(tools.some((tool) => tool.name === "browser")).toBe(false);
   });
@@ -371,7 +423,7 @@ describe("createClawdbotCodingTools", () => {
     const tools = createClawdbotCodingTools({
       config: { tools: { deny: ["browser"] } },
     });
-    expect(tools.some((tool) => tool.name === "bash")).toBe(true);
+    expect(tools.some((tool) => tool.name === "exec")).toBe(true);
     expect(tools.some((tool) => tool.name === "browser")).toBe(false);
   });
 
@@ -531,6 +583,89 @@ describe("createClawdbotCodingTools", () => {
       expect(edited).toBe(expectedContent);
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts Claude Code parameter aliases for read/write/edit", async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawdbot-alias-"));
+    try {
+      const tools = createClawdbotCodingTools({ workspaceDir: tmpDir });
+      const readTool = tools.find((tool) => tool.name === "read");
+      const writeTool = tools.find((tool) => tool.name === "write");
+      const editTool = tools.find((tool) => tool.name === "edit");
+      expect(readTool).toBeDefined();
+      expect(writeTool).toBeDefined();
+      expect(editTool).toBeDefined();
+
+      const filePath = "alias-test.txt";
+      await writeTool?.execute("tool-alias-1", {
+        file_path: filePath,
+        content: "hello world",
+      });
+
+      await editTool?.execute("tool-alias-2", {
+        file_path: filePath,
+        old_string: "world",
+        new_string: "universe",
+      });
+
+      const result = await readTool?.execute("tool-alias-3", {
+        file_path: filePath,
+      });
+
+      const textBlocks = result?.content?.filter(
+        (block) => block.type === "text",
+      ) as Array<{ text?: string }> | undefined;
+      const combinedText = textBlocks
+        ?.map((block) => block.text ?? "")
+        .join("\n");
+      expect(combinedText).toContain("hello universe");
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("applies sandbox path guards to file_path alias", async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawdbot-sbx-"));
+    const outsidePath = path.join(os.tmpdir(), "clawdbot-outside.txt");
+    await fs.writeFile(outsidePath, "outside", "utf8");
+    try {
+      const sandbox = {
+        enabled: true,
+        sessionKey: "sandbox:test",
+        workspaceDir: tmpDir,
+        agentWorkspaceDir: path.join(os.tmpdir(), "clawdbot-workspace"),
+        workspaceAccess: "ro",
+        containerName: "clawdbot-sbx-test",
+        containerWorkdir: "/workspace",
+        docker: {
+          image: "clawdbot-sandbox:bookworm-slim",
+          containerPrefix: "clawdbot-sbx-",
+          workdir: "/workspace",
+          readOnlyRoot: true,
+          tmpfs: [],
+          network: "none",
+          user: "1000:1000",
+          capDrop: ["ALL"],
+          env: { LANG: "C.UTF-8" },
+        },
+        tools: {
+          allow: ["read"],
+          deny: [],
+        },
+        browserAllowHostControl: false,
+      };
+
+      const tools = createClawdbotCodingTools({ sandbox });
+      const readTool = tools.find((tool) => tool.name === "read");
+      expect(readTool).toBeDefined();
+
+      await expect(
+        readTool?.execute("tool-sbx-1", { file_path: outsidePath }),
+      ).rejects.toThrow();
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+      await fs.rm(outsidePath, { force: true });
     }
   });
 

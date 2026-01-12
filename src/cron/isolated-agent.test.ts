@@ -120,6 +120,75 @@ describe("runCronIsolatedAgentTurn", () => {
     });
   });
 
+  it("uses agentId for workspace, session key, and store paths", async () => {
+    await withTempHome(async (home) => {
+      const deps: CliDeps = {
+        sendMessageWhatsApp: vi.fn(),
+        sendMessageTelegram: vi.fn(),
+        sendMessageDiscord: vi.fn(),
+        sendMessageSignal: vi.fn(),
+        sendMessageIMessage: vi.fn(),
+      };
+      const opsWorkspace = path.join(home, "ops-workspace");
+      vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
+        payloads: [{ text: "ok" }],
+        meta: {
+          durationMs: 5,
+          agentMeta: { sessionId: "s", provider: "p", model: "m" },
+        },
+      });
+
+      const cfg = makeCfg(
+        home,
+        path.join(
+          home,
+          ".clawdbot",
+          "agents",
+          "{agentId}",
+          "sessions",
+          "sessions.json",
+        ),
+        {
+          agents: {
+            defaults: { workspace: path.join(home, "default-workspace") },
+            list: [
+              { id: "main", default: true },
+              { id: "ops", workspace: opsWorkspace },
+            ],
+          },
+        },
+      );
+
+      const res = await runCronIsolatedAgentTurn({
+        cfg,
+        deps,
+        job: {
+          ...makeJob({
+            kind: "agentTurn",
+            message: "do it",
+            deliver: false,
+            provider: "last",
+          }),
+          agentId: "ops",
+        },
+        message: "do it",
+        sessionKey: "cron:job-ops",
+        agentId: "ops",
+        lane: "cron",
+      });
+
+      expect(res.status).toBe("ok");
+      const call = vi.mocked(runEmbeddedPiAgent).mock.calls.at(-1)?.[0] as {
+        sessionKey?: string;
+        workspaceDir?: string;
+        sessionFile?: string;
+      };
+      expect(call?.sessionKey).toBe("agent:ops:cron:job-ops");
+      expect(call?.workspaceDir).toBe(opsWorkspace);
+      expect(call?.sessionFile).toContain(path.join("agents", "ops"));
+    });
+  });
+
   it("uses model override when provided", async () => {
     await withTempHome(async (home) => {
       const storePath = await writeSessionStore(home);
@@ -445,7 +514,7 @@ describe("runCronIsolatedAgentTurn", () => {
     });
   });
 
-  it("passes telegram token from config for delivery", async () => {
+  it("delivers telegram via provider send", async () => {
     await withTempHome(async (home) => {
       const storePath = await writeSessionStore(home);
       const deps: CliDeps = {
@@ -488,7 +557,7 @@ describe("runCronIsolatedAgentTurn", () => {
         expect(deps.sendMessageTelegram).toHaveBeenCalledWith(
           "123",
           "hello from cron",
-          expect.objectContaining({ token: "t-1" }),
+          expect.objectContaining({ verbose: false }),
         );
       } finally {
         if (prevTelegramToken === undefined) {
@@ -500,7 +569,7 @@ describe("runCronIsolatedAgentTurn", () => {
     });
   });
 
-  it("delivers telegram topic targets with messageThreadId", async () => {
+  it("delivers telegram topic targets via provider send", async () => {
     await withTempHome(async (home) => {
       const storePath = await writeSessionStore(home);
       const deps: CliDeps = {
@@ -538,14 +607,14 @@ describe("runCronIsolatedAgentTurn", () => {
 
       expect(res.status).toBe("ok");
       expect(deps.sendMessageTelegram).toHaveBeenCalledWith(
-        "-1001234567890",
+        "telegram:group:-1001234567890:topic:321",
         "hello from cron",
-        expect.objectContaining({ messageThreadId: 321 }),
+        expect.objectContaining({ verbose: false }),
       );
     });
   });
 
-  it("delivers telegram shorthand topic suffixes with messageThreadId", async () => {
+  it("delivers telegram shorthand topic suffixes via provider send", async () => {
     await withTempHome(async (home) => {
       const storePath = await writeSessionStore(home);
       const deps: CliDeps = {
@@ -583,9 +652,9 @@ describe("runCronIsolatedAgentTurn", () => {
 
       expect(res.status).toBe("ok");
       expect(deps.sendMessageTelegram).toHaveBeenCalledWith(
-        "-1001234567890",
+        "-1001234567890:321",
         "hello from cron",
-        expect.objectContaining({ messageThreadId: 321 }),
+        expect.objectContaining({ verbose: false }),
       );
     });
   });
@@ -630,7 +699,7 @@ describe("runCronIsolatedAgentTurn", () => {
       expect(deps.sendMessageDiscord).toHaveBeenCalledWith(
         "channel:1122",
         "hello from cron",
-        expect.objectContaining({ token: process.env.DISCORD_BOT_TOKEN }),
+        expect.objectContaining({ verbose: false }),
       );
     });
   });

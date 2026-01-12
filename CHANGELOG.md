@@ -1,12 +1,112 @@
 # Changelog
 
+## 2026.1.12
+
+### Highlights
+- Memory: add vector search for agent memories (Markdown-only scope) with SQLite index, chunking, lazy sync + file watch, and per-agent enablement/fallback.
+
+### Changes
+- Memory: embedding providers support OpenAI or local `node-llama-cpp`; config adds defaults + per-agent overrides, provider/fallback metadata surfaced in tools/CLI.
+- CLI/Tools: new `clawdbot memory` commands plus `memory_search`/`memory_get` tools returning snippets + line ranges and provider info.
+- Runtime: memory index stored under `~/.clawdbot/memory/{agentId}.sqlite` with watch-on-by-default; inline status replies now stay auth-gated while inline prompts continue to the agent.
+
+### Fixes
+- Auto-reply: inline `/status` now honors allowlists (authorized stripped + replied inline; unauthorized leaves text for the agent) to match command gating tests.
+
+## 2026.1.11
+
+### Highlights
+- Plugins are now first-class: loader + CLI management, plus the new Voice Call plugin.
+- Config: modular `$include` support for split config files. (#731) — thanks @pasogott.
+- Agents/Pi: reserve compaction headroom so pre-compaction memory writes can run before auto-compaction.
+- Agents: automatic pre-compaction memory flush turn to store durable memories before compaction.
+
+### Changes
+- CLI/Onboarding: simplify MiniMax auth choice to a single M2.1 option.
+- CLI: configure section selection now loops until Continue.
+- Docs: explain MiniMax vs MiniMax Lightning (speed vs cost) and restore LM Studio example.
+- Docs: add Cerebras GLM 4.6/4.7 config example (OpenAI-compatible endpoint).
+- Onboarding/CLI: group model/auth choice by provider and label Z.AI as GLM 4.7.
+- Onboarding/Docs: add Moonshot AI (Kimi K2) auth choice + config example.
+- CLI/Onboarding: prompt to reuse detected API keys for Moonshot/MiniMax/Z.AI/Gemini/Anthropic/OpenCode.
+- Auto-reply: add compact `/model` picker (models + available providers) and show provider endpoints in `/model status`.
+- Control UI: add Config tab model presets (MiniMax M2.1, GLM 4.7, Kimi) for one-click setup.
+- Plugins: add extension loader (tools/RPC/CLI/services), discovery paths, and config schema + Control UI labels (uiHints).
+- Plugins: add `clawdbot plugins install` (path/tgz/npm), plus `list|info|enable|disable|doctor` UX.
+- Plugins: voice-call plugin now real (Twilio/log), adds start/status RPC/CLI/tool + tests.
+- Docs: add plugins doc + cross-links from tools/skills/gateway config.
+- Docs: add beginner-friendly plugin quick start + expand Voice Call plugin docs.
+- Tests: add Docker plugin loader + tgz-install smoke test.
+- Tests: extend Docker plugin E2E to cover installing from local folders (`plugins.load.paths`) and `file:` npm specs.
+- Tests: add coverage for pre-compaction memory flush settings.
+- Tests: modernize live model smoke selection for current releases and enforce tools/images/thinking-high coverage. (#769) — thanks @steipete.
+- Agents/Tools: add `apply_patch` tool for multi-file edits (experimental; gated by tools.exec.applyPatch; OpenAI-only).
+- Agents/Tools: rename the bash tool to exec (config alias maintained). (#748) — thanks @myfunc.
+- Agents: add pre-compaction memory flush config (`agents.defaults.compaction.*`) with a soft threshold + system prompt.
+- Config: add `$include` directive for modular config files. (#731) — thanks @pasogott.
+- Build: set pnpm minimum release age to 2880 minutes (2 days). (#718) — thanks @dan-dr.
+- macOS: prompt to install the global `clawdbot` CLI when missing in local mode; install via `clawd.bot/install-cli.sh` (no onboarding) and use external launchd/CLI instead of the embedded gateway runtime.
+- Docs: add gog calendar event color IDs from `gog calendar colors`. (#715) — thanks @mjrussell.
+- Cron/CLI: add `--model` flag to cron add/edit commands. (#711) — thanks @mjrussell.
+- Cron/CLI: trim model overrides on cron edits and document main-session guidance. (#711) — thanks @mjrussell.
+- Skills: bundle `skill-creator` to guide creating and packaging skills.
+- Providers: add per-DM history limit overrides (`dmHistoryLimit`) with provider-level config. (#728) — thanks @pkrmf.
+- Discord: expose channel/category management actions in the message tool. (#730) — thanks @NicholasSpisak.
+- Docs: rename README “macOS app” section to “Apps”. (#733) — thanks @AbhisekBasu1.
+- Gateway: require `client.id` in WebSocket connect params; use `client.instanceId` for presence de-dupe; update docs/tests.
+- macOS: remove the attach-only gateway setting; local mode now always manages launchd while still attaching to an existing gateway if present.
+
+### Installer
+- Postinstall: replace `git apply` with builtin JS patcher (works npm/pnpm/bun; no git dependency) plus regression tests.
+- Postinstall: skip pnpm patch fallback when the new patcher is active.
+- Installer tests: add root+non-root docker smokes, CI workflow to fetch clawd.bot scripts and run install sh/cli with onboarding skipped.
+- Installer UX: support `CLAWDBOT_NO_ONBOARD=1` for non-interactive installs; fix npm prefix on Linux and auto-install git.
+- Installer UX: add `install.sh --help` with flags/env and git install hint.
+- Installer UX: add `--install-method git|npm` and auto-detect source checkouts (prompt to update git checkout vs migrate to npm).
+
+### Fixes
+- Models/Onboarding: configure MiniMax (minimax.io) via Anthropic-compatible `/anthropic` endpoint by default (keep `minimax-api` as a legacy alias).
+- Models: normalize Gemini 3 Pro/Flash IDs to preview names for live model lookups. (#769) — thanks @steipete.
+- CLI: fix guardCancel typing for configure prompts. (#769) — thanks @steipete.
+- Gateway/WebChat: include handshake validation details in the WebSocket close reason for easier debugging; preserve close codes.
+- Gateway/Auth: send invalid connect responses before closing the handshake; stabilize invalid-connect auth test.
+- Gateway: tighten gateway listener detection.
+- Control UI: hide onboarding chat when configured and guard the mobile chat sidebar overlay.
+- Auth: read Codex keychain credentials and make the lookup platform-aware.
+- macOS/Release: avoid bundling dist artifacts in relay builds and generate appcasts from zip-only sources.
+- Doctor: surface plugin diagnostics in the report.
+- Plugins: treat `plugins.load.paths` directory entries as package roots when they contain `package.json` + `clawdbot.extensions`; load plugin packages from config dirs; extract archives without system tar.
+- Config: expand `~` in `CLAWDBOT_CONFIG_PATH` and common path-like config fields (including `plugins.load.paths`); guard invalid `$include` paths. (#731) — thanks @pasogott.
+- Agents: stop pre-creating session transcripts so first user messages persist in JSONL history.
+- Agents: skip pre-compaction memory flush when the session workspace is read-only.
+- Auto-reply: ignore inline `/status` directives unless the message is directive-only.
+- Auto-reply: align `/think` default display with model reasoning defaults. (#751) — thanks @gabriel-trigo.
+- Auto-reply: flush block reply buffers on tool boundaries. (#750) — thanks @sebslight.
+- Auto-reply: allow sender fallback for command authorization when `SenderId` is empty (WhatsApp self-chat). (#755) — thanks @juanpablodlc.
+- Heartbeat: refresh prompt text for updated defaults.
+- Agents/Tools: use PowerShell on Windows to capture system utility output. (#748) — thanks @myfunc.
+- Docker: tolerate unset optional env vars in docker-setup.sh under strict mode. (#725) — thanks @petradonka.
+- CLI/Update: preserve base environment when passing overrides to update subprocesses. (#713) — thanks @danielz1z.
+- Agents: treat message tool errors as failures so fallback replies still send; require `to` + `message` for `action=send`. (#717) — thanks @theglove44.
+- Agents: preserve reasoning items on tool-only turns.
+- Agents/Subagents: wait for completion before announcing, align wait timeout with run timeout, and make announce prompts more emphatic.
+- Agents: route subagent transcripts to the target agent sessions directory and add regression coverage. (#708) — thanks @xMikeMickelson.
+- Agents/Tools: preserve action enums when flattening tool schemas. (#708) — thanks @xMikeMickelson.
+- Gateway/Agents: canonicalize main session aliases for store writes and add regression coverage. (#709) — thanks @xMikeMickelson.
+- Agents: reset sessions and retry when auto-compaction overflows instead of crashing the gateway.
+- Providers/Telegram: normalize command mentions for consistent parsing. (#729) — thanks @obviyus.
+- Providers: skip DM history limit handling for non-DM sessions. (#728) — thanks @pkrmf.
+- Sandbox: fix non-main mode incorrectly sandboxing the main DM session and align `/status` runtime reporting with effective sandbox state.
+- Sandbox/Gateway: treat `agent:<id>:main` as a main-session alias when `session.mainKey` is customized (backwards compatible).
+- Auto-reply: fast-path allowlisted slash commands (inline `/help`/`/commands`/`/status`/`/whoami` stripped before model).
+
 ## 2026.1.10
 
 ### Highlights
 - CLI: `clawdbot status` now table-based + shows OS/update/gateway/daemon/agents/sessions; `status --all` adds a full read-only debug report (tables, log tails, Tailscale summary, and scan progress via OSC-9 + spinner).
 - CLI Backends: add Codex CLI fallback with resume support (text output) and JSONL parsing for new runs, plus a live CLI resume probe.
 - CLI: add `clawdbot update` (safe-ish git checkout update) + `--update` shorthand. (#673) — thanks @fm1randa.
-- Gateway: add OpenAI-compatible `/v1/chat/completions` HTTP endpoint (auth, SSE streaming, per-agent routing). (#680) — thanks @steipete.
+- Gateway: add OpenAI-compatible `/v1/chat/completions` HTTP endpoint (auth, SSE streaming, per-agent routing). (#680).
 
 ### Changes
 - Onboarding/Models: add first-class Z.AI (GLM) auth choice (`zai-api-key`) + `--zai-api-key` flag.
@@ -15,21 +115,26 @@
 - Agents/Browser: add `browser.target` (sandbox/host/custom) with sandbox host-control gating via `agents.defaults.sandbox.browser.allowHostControl`, allowlists for custom control URLs/hosts/ports, and expand browser tool docs (remote control, profiles, internals).
 - Onboarding/Models: add catalog-backed default model picker to onboarding + configure. (#611) — thanks @jonasjancarik.
 - Agents/OpenCode Zen: update fallback models + defaults, keep legacy alias mappings. (#669) — thanks @magimetal.
-- Providers: unify group history context wrappers across providers with per-provider/per-account `historyLimit` overrides (fallback to `messages.groupChat.historyLimit`). Set `0` to disable. (#672) — thanks @steipete.
+- CLI: add `clawdbot reset` and `clawdbot uninstall` flows (interactive + non-interactive) plus docker cleanup smoke test.
+- Providers: move provider wiring to a plugin architecture. (#661).
+- Providers: unify group history context wrappers across providers with per-provider/per-account `historyLimit` overrides (fallback to `messages.groupChat.historyLimit`). Set `0` to disable. (#672).
 - Gateway/Heartbeat: optionally deliver heartbeat `Reasoning:` output (`agents.defaults.heartbeat.includeReasoning`). (#690)
 - Docker: allow optional home volume + extra bind mounts in `docker-setup.sh`. (#679) — thanks @gabriel-trigo.
 
 ### Fixes
+- Auto-reply: suppress draft/typing streaming for `NO_REPLY` (silent system ops) so it doesn’t leak partial output.
 - CLI/Status: expand tables to full terminal width; clarify provider setup vs runtime warnings; richer per-provider detail; token previews in `status` while keeping `status --all` redacted; add troubleshooting link footer; keep log tails pasteable; show gateway auth used when reachable; surface provider runtime errors (Signal/iMessage/Slack); harden `tailscale status --json` parsing; make `status --all` scan progress determinate; and replace the footer with a 3-line “Next steps” recommendation (share/debug/probe).
 - CLI/Gateway: clarify that `clawdbot gateway status` reports RPC health (connect + RPC) and shows RPC failures separately from connect failures.
 - CLI/Update: gate progress spinner on stdout TTY and align clean-check step label. (#701) — thanks @bjesuiter.
 - Telegram: add `/whoami` + `/id` commands to reveal sender id for allowlists; allow `@username` and prefixed ids in `allowFrom` prompts (with stability warning).
+- Heartbeat: strip markup-wrapped `HEARTBEAT_OK` so acks don’t leak to external providers (e.g., Telegram).
 - Control UI: stop auto-writing `telegram.groups["*"]` and warn/confirm before enabling wildcard groups.
 - WhatsApp: send ack reactions only for handled messages and ignore legacy `messages.ackReaction` (doctor copies to `whatsapp.ackReaction`). (#629) — thanks @pasogott.
 - Sandbox/Skills: mirror skills into sandbox workspaces for read-only mounts so SKILL.md stays accessible.
 - Terminal/Table: ANSI-safe wrapping to prevent table clipping/color loss; add regression coverage.
 - Docker: allow optional apt packages during image build and document the build arg. (#697) — thanks @gabriel-trigo.
 - Gateway/Heartbeat: deliver reasoning even when the main heartbeat reply is `HEARTBEAT_OK`. (#694) — thanks @antons.
+- Agents/Pi: inject config `temperature`/`maxTokens` into streaming without replacing the session streamFn; cover with live maxTokens probe. (#732) — thanks @peschee.
 - macOS: clear unsigned launchd overrides on signed restarts and warn via doctor when attach-only/disable markers are set. (#695) — thanks @jeffersonwarrior.
 - Agents: enforce single-writer session locks and drop orphan tool results to prevent tool-call ID failures (MiniMax/Anthropic-compatible APIs).
 - Docs: make `clawdbot status` the first diagnostic step, clarify `status --deep` behavior, and document `/whoami` + `/id`.
@@ -80,6 +185,7 @@
 - Telegram: add `telegram.draftChunk` to tune draft streaming chunking for `streamMode: "block"`. (#667) — thanks @rubyrunsstuff.
 - Tests/Agents: add regression coverage for workspace tool path resolution and bash cwd defaults.
 - iOS/Android: enable stricter concurrency/lint checks; fix Swift 6 strict concurrency issues + Android lint errors (ExifInterface, obsolete SDK check). (#662) — thanks @KristijanJovanovski.
+- Auth: read Codex CLI keychain tokens on macOS before falling back to `~/.codex/auth.json`, preventing stale refresh tokens from breaking gateway live tests.
 - iOS/macOS: share `AsyncTimeout`, require explicit `bridgeStableID` on connect, and harden tool display defaults (avoids missing-resource label fallbacks).
 - Telegram: serialize media-group processing to avoid missed albums under load.
 - Signal: handle `dataMessage.reaction` events (signal-cli SSE) to avoid broken attachment errors. (#637) — thanks @neist.

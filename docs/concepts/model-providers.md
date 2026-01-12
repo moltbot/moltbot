@@ -76,7 +76,7 @@ Clawdbot ships with the pi‑ai catalog. These providers require **no**
 
 - Provider: `google`
 - Auth: `GEMINI_API_KEY`
-- Example model: `google/gemini-3-pro`
+- Example model: `google/gemini-3-pro-preview`
 - CLI: `clawdbot onboard --auth-choice gemini-api-key`
 
 ### Google Vertex / Antigravity / Gemini CLI
@@ -100,6 +100,8 @@ Clawdbot ships with the pi‑ai catalog. These providers require **no**
 - xAI: `xai` (`XAI_API_KEY`)
 - Groq: `groq` (`GROQ_API_KEY`)
 - Cerebras: `cerebras` (`CEREBRAS_API_KEY`)
+  - GLM models on Cerebras use ids `zai-glm-4.7` and `zai-glm-4.6`.
+  - OpenAI-compatible base URL: `https://api.cerebras.ai/v1`.
 - Mistral: `mistral` (`MISTRAL_API_KEY`)
 - GitHub Copilot: `github-copilot` (`COPILOT_GITHUB_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN`)
 
@@ -108,13 +110,42 @@ Clawdbot ships with the pi‑ai catalog. These providers require **no**
 Use `models.providers` (or `models.json`) to add **custom** providers or
 OpenAI/Anthropic‑compatible proxies.
 
+### Moonshot AI (Kimi)
+
+Moonshot uses OpenAI-compatible endpoints, so configure it as a custom provider:
+
+- Provider: `moonshot`
+- Auth: `MOONSHOT_API_KEY`
+- Example model: `moonshot/kimi-k2-0905-preview`
+- CLI: `clawdbot onboard --auth-choice moonshot-api-key`
+
+```json5
+{
+  agents: {
+    defaults: { model: { primary: "moonshot/kimi-k2-0905-preview" } }
+  },
+  models: {
+    mode: "merge",
+    providers: {
+      moonshot: {
+        baseUrl: "https://api.moonshot.ai/v1",
+        apiKey: "${MOONSHOT_API_KEY}",
+        api: "openai-completions",
+        models: [{ id: "kimi-k2-0905-preview", name: "Kimi K2 0905 Preview" }]
+      }
+    }
+  }
+}
+```
+
 ### MiniMax
 
 MiniMax is configured via `models.providers` because it uses custom endpoints:
 
-- MiniMax Cloud (OpenAI‑compatible): `--auth-choice minimax-cloud`
-- MiniMax API (Anthropic‑compatible): `--auth-choice minimax-api`
+- MiniMax (Anthropic‑compatible): `--auth-choice minimax-api`
 - Auth: `MINIMAX_API_KEY`
+
+See [/providers/minimax](/providers/minimax) for setup details, model options, and config snippets.
 
 ### Local proxies (LM Studio, vLLM, LiteLLM, etc.)
 

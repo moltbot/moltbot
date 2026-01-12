@@ -32,9 +32,8 @@ let peekabooBridgeEnabledKey = "clawdbot.peekabooBridgeEnabled"
 let deepLinkKeyKey = "clawdbot.deepLinkKey"
 let modelCatalogPathKey = "clawdbot.modelCatalogPath"
 let modelCatalogReloadKey = "clawdbot.modelCatalogReload"
-let attachExistingGatewayOnlyKey = "clawdbot.gateway.attachExistingOnly"
+let cliInstallPromptedVersionKey = "clawdbot.cliInstallPromptedVersion"
 let heartbeatsEnabledKey = "clawdbot.heartbeatsEnabled"
 let debugFileLogEnabledKey = "clawdbot.debug.fileLogEnabled"
 let appLogLevelKey = "clawdbot.debug.appLogLevel"
 let voiceWakeSupported: Bool = ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26
-let cliHelperSearchPaths = ["/usr/local/bin", "/opt/homebrew/bin"]

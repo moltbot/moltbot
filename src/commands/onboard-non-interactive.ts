@@ -16,7 +16,11 @@ import {
 } from "../config/config.js";
 import { resolveGatewayLaunchAgentLabel } from "../daemon/constants.js";
 import { resolveGatewayProgramArguments } from "../daemon/program-args.js";
-import { resolvePreferredNodePath } from "../daemon/runtime-paths.js";
+import {
+  renderSystemNodeWarning,
+  resolvePreferredNodePath,
+  resolveSystemNodeInfo,
+} from "../daemon/runtime-paths.js";
 import { resolveGatewayService } from "../daemon/service.js";
 import { buildServiceEnvironment } from "../daemon/service-env.js";
 import { isSystemdUserServiceAvailable } from "../daemon/systemd.js";
@@ -34,13 +38,14 @@ import {
   applyAuthProfileConfig,
   applyMinimaxApiConfig,
   applyMinimaxConfig,
-  applyMinimaxHostedConfig,
+  applyMoonshotConfig,
   applyOpencodeZenConfig,
   applyOpenrouterConfig,
   applyZaiConfig,
   setAnthropicApiKey,
   setGeminiApiKey,
   setMinimaxApiKey,
+  setMoonshotApiKey,
   setOpencodeZenApiKey,
   setOpenrouterApiKey,
   setZaiApiKey,
@@ -285,7 +290,30 @@ export async function runNonInteractiveOnboarding(
       mode: "api_key",
     });
     nextConfig = applyOpenrouterConfig(nextConfig);
-  } else if (authChoice === "minimax-cloud") {
+  } else if (authChoice === "moonshot-api-key") {
+    const resolved = await resolveNonInteractiveApiKey({
+      provider: "moonshot",
+      cfg: baseConfig,
+      flagValue: opts.moonshotApiKey,
+      flagName: "--moonshot-api-key",
+      envVar: "MOONSHOT_API_KEY",
+      runtime,
+    });
+    if (!resolved) return;
+    if (resolved.source !== "profile") {
+      await setMoonshotApiKey(resolved.key);
+    }
+    nextConfig = applyAuthProfileConfig(nextConfig, {
+      profileId: "moonshot:default",
+      provider: "moonshot",
+      mode: "api_key",
+    });
+    nextConfig = applyMoonshotConfig(nextConfig);
+  } else if (
+    authChoice === "minimax-cloud" ||
+    authChoice === "minimax-api" ||
+    authChoice === "minimax-api-lightning"
+  ) {
     const resolved = await resolveNonInteractiveApiKey({
       provider: "minimax",
       cfg: baseConfig,
@@ -303,26 +331,11 @@ export async function runNonInteractiveOnboarding(
       provider: "minimax",
       mode: "api_key",
     });
-    nextConfig = applyMinimaxHostedConfig(nextConfig);
-  } else if (authChoice === "minimax-api") {
-    const resolved = await resolveNonInteractiveApiKey({
-      provider: "minimax",
-      cfg: baseConfig,
-      flagValue: opts.minimaxApiKey,
-      flagName: "--minimax-api-key",
-      envVar: "MINIMAX_API_KEY",
-      runtime,
-    });
-    if (!resolved) return;
-    if (resolved.source !== "profile") {
-      await setMinimaxApiKey(resolved.key);
-    }
-    nextConfig = applyAuthProfileConfig(nextConfig, {
-      profileId: "minimax:default",
-      provider: "minimax",
-      mode: "api_key",
-    });
-    nextConfig = applyMinimaxApiConfig(nextConfig);
+    const modelId =
+      authChoice === "minimax-api-lightning"
+        ? "MiniMax-M2.1-lightning"
+        : "MiniMax-M2.1";
+    nextConfig = applyMinimaxApiConfig(nextConfig, modelId);
   } else if (authChoice === "claude-cli") {
     const store = ensureAuthProfileStore(undefined, {
       allowKeychainPrompt: false,
@@ -526,6 +539,14 @@ export async function runNonInteractiveOnboarding(
           runtime: daemonRuntimeRaw,
           nodePath,
         });
+      if (daemonRuntimeRaw === "node") {
+        const systemNode = await resolveSystemNodeInfo({ env: process.env });
+        const warning = renderSystemNodeWarning(
+          systemNode,
+          programArguments[0],
+        );
+        if (warning) runtime.log(warning);
+      }
       const environment = buildServiceEnvironment({
         env: process.env,
         port,

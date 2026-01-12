@@ -136,6 +136,28 @@ Full setup walkthrough (28m) by VelvetShark.
 
 <CardGroup cols={2}>
 
+<Card title="Winix Air Purifier Control" icon="wind" href="https://x.com/antonplex/status/2010518442471006253">
+  **@antonplex** • `automation` `hardware` `air-quality`
+
+  Claude Code discovered and confirmed the purifier controls, then Clawdbot takes over to manage room air quality.
+
+  <img src="/assets/showcase/winix-air-purifier.jpg" alt="Winix air purifier control via Clawdbot" />
+</Card>
+
+<Card title="Pretty Sky Camera Shots" icon="camera" href="https://x.com/signalgaining/status/2010523120604746151">
+  **@signalgaining** • `automation` `camera` `skill` `images`
+
+  Triggered by a roof camera: ask Clawdbot to snap a sky photo whenever it looks pretty — it designed a skill and took the shot.
+
+  <img src="/assets/showcase/roof-camera-sky.jpg" alt="Roof camera sky snapshot captured by Clawdbot" />
+</Card>
+
+<Card title="Visual Morning Briefing Scene" icon="robot" href="https://x.com/buddyhadry/status/2010005331925954739">
+  **@buddyhadry** • `automation` `briefing` `images` `telegram`
+
+  A scheduled prompt generates a single "scene" image each morning (weather, tasks, date, favorite post/quote) via a Clawdbot persona.
+</Card>
+
 <Card title="Grocery Autopilot" icon="cart-shopping" href="https://github.com/timkrase/clawdis-picnic-skill">
   **@timkrase** • `automation` `groceries` `api`
   

@@ -153,6 +153,9 @@ struct MenuContent: View {
             self.micRefreshTask = nil
             self.micObserver.stop()
         }
+        .task { @MainActor in
+            SettingsWindowOpener.shared.register(openSettings: self.openSettings)
+        }
     }
 
     private var connectionLabel: String {
@@ -276,7 +279,7 @@ struct MenuContent: View {
                     Label("Send Test Notification", systemImage: "bell")
                 }
                 Divider()
-                if self.state.connectionMode == .local, !AppStateStore.attachExistingGatewayOnly {
+                if self.state.connectionMode == .local {
                     Button {
                         DebugActions.restartGateway()
                     } label: {
@@ -301,7 +304,9 @@ struct MenuContent: View {
         SettingsTabRouter.request(tab)
         NSApp.activate(ignoringOtherApps: true)
         self.openSettings()
-        NotificationCenter.default.post(name: .clawdbotSelectSettingsTab, object: tab)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .clawdbotSelectSettingsTab, object: tab)
+        }
     }
 
     @MainActor

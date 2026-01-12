@@ -64,6 +64,37 @@ describe("models config", () => {
     });
   });
 
+  it("adds minimax provider when MINIMAX_API_KEY is set", async () => {
+    await withTempHome(async () => {
+      vi.resetModules();
+      const prevKey = process.env.MINIMAX_API_KEY;
+      process.env.MINIMAX_API_KEY = "sk-minimax-test";
+      try {
+        const { ensureClawdbotModelsJson } = await import("./models-config.js");
+        const { resolveClawdbotAgentDir } = await import("./agent-paths.js");
+
+        await ensureClawdbotModelsJson({});
+
+        const modelPath = path.join(resolveClawdbotAgentDir(), "models.json");
+        const raw = await fs.readFile(modelPath, "utf8");
+        const parsed = JSON.parse(raw) as {
+          providers: Record<
+            string,
+            { baseUrl?: string; models?: Array<{ id: string }> }
+          >;
+        };
+        expect(parsed.providers.minimax?.baseUrl).toBe(
+          "https://api.minimax.io/anthropic",
+        );
+        const ids = parsed.providers.minimax?.models?.map((model) => model.id);
+        expect(ids).toContain("MiniMax-M2.1");
+      } finally {
+        if (prevKey === undefined) delete process.env.MINIMAX_API_KEY;
+        else process.env.MINIMAX_API_KEY = prevKey;
+      }
+    });
+  });
+
   it("merges providers by default", async () => {
     await withTempHome(async () => {
       vi.resetModules();
@@ -115,6 +146,58 @@ describe("models config", () => {
       expect(parsed.providers["custom-proxy"]?.baseUrl).toBe(
         "http://localhost:4000/v1",
       );
+    });
+  });
+
+  it("normalizes gemini 3 ids to preview for google providers", async () => {
+    await withTempHome(async () => {
+      vi.resetModules();
+      const { ensureClawdbotModelsJson } = await import("./models-config.js");
+      const { resolveClawdbotAgentDir } = await import("./agent-paths.js");
+
+      const cfg: ClawdbotConfig = {
+        models: {
+          providers: {
+            google: {
+              baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+              apiKey: "GEMINI_KEY",
+              api: "google-generative-ai",
+              models: [
+                {
+                  id: "gemini-3-pro",
+                  name: "Gemini 3 Pro",
+                  api: "google-generative-ai",
+                  reasoning: true,
+                  input: ["text", "image"],
+                  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+                  contextWindow: 1048576,
+                  maxTokens: 65536,
+                },
+                {
+                  id: "gemini-3-flash",
+                  name: "Gemini 3 Flash",
+                  api: "google-generative-ai",
+                  reasoning: false,
+                  input: ["text", "image"],
+                  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+                  contextWindow: 1048576,
+                  maxTokens: 65536,
+                },
+              ],
+            },
+          },
+        },
+      };
+
+      await ensureClawdbotModelsJson(cfg);
+
+      const modelPath = path.join(resolveClawdbotAgentDir(), "models.json");
+      const raw = await fs.readFile(modelPath, "utf8");
+      const parsed = JSON.parse(raw) as {
+        providers: Record<string, { models: Array<{ id: string }> }>;
+      };
+      const ids = parsed.providers.google?.models?.map((model) => model.id);
+      expect(ids).toEqual(["gemini-3-pro-preview", "gemini-3-flash-preview"]);
     });
   });
 });

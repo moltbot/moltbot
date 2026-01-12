@@ -70,6 +70,37 @@ With **multiple agents**, each `agentId` becomes a **fully isolated persona**:
 
 This lets **multiple people** share one Gateway server while keeping their AI “brains” and data isolated.
 
+## One WhatsApp number, multiple people (DM split)
+
+You can route **different WhatsApp DMs** to different agents while staying on **one WhatsApp account**. Match on sender E.164 (like `+15551234567`) with `peer.kind: "dm"`. Replies still come from the same WhatsApp number (no per‑agent sender identity).
+
+Important detail: direct chats collapse to the agent’s **main session key**, so true isolation requires **one agent per person**.
+
+Example:
+
+```json5
+{
+  agents: {
+    list: [
+      { id: "alex", workspace: "~/clawd-alex" },
+      { id: "mia", workspace: "~/clawd-mia" }
+    ]
+  },
+  bindings: [
+    { agentId: "alex", match: { provider: "whatsapp", peer: { kind: "dm", id: "+15551230001" } } },
+    { agentId: "mia",  match: { provider: "whatsapp", peer: { kind: "dm", id: "+15551230002" } } }
+  ],
+  whatsapp: {
+    dmPolicy: "allowlist",
+    allowFrom: ["+15551230001", "+15551230002"]
+  }
+}
+```
+
+Notes:
+- DM access control is **global per WhatsApp account** (pairing/allowlist), not per agent.
+- For shared groups, bind the group to one agent or use [Broadcast groups](/broadcast-groups).
+
 ## Routing rules (how messages pick an agent)
 
 Bindings are **deterministic** and **most-specific wins**:
@@ -157,6 +188,60 @@ multiple phone numbers without mixing sessions.
 }
 ```
 
+## Example: WhatsApp daily chat + Telegram deep work
+
+Split by provider: route WhatsApp to a fast everyday agent and Telegram to an Opus agent.
+
+```json5
+{
+  agents: {
+    list: [
+      {
+        id: "chat",
+        name: "Everyday",
+        workspace: "~/clawd-chat",
+        model: "anthropic/claude-sonnet-4-5"
+      },
+      {
+        id: "opus",
+        name: "Deep Work",
+        workspace: "~/clawd-opus",
+        model: "anthropic/claude-opus-4-5"
+      }
+    ]
+  },
+  bindings: [
+    { agentId: "chat", match: { provider: "whatsapp" } },
+    { agentId: "opus", match: { provider: "telegram" } }
+  ]
+}
+```
+
+Notes:
+- If you have multiple accounts for a provider, add `accountId` to the binding (for example `{ provider: "whatsapp", accountId: "personal" }`).
+- To route a single DM/group to Opus while keeping the rest on chat, add a `match.peer` binding for that peer; peer matches always win over provider-wide rules.
+
+## Example: same provider, one peer to Opus
+
+Keep WhatsApp on the fast agent, but route one DM to Opus:
+
+```json5
+{
+  agents: {
+    list: [
+      { id: "chat", name: "Everyday", workspace: "~/clawd-chat", model: "anthropic/claude-sonnet-4-5" },
+      { id: "opus", name: "Deep Work", workspace: "~/clawd-opus", model: "anthropic/claude-opus-4-5" }
+    ]
+  },
+  bindings: [
+    { agentId: "opus", match: { provider: "whatsapp", peer: { kind: "dm", id: "+15551234567" } } },
+    { agentId: "chat", match: { provider: "whatsapp" } }
+  ]
+}
+```
+
+Peer bindings always win, so keep them above the provider-wide rule.
+
 ## Per-Agent Sandbox and Tool Configuration
 
 Starting with v2026.1.6, each agent can have its own sandbox and tool restrictions:
@@ -186,7 +271,7 @@ Starting with v2026.1.6, each agent can have its own sandbox and tool restrictio
         },
         tools: {
           allow: ["read"],                    // Only read tool
-          deny: ["bash", "write", "edit"],    // Deny others
+          deny: ["exec", "write", "edit", "apply_patch"],    // Deny others
         },
       },
     ],
@@ -200,7 +285,7 @@ Starting with v2026.1.6, each agent can have its own sandbox and tool restrictio
 - **Flexible policies**: Different permissions per agent
 
 Note: `tools.elevated` is **global** and sender-based; it is not configurable per agent.
-If you need per-agent boundaries, use `agents.list[].tools` to deny `bash`.
+If you need per-agent boundaries, use `agents.list[].tools` to deny `exec`.
 For group targeting, use `agents.list[].groupChat.mentionPatterns` so @mentions map cleanly to the intended agent.
 
 See [Multi-Agent Sandbox & Tools](/multi-agent-sandbox-tools) for detailed examples.

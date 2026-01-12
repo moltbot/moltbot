@@ -7,6 +7,7 @@ import {
   formatAssistantErrorText,
   isBillingErrorMessage,
   isCloudCodeAssistFormatError,
+  isCompactionFailureError,
   isContextOverflowError,
   isFailoverErrorMessage,
   isMessagingToolDuplicate,
@@ -208,6 +209,8 @@ describe("isContextOverflowError", () => {
       "Request exceeds the maximum size",
       "context length exceeded",
       "Maximum context length",
+      "prompt is too long: 208423 tokens > 200000 maximum",
+      "Context overflow: Summarization failed",
       "413 Request Entity Too Large",
     ];
     for (const sample of samples) {
@@ -217,6 +220,26 @@ describe("isContextOverflowError", () => {
 
   it("ignores unrelated errors", () => {
     expect(isContextOverflowError("rate limit exceeded")).toBe(false);
+  });
+});
+
+describe("isCompactionFailureError", () => {
+  it("matches compaction overflow failures", () => {
+    const samples = [
+      'Context overflow: Summarization failed: 400 {"message":"prompt is too long"}',
+      "auto-compaction failed due to context overflow",
+      "Compaction failed: prompt is too long",
+    ];
+    for (const sample of samples) {
+      expect(isCompactionFailureError(sample)).toBe(true);
+    }
+  });
+
+  it("ignores non-compaction overflow errors", () => {
+    expect(isCompactionFailureError("Context overflow: prompt too large")).toBe(
+      false,
+    );
+    expect(isCompactionFailureError("rate limit exceeded")).toBe(false);
   });
 });
 
@@ -333,7 +356,7 @@ describe("sanitizeGoogleTurnOrdering", () => {
       {
         role: "assistant",
         content: [
-          { type: "toolCall", id: "call_1", name: "bash", arguments: {} },
+          { type: "toolCall", id: "call_1", name: "exec", arguments: {} },
         ],
       },
     ] satisfies AgentMessage[];
@@ -380,7 +403,7 @@ describe("sanitizeSessionMessagesImages", () => {
           {
             type: "toolCall",
             id: "call_abc|item:456",
-            name: "bash",
+            name: "exec",
             arguments: {},
           },
         ],

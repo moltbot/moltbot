@@ -9,6 +9,10 @@ import { formatToolAggregate } from "../auto-reply/tool-meta.js";
 import { resolveStateDir } from "../config/paths.js";
 import { emitAgentEvent } from "../infra/agent-events.js";
 import { createSubsystemLogger } from "../logging.js";
+import {
+  getProviderPlugin,
+  normalizeProviderId,
+} from "../providers/plugins/index.js";
 import { truncateUtf16Safe } from "../utils.js";
 import type { BlockReplyChunking } from "./pi-embedded-block-chunker.js";
 import { EmbeddedBlockChunker } from "./pi-embedded-block-chunker.js";
@@ -32,11 +36,9 @@ import {
   promoteThinkingTagsToBlocks,
 } from "./pi-embedded-utils.js";
 
-const THINKING_TAG_RE = /<\s*\/?\s*(?:think(?:ing)?|thought|antthinking)\s*>/gi;
-const THINKING_OPEN_RE = /<\s*(?:think(?:ing)?|thought|antthinking)\s*>/i;
-const THINKING_CLOSE_RE = /<\s*\/\s*(?:think(?:ing)?|thought|antthinking)\s*>/i;
 const THINKING_TAG_SCAN_RE =
   /<\s*(\/?)\s*(?:think(?:ing)?|thought|antthinking)\s*>/gi;
+const FINAL_TAG_SCAN_RE = /<\s*(\/?)\s*final\s*>/gi;
 const TOOL_RESULT_MAX_CHARS = 8000;
 const log = createSubsystemLogger("agent/embedded");
 const RAW_STREAM_ENABLED = process.env.CLAWDBOT_RAW_STREAM === "1";
@@ -96,94 +98,52 @@ function sanitizeToolResult(result: unknown): unknown {
   return { ...record, content: sanitized };
 }
 
-function stripThinkingSegments(text: string): string {
-  if (!text || !THINKING_TAG_RE.test(text)) return text;
-  THINKING_TAG_RE.lastIndex = 0;
-  let result = "";
-  let lastIndex = 0;
-  let inThinking = false;
-  for (const match of text.matchAll(THINKING_TAG_RE)) {
-    const idx = match.index ?? 0;
-    if (!inThinking) {
-      result += text.slice(lastIndex, idx);
-    }
-    const tag = match[0].toLowerCase();
-    inThinking = !tag.includes("/");
-    lastIndex = idx + match[0].length;
-  }
-  if (!inThinking) {
-    result += text.slice(lastIndex);
-  }
-  return result;
-}
-
-function stripUnpairedThinkingTags(text: string): string {
-  if (!text) return text;
-  const hasOpen = THINKING_OPEN_RE.test(text);
-  const hasClose = THINKING_CLOSE_RE.test(text);
-  if (hasOpen && hasClose) return text;
-  if (!hasOpen) return text.replace(THINKING_CLOSE_RE, "");
-  if (!hasClose) return text.replace(THINKING_OPEN_RE, "");
-  return text;
+function isToolResultError(result: unknown): boolean {
+  if (!result || typeof result !== "object") return false;
+  const record = result as { details?: unknown };
+  const details = record.details;
+  if (!details || typeof details !== "object") return false;
+  const status = (details as { status?: unknown }).status;
+  if (typeof status !== "string") return false;
+  const normalized = status.trim().toLowerCase();
+  return normalized === "error" || normalized === "timeout";
 }
 
 function extractMessagingToolSend(
   toolName: string,
   args: Record<string, unknown>,
 ): MessagingToolSend | undefined {
+  // Provider docking: new provider tools must implement plugin.actions.extractToolSend.
   const action = typeof args.action === "string" ? args.action.trim() : "";
   const accountIdRaw =
     typeof args.accountId === "string" ? args.accountId.trim() : undefined;
   const accountId = accountIdRaw ? accountIdRaw : undefined;
-  if (toolName === "slack") {
-    if (action !== "sendMessage") return undefined;
-    const toRaw = typeof args.to === "string" ? args.to : undefined;
-    if (!toRaw) return undefined;
-    const to = normalizeTargetForProvider("slack", toRaw);
-    return to
-      ? { tool: toolName, provider: "slack", accountId, to }
-      : undefined;
-  }
-  if (toolName === "discord") {
-    if (action === "sendMessage") {
-      const toRaw = typeof args.to === "string" ? args.to : undefined;
-      if (!toRaw) return undefined;
-      const to = normalizeTargetForProvider("discord", toRaw);
-      return to
-        ? { tool: toolName, provider: "discord", accountId, to }
-        : undefined;
-    }
-    if (action === "threadReply") {
-      const channelId =
-        typeof args.channelId === "string" ? args.channelId.trim() : "";
-      if (!channelId) return undefined;
-      const to = normalizeTargetForProvider("discord", `channel:${channelId}`);
-      return to
-        ? { tool: toolName, provider: "discord", accountId, to }
-        : undefined;
-    }
-    return undefined;
-  }
-  if (toolName === "telegram") {
-    if (action !== "sendMessage") return undefined;
-    const toRaw = typeof args.to === "string" ? args.to : undefined;
-    if (!toRaw) return undefined;
-    const to = normalizeTargetForProvider("telegram", toRaw);
-    return to
-      ? { tool: toolName, provider: "telegram", accountId, to }
-      : undefined;
-  }
   if (toolName === "message") {
     if (action !== "send" && action !== "thread-reply") return undefined;
     const toRaw = typeof args.to === "string" ? args.to : undefined;
     if (!toRaw) return undefined;
     const providerRaw =
       typeof args.provider === "string" ? args.provider.trim() : "";
-    const provider = providerRaw ? providerRaw.toLowerCase() : "message";
+    const providerId = providerRaw ? normalizeProviderId(providerRaw) : null;
+    const provider =
+      providerId ?? (providerRaw ? providerRaw.toLowerCase() : "message");
     const to = normalizeTargetForProvider(provider, toRaw);
     return to ? { tool: toolName, provider, accountId, to } : undefined;
   }
-  return undefined;
+  const providerId = normalizeProviderId(toolName);
+  if (!providerId) return undefined;
+  const plugin = getProviderPlugin(providerId);
+  const extracted = plugin?.actions?.extractToolSend?.({ args });
+  if (!extracted?.to) return undefined;
+  const to = normalizeTargetForProvider(providerId, extracted.to);
+  return to
+    ? {
+        tool: toolName,
+        provider: providerId,
+        accountId: extracted.accountId ?? accountId,
+        to,
+      }
+    : undefined;
 }
 
 export function subscribeEmbeddedPiSession(params: {
@@ -205,6 +165,8 @@ export function subscribeEmbeddedPiSession(params: {
     mediaUrls?: string[];
     audioAsVoice?: boolean;
   }) => void | Promise<void>;
+  /** Flush pending block replies (e.g., before tool execution to preserve message boundaries). */
+  onBlockReplyFlush?: () => void | Promise<void>;
   blockReplyBreak?: "text_end" | "message_end";
   blockReplyChunking?: BlockReplyChunking;
   onPartialReply?: (payload: {
@@ -231,7 +193,7 @@ export function subscribeEmbeddedPiSession(params: {
   let deltaBuffer = "";
   let blockBuffer = "";
   // Track if a streamed chunk opened a <think> block (stateful across chunks).
-  let blockThinkingActive = false;
+  const blockState = { thinking: false, final: false };
   let lastStreamedAssistant: string | undefined;
   let lastStreamedReasoning: string | undefined;
   let lastBlockReplyText: string | undefined;
@@ -247,7 +209,8 @@ export function subscribeEmbeddedPiSession(params: {
     deltaBuffer = "";
     blockBuffer = "";
     blockChunker?.reset();
-    blockThinkingActive = false;
+    blockState.thinking = false;
+    blockState.final = false;
     lastStreamedAssistant = undefined;
     lastBlockReplyText = undefined;
     lastStreamedReasoning = undefined;
@@ -342,27 +305,6 @@ export function subscribeEmbeddedPiSession(params: {
       compactionRetryPromise = null;
     }
   };
-  const FINAL_START_RE = /<\s*final\s*>/i;
-  const FINAL_END_RE = /<\s*\/\s*final\s*>/i;
-  // Local providers sometimes emit malformed tags; normalize before filtering.
-  const sanitizeFinalText = (text: string): string => {
-    if (!text) return text;
-    const hasStart = FINAL_START_RE.test(text);
-    const hasEnd = FINAL_END_RE.test(text);
-    if (hasStart && !hasEnd) return text.replace(FINAL_START_RE, "");
-    if (!hasStart && hasEnd) return text.replace(FINAL_END_RE, "");
-    return text;
-  };
-  const extractFinalText = (text: string): string | undefined => {
-    const cleaned = sanitizeFinalText(text);
-    const startMatch = FINAL_START_RE.exec(cleaned);
-    if (!startMatch) return undefined;
-    const startIndex = startMatch.index + startMatch[0].length;
-    const afterStart = cleaned.slice(startIndex);
-    const endMatch = FINAL_END_RE.exec(afterStart);
-    const endIndex = endMatch ? endMatch.index : afterStart.length;
-    return afterStart.slice(0, endIndex);
-  };
 
   const blockChunking = params.blockReplyChunking;
   const blockChunker = blockChunking
@@ -390,34 +332,85 @@ export function subscribeEmbeddedPiSession(params: {
     }
   };
 
-  const stripBlockThinkingSegments = (text: string): string => {
+  const stripBlockTags = (
+    text: string,
+    state: { thinking: boolean; final: boolean },
+  ): string => {
     if (!text) return text;
-    if (!blockThinkingActive && !THINKING_TAG_SCAN_RE.test(text)) return text;
+
+    // 1. Handle <think> blocks (stateful, strip content inside)
+    let processed = "";
     THINKING_TAG_SCAN_RE.lastIndex = 0;
-    let result = "";
     let lastIndex = 0;
-    let inThinking = blockThinkingActive;
+    let inThinking = state.thinking;
     for (const match of text.matchAll(THINKING_TAG_SCAN_RE)) {
       const idx = match.index ?? 0;
       if (!inThinking) {
-        result += text.slice(lastIndex, idx);
+        processed += text.slice(lastIndex, idx);
       }
       const isClose = match[1] === "/";
       inThinking = !isClose;
       lastIndex = idx + match[0].length;
     }
     if (!inThinking) {
-      result += text.slice(lastIndex);
+      processed += text.slice(lastIndex);
     }
-    blockThinkingActive = inThinking;
-    return result;
+    state.thinking = inThinking;
+
+    // 2. Handle <final> blocks (stateful, strip content OUTSIDE)
+    // If enforcement is disabled, we still strip the tags themselves to prevent
+    // hallucinations (e.g. Minimax copying the style) from leaking, but we
+    // do not enforce buffering/extraction logic.
+    if (!params.enforceFinalTag) {
+      FINAL_TAG_SCAN_RE.lastIndex = 0;
+      return processed.replace(FINAL_TAG_SCAN_RE, "");
+    }
+
+    // If enforcement is enabled, only return text that appeared inside a <final> block.
+    let result = "";
+    FINAL_TAG_SCAN_RE.lastIndex = 0;
+    let lastFinalIndex = 0;
+    let inFinal = state.final;
+    let everInFinal = state.final;
+
+    for (const match of processed.matchAll(FINAL_TAG_SCAN_RE)) {
+      const idx = match.index ?? 0;
+      const isClose = match[1] === "/";
+
+      if (!inFinal && !isClose) {
+        // Found <final> start tag.
+        inFinal = true;
+        everInFinal = true;
+        lastFinalIndex = idx + match[0].length;
+      } else if (inFinal && isClose) {
+        // Found </final> end tag.
+        result += processed.slice(lastFinalIndex, idx);
+        inFinal = false;
+        lastFinalIndex = idx + match[0].length;
+      }
+    }
+
+    if (inFinal) {
+      result += processed.slice(lastFinalIndex);
+    }
+    state.final = inFinal;
+
+    // Strict Mode: If enforcing final tags, we MUST NOT return content unless
+    // we have seen a <final> tag. Otherwise, we leak "thinking out loud" text
+    // (e.g. "**Locating Manulife**...") that the model emitted without <think> tags.
+    if (!everInFinal) {
+      return "";
+    }
+
+    // Hardened Cleanup: Remove any remaining <final> tags that might have been
+    // missed (e.g. nested tags or hallucinations) to prevent leakage.
+    return result.replace(FINAL_TAG_SCAN_RE, "");
   };
 
   const emitBlockChunk = (text: string) => {
     if (suppressBlockChunks) return;
-    // Strip <think> blocks across chunk boundaries to avoid leaking reasoning.
-    const strippedText = stripBlockThinkingSegments(text);
-    const chunk = strippedText.trimEnd();
+    // Strip <think> and <final> blocks across chunk boundaries to avoid leaking reasoning.
+    const chunk = stripBlockTags(text, blockState).trimEnd();
     if (!chunk) return;
     if (chunk === lastBlockReplyText) return;
 
@@ -449,6 +442,19 @@ export function subscribeEmbeddedPiSession(params: {
       mediaUrls: mediaUrls?.length ? mediaUrls : undefined,
       audioAsVoice,
     });
+  };
+
+  const flushBlockReplyBuffer = () => {
+    if (!params.onBlockReply) return;
+    if (blockChunker?.hasBuffered()) {
+      blockChunker.drain({ force: true, emit: emitBlockChunk });
+      blockChunker.reset();
+      return;
+    }
+    if (blockBuffer.length > 0) {
+      emitBlockChunk(blockBuffer);
+      blockBuffer = "";
+    }
   };
 
   const emitReasoningStream = (text: string) => {
@@ -490,6 +496,12 @@ export function subscribeEmbeddedPiSession(params: {
       }
 
       if (evt.type === "tool_execution_start") {
+        // Flush pending block replies to preserve message boundaries before tool execution.
+        flushBlockReplyBuffer();
+        if (params.onBlockReplyFlush) {
+          void params.onBlockReplyFlush();
+        }
+
         const toolName = String(
           (evt as AgentEvent & { toolName: string }).toolName,
         );
@@ -553,7 +565,10 @@ export function subscribeEmbeddedPiSession(params: {
             typeof argsRecord.action === "string"
               ? argsRecord.action.trim()
               : "";
-          const isMessagingSend = isMessagingToolSendAction(toolName, action);
+          const isMessagingSend = isMessagingToolSendAction(
+            toolName,
+            argsRecord,
+          );
           if (isMessagingSend) {
             const sendTarget = extractMessagingToolSend(toolName, argsRecord);
             if (sendTarget) {
@@ -613,6 +628,7 @@ export function subscribeEmbeddedPiSession(params: {
           (evt as AgentEvent & { isError: boolean }).isError,
         );
         const result = (evt as AgentEvent & { result?: unknown }).result;
+        const isToolError = isError || isToolResultError(result);
         const sanitizedResult = sanitizeToolResult(result);
         const meta = toolMetaById.get(toolCallId);
         toolMetas.push({ toolName, meta });
@@ -624,7 +640,7 @@ export function subscribeEmbeddedPiSession(params: {
         const pendingTarget = pendingMessagingTargets.get(toolCallId);
         if (pendingText) {
           pendingMessagingTexts.delete(toolCallId);
-          if (!isError) {
+          if (!isToolError) {
             messagingToolSentTexts.push(pendingText);
             messagingToolSentTextsNormalized.push(
               normalizeTextForComparison(pendingText),
@@ -637,7 +653,7 @@ export function subscribeEmbeddedPiSession(params: {
         }
         if (pendingTarget) {
           pendingMessagingTargets.delete(toolCallId);
-          if (!isError) {
+          if (!isToolError) {
             messagingToolSentTargets.push(pendingTarget);
             trimMessagingToolSent();
           }
@@ -651,7 +667,7 @@ export function subscribeEmbeddedPiSession(params: {
             name: toolName,
             toolCallId,
             meta,
-            isError,
+            isError: isToolError,
             result: sanitizedResult,
           },
         });
@@ -662,7 +678,7 @@ export function subscribeEmbeddedPiSession(params: {
             name: toolName,
             toolCallId,
             meta,
-            isError,
+            isError: isToolError,
           },
         });
       }
@@ -736,12 +752,10 @@ export function subscribeEmbeddedPiSession(params: {
               emitReasoningStream(extractThinkingFromTaggedStream(deltaBuffer));
             }
 
-            const cleaned = params.enforceFinalTag
-              ? stripThinkingSegments(stripUnpairedThinkingTags(deltaBuffer))
-              : stripThinkingSegments(deltaBuffer);
-            const next = params.enforceFinalTag
-              ? (extractFinalText(cleaned)?.trim() ?? cleaned.trim())
-              : cleaned.trim();
+            const next = stripBlockTags(deltaBuffer, {
+              thinking: false,
+              final: false,
+            }).trim();
             if (next && next !== lastStreamedAssistant) {
               lastStreamedAssistant = next;
               const { text: cleanedText, mediaUrls } =
@@ -804,13 +818,10 @@ export function subscribeEmbeddedPiSession(params: {
             rawText,
             rawThinking: extractAssistantThinking(assistantMessage),
           });
-          const cleaned = params.enforceFinalTag
-            ? stripThinkingSegments(stripUnpairedThinkingTags(rawText))
-            : stripThinkingSegments(rawText);
-          const baseText =
-            params.enforceFinalTag && cleaned
-              ? (extractFinalText(cleaned)?.trim() ?? cleaned)
-              : cleaned;
+          const text = stripBlockTags(rawText, {
+            thinking: false,
+            final: false,
+          });
           const rawThinking =
             includeReasoning || streamReasoning
               ? extractAssistantThinking(assistantMessage) ||
@@ -819,7 +830,6 @@ export function subscribeEmbeddedPiSession(params: {
           const formattedReasoning = rawThinking
             ? formatReasoningMessage(rawThinking)
             : "";
-          const text = baseText;
 
           const addedDuringMessage =
             assistantTexts.length > assistantTextBaseline;
@@ -901,7 +911,8 @@ export function subscribeEmbeddedPiSession(params: {
           deltaBuffer = "";
           blockBuffer = "";
           blockChunker?.reset();
-          blockThinkingActive = false;
+          blockState.thinking = false;
+          blockState.final = false;
           lastStreamedAssistant = undefined;
         }
       }
@@ -983,7 +994,8 @@ export function subscribeEmbeddedPiSession(params: {
             blockBuffer = "";
           }
         }
-        blockThinkingActive = false;
+        blockState.thinking = false;
+        blockState.final = false;
         if (pendingCompactionRetry > 0) {
           resolveCompactionRetry();
         } else {

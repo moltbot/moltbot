@@ -1,21 +1,21 @@
 ---
-summary: "Group chat behavior across surfaces (WhatsApp/Telegram/Discord/Slack/Signal/iMessage)"
+summary: "Group chat behavior across surfaces (WhatsApp/Telegram/Discord/Slack/Signal/iMessage/Microsoft Teams)"
 read_when:
   - Changing group chat behavior or mention gating
 ---
 # Groups
 
-Clawdbot treats group chats consistently across surfaces: WhatsApp, Telegram, Discord, Slack, Signal, iMessage.
+Clawdbot treats group chats consistently across surfaces: WhatsApp, Telegram, Discord, Slack, Signal, iMessage, Microsoft Teams.
 
 ## Beginner intro (2 minutes)
 Clawdbot “lives” on your own messaging accounts. There is no separate WhatsApp bot user.
 If **you** are in a group, Clawdbot can see that group and respond there.
 
 Default behavior:
-- Groups are allowed (`groupPolicy: "open"`).
+- Groups are restricted (`groupPolicy: "allowlist"`).
 - Replies require a mention unless you explicitly disable mention gating.
 
-Translation: anyone in the group can trigger Clawdbot by mentioning it.
+Translation: allowlisted senders can trigger Clawdbot by mentioning it.
 
 > TL;DR
 > - **DM access** is controlled by `*.allowFrom`.
@@ -71,6 +71,10 @@ Control how group/room messages are handled per provider:
     groupPolicy: "disabled",
     groupAllowFrom: ["chat_id:123"]
   },
+  msteams: {
+    groupPolicy: "disabled",
+    groupAllowFrom: ["user@org.com"]
+  },
   discord: {
     groupPolicy: "allowlist",
     guilds: {
@@ -86,17 +90,18 @@ Control how group/room messages are handled per provider:
 
 | Policy | Behavior |
 |--------|----------|
-| `"open"` | Default. Groups bypass allowlists; mention-gating still applies. |
+| `"open"` | Groups bypass allowlists; mention-gating still applies. |
 | `"disabled"` | Block all group messages entirely. |
 | `"allowlist"` | Only allow groups/rooms that match the configured allowlist. |
 
 Notes:
 - `groupPolicy` is separate from mention-gating (which requires @mentions).
-- WhatsApp/Telegram/Signal/iMessage: use `groupAllowFrom` (fallback: explicit `allowFrom`).
+- WhatsApp/Telegram/Signal/iMessage/Microsoft Teams: use `groupAllowFrom` (fallback: explicit `allowFrom`).
 - Discord: allowlist uses `discord.guilds.<id>.channels`.
 - Slack: allowlist uses `slack.channels`.
 - Group DMs are controlled separately (`discord.dm.*`, `slack.dm.*`).
 - Telegram allowlist can match user IDs (`"123456789"`, `"telegram:123456789"`, `"tg:123456789"`) or usernames (`"@alice"` or `"alice"`); prefixes are case-insensitive.
+- Default is `groupPolicy: "allowlist"`; if your group allowlist is empty, group messages are blocked.
 
 Quick mental model (evaluation order for group messages):
 1) `groupPolicy` (open/disabled/allowlist)

@@ -1,5 +1,10 @@
 import type { BrowserFormField } from "./client-actions-core.js";
 import {
+  buildRoleSnapshotFromAriaSnapshot,
+  parseRoleRef,
+  type RoleSnapshotOptions,
+} from "./pw-role-snapshot.js";
+import {
   type BrowserConsoleMessage,
   ensurePageState,
   getPageForTargetId,
@@ -11,7 +16,9 @@ let nextUploadArmId = 0;
 let nextDialogArmId = 0;
 
 function requireRef(value: unknown): string {
-  const ref = typeof value === "string" ? value.trim() : "";
+  const raw = typeof value === "string" ? value.trim() : "";
+  const roleRef = raw ? parseRoleRef(raw) : null;
+  const ref = roleRef ?? (raw.startsWith("@") ? raw.slice(1) : raw);
   if (!ref) throw new Error("ref is required");
   return ref;
 }
@@ -20,7 +27,8 @@ export async function snapshotAiViaPlaywright(opts: {
   cdpUrl: string;
   targetId?: string;
   timeoutMs?: number;
-}): Promise<{ snapshot: string }> {
+  maxChars?: number;
+}): Promise<{ snapshot: string; truncated?: boolean }> {
   const page = await getPageForTargetId({
     cdpUrl: opts.cdpUrl,
     targetId: opts.targetId,
@@ -41,7 +49,42 @@ export async function snapshotAiViaPlaywright(opts: {
     ),
     track: "response",
   });
-  return { snapshot: String(result?.full ?? "") };
+  let snapshot = String(result?.full ?? "");
+  const maxChars = opts.maxChars;
+  const limit =
+    typeof maxChars === "number" && Number.isFinite(maxChars) && maxChars > 0
+      ? Math.floor(maxChars)
+      : undefined;
+  if (limit && snapshot.length > limit) {
+    snapshot = `${snapshot.slice(0, limit)}\n\n[...TRUNCATED - page too large]`;
+    return { snapshot, truncated: true };
+  }
+  return { snapshot };
+}
+
+export async function snapshotRoleViaPlaywright(opts: {
+  cdpUrl: string;
+  targetId?: string;
+  selector?: string;
+  options?: RoleSnapshotOptions;
+}): Promise<{ snapshot: string }> {
+  const page = await getPageForTargetId({
+    cdpUrl: opts.cdpUrl,
+    targetId: opts.targetId,
+  });
+  const state = ensurePageState(page);
+
+  const locator = opts.selector?.trim()
+    ? page.locator(opts.selector.trim())
+    : page.locator(":root");
+
+  const ariaSnapshot = await locator.ariaSnapshot();
+  const built = buildRoleSnapshotFromAriaSnapshot(
+    String(ariaSnapshot ?? ""),
+    opts.options,
+  );
+  state.roleRefs = built.refs;
+  return { snapshot: built.snapshot };
 }
 
 export async function clickViaPlaywright(opts: {
@@ -84,8 +127,7 @@ export async function hoverViaPlaywright(opts: {
   ref: string;
   timeoutMs?: number;
 }): Promise<void> {
-  const ref = String(opts.ref ?? "").trim();
-  if (!ref) throw new Error("ref is required");
+  const ref = requireRef(opts.ref);
   const page = await getPageForTargetId(opts);
   ensurePageState(page);
   await refLocator(page, ref).hover({
@@ -100,8 +142,8 @@ export async function dragViaPlaywright(opts: {
   endRef: string;
   timeoutMs?: number;
 }): Promise<void> {
-  const startRef = String(opts.startRef ?? "").trim();
-  const endRef = String(opts.endRef ?? "").trim();
+  const startRef = requireRef(opts.startRef);
+  const endRef = requireRef(opts.endRef);
   if (!startRef || !endRef) throw new Error("startRef and endRef are required");
   const page = await getPageForTargetId(opts);
   ensurePageState(page);
@@ -117,8 +159,7 @@ export async function selectOptionViaPlaywright(opts: {
   values: string[];
   timeoutMs?: number;
 }): Promise<void> {
-  const ref = String(opts.ref ?? "").trim();
-  if (!ref) throw new Error("ref is required");
+  const ref = requireRef(opts.ref);
   if (!opts.values?.length) throw new Error("values are required");
   const page = await getPageForTargetId(opts);
   ensurePageState(page);

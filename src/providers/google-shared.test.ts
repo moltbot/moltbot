@@ -26,6 +26,20 @@ const makeModel = (id: string): Model<"google-generative-ai"> =>
     maxTokens: 1,
   }) as Model<"google-generative-ai">;
 
+const makeGeminiCliModel = (id: string): Model<"google-gemini-cli"> =>
+  ({
+    id,
+    name: id,
+    api: "google-gemini-cli",
+    provider: "google-gemini-cli",
+    baseUrl: "https://example.invalid",
+    reasoning: false,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 1,
+    maxTokens: 1,
+  }) as Model<"google-gemini-cli">;
+
 describe("google-shared convertTools", () => {
   it("preserves parameters when type is missing", () => {
     const tools = [
@@ -93,10 +107,10 @@ describe("google-shared convertTools", () => {
     const list = asRecord(properties.list);
     const items = asRecord(list.items);
 
-    expect(params.patternProperties).toBeDefined();
+    expect(params.patternProperties).toEqual({ "^x-": { type: "string" } });
     expect(params.additionalProperties).toBe(false);
     expect(mode.const).toBe("fast");
-    expect(options.anyOf).toBeDefined();
+    expect(options.anyOf).toEqual([{ type: "string" }, { type: "number" }]);
     expect(items.const).toBe("item");
     expect(params.required).toEqual(["mode"]);
   });
@@ -185,9 +199,8 @@ describe("google-shared convertMessages", () => {
 
     const contents = convertMessages(model, context);
     expect(contents).toHaveLength(1);
-    const parts = contents?.[0]?.parts ?? [];
-    expect(parts).toHaveLength(1);
-    expect(parts[0]).toMatchObject({
+    expect(contents[0].role).toBe("model");
+    expect(contents[0].parts?.[0]).toMatchObject({
       thought: true,
       thoughtSignature: "sig",
     });
@@ -257,6 +270,8 @@ describe("google-shared convertMessages", () => {
     expect(contents).toHaveLength(2);
     expect(contents[0].role).toBe("user");
     expect(contents[1].role).toBe("user");
+    expect(contents[0].parts).toHaveLength(1);
+    expect(contents[1].parts).toHaveLength(1);
   });
 
   it("does not merge consecutive user messages for non-Gemini Google models", () => {
@@ -278,6 +293,8 @@ describe("google-shared convertMessages", () => {
     expect(contents).toHaveLength(2);
     expect(contents[0].role).toBe("user");
     expect(contents[1].role).toBe("user");
+    expect(contents[0].parts).toHaveLength(1);
+    expect(contents[1].parts).toHaveLength(1);
   });
 
   it("does not merge consecutive model messages for Gemini", () => {
@@ -342,6 +359,8 @@ describe("google-shared convertMessages", () => {
     expect(contents[0].role).toBe("user");
     expect(contents[1].role).toBe("model");
     expect(contents[2].role).toBe("model");
+    expect(contents[1].parts).toHaveLength(1);
+    expect(contents[2].parts).toHaveLength(1);
   });
 
   it("handles user message after tool result without model response in between", () => {
@@ -402,6 +421,7 @@ describe("google-shared convertMessages", () => {
     expect(contents[0].role).toBe("user");
     expect(contents[1].role).toBe("model");
     expect(contents[2].role).toBe("user");
+    expect(contents[3].role).toBe("user");
     const toolResponsePart = contents[2].parts?.find(
       (part) =>
         typeof part === "object" && part !== null && "functionResponse" in part,
@@ -479,11 +499,79 @@ describe("google-shared convertMessages", () => {
     expect(contents).toHaveLength(3);
     expect(contents[0].role).toBe("user");
     expect(contents[1].role).toBe("model");
+    expect(contents[2].role).toBe("model");
     const toolCallPart = contents[2].parts?.find(
       (part) =>
         typeof part === "object" && part !== null && "functionCall" in part,
     );
     const toolCall = asRecord(toolCallPart);
     expect(toolCall.functionCall).toBeTruthy();
+  });
+
+  it("strips tool call and response ids for google-gemini-cli", () => {
+    const model = makeGeminiCliModel("gemini-3-flash");
+    const context = {
+      messages: [
+        {
+          role: "user",
+          content: "Use a tool",
+        },
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "call_1",
+              name: "myTool",
+              arguments: { arg: "value" },
+            },
+          ],
+          api: "google-gemini-cli",
+          provider: "google-gemini-cli",
+          model: "gemini-3-flash",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              total: 0,
+            },
+          },
+          stopReason: "stop",
+          timestamp: 0,
+        },
+        {
+          role: "toolResult",
+          toolCallId: "call_1",
+          toolName: "myTool",
+          content: [{ type: "text", text: "Tool result" }],
+          isError: false,
+          timestamp: 0,
+        },
+      ],
+    } as unknown as Context;
+
+    const contents = convertMessages(model, context);
+    const parts = contents.flatMap((content) => content.parts ?? []);
+    const toolCallPart = parts.find(
+      (part) =>
+        typeof part === "object" && part !== null && "functionCall" in part,
+    );
+    const toolResponsePart = parts.find(
+      (part) =>
+        typeof part === "object" && part !== null && "functionResponse" in part,
+    );
+
+    const toolCall = asRecord(toolCallPart);
+    const toolResponse = asRecord(toolResponsePart);
+
+    expect(asRecord(toolCall.functionCall).id).toBeUndefined();
+    expect(asRecord(toolResponse.functionResponse).id).toBeUndefined();
   });
 });

@@ -82,6 +82,132 @@ To prevent the bot from responding to WhatsApp @-mentions in groups (only respon
 }
 ```
 
+## Config Includes (`$include`)
+
+Split your config into multiple files using the `$include` directive. This is useful for:
+- Organizing large configs (e.g., per-client agent definitions)
+- Sharing common settings across environments
+- Keeping sensitive configs separate
+
+### Basic usage
+
+```json5
+// ~/.clawdbot/clawdbot.json
+{
+  gateway: { port: 18789 },
+  
+  // Include a single file (replaces the key's value)
+  agents: { "$include": "./agents.json5" },
+  
+  // Include multiple files (deep-merged in order)
+  broadcast: { 
+    "$include": [
+      "./clients/mueller.json5",
+      "./clients/schmidt.json5"
+    ]
+  }
+}
+```
+
+```json5
+// ~/.clawdbot/agents.json5
+{
+  defaults: { sandbox: { mode: "all", scope: "session" } },
+  list: [
+    { id: "main", workspace: "~/clawd" }
+  ]
+}
+```
+
+### Merge behavior
+
+- **Single file**: Replaces the object containing `$include`
+- **Array of files**: Deep-merges files in order (later files override earlier ones)
+- **With sibling keys**: Sibling keys are merged after includes (override included values)
+- **Sibling keys + arrays/primitives**: Not supported (included content must be an object)
+
+```json5
+// Sibling keys override included values
+{
+  "$include": "./base.json5",   // { a: 1, b: 2 }
+  b: 99                          // Result: { a: 1, b: 99 }
+}
+```
+
+### Nested includes
+
+Included files can themselves contain `$include` directives (up to 10 levels deep):
+
+```json5
+// clients/mueller.json5
+{
+  agents: { "$include": "./mueller/agents.json5" },
+  broadcast: { "$include": "./mueller/broadcast.json5" }
+}
+```
+
+### Path resolution
+
+- **Relative paths**: Resolved relative to the including file
+- **Absolute paths**: Used as-is
+- **Parent directories**: `../` references work as expected
+
+```json5
+{ "$include": "./sub/config.json5" }      // relative
+{ "$include": "/etc/clawdbot/base.json5" } // absolute
+{ "$include": "../shared/common.json5" }   // parent dir
+```
+
+### Error handling
+
+- **Missing file**: Clear error with resolved path
+- **Parse error**: Shows which included file failed
+- **Circular includes**: Detected and reported with include chain
+
+### Example: Multi-client legal setup
+
+```json5
+// ~/.clawdbot/clawdbot.json
+{
+  gateway: { port: 18789, auth: { token: "secret" } },
+  
+  // Common agent defaults
+  agents: {
+    defaults: {
+      sandbox: { mode: "all", scope: "session" }
+    },
+    // Merge agent lists from all clients
+    list: { "$include": [
+      "./clients/mueller/agents.json5",
+      "./clients/schmidt/agents.json5"
+    ]}
+  },
+  
+  // Merge broadcast configs
+  broadcast: { "$include": [
+    "./clients/mueller/broadcast.json5",
+    "./clients/schmidt/broadcast.json5"
+  ]},
+  
+  whatsapp: { groupPolicy: "allowlist" }
+}
+```
+
+```json5
+// ~/.clawdbot/clients/mueller/agents.json5
+[
+  { id: "mueller-transcribe", workspace: "~/clients/mueller/transcribe" },
+  { id: "mueller-docs", workspace: "~/clients/mueller/docs" }
+]
+```
+
+```json5
+// ~/.clawdbot/clients/mueller/broadcast.json5
+{
+  "120363403215116621@g.us": ["mueller-transcribe", "mueller-docs"]
+}
+```
+
 ## Common options
 
 ### Env vars + `.env`
@@ -403,6 +529,10 @@ Use `*.groupPolicy` to control whether group/room messages are accepted at all:
     groupPolicy: "allowlist",
     groupAllowFrom: ["chat_id:123"]
   },
+  msteams: {
+    groupPolicy: "allowlist",
+    groupAllowFrom: ["user@org.com"]
+  },
   discord: {
     groupPolicy: "allowlist",
     guilds: {
@@ -419,12 +549,13 @@ Use `*.groupPolicy` to control whether group/room messages are accepted at all:
 ```
 
 Notes:
-- `"open"` (default): groups bypass allowlists; mention-gating still applies.
+- `"open"`: groups bypass allowlists; mention-gating still applies.
 - `"disabled"`: block all group/room messages.
 - `"allowlist"`: only allow groups/rooms that match the configured allowlist.
-- WhatsApp/Telegram/Signal/iMessage use `groupAllowFrom` (fallback: explicit `allowFrom`).
+- WhatsApp/Telegram/Signal/iMessage/Microsoft Teams use `groupAllowFrom` (fallback: explicit `allowFrom`).
 - Discord/Slack use channel allowlists (`discord.guilds.*.channels`, `slack.channels`).
 - Group DMs (Discord/Slack) are still controlled by `dm.groupEnabled` + `dm.groupChannels`.
+- Default is `groupPolicy: "allowlist"`; if no allowlist is configured, group messages are blocked.
 
 ### Multi-agent routing (`agents.list` + `bindings`)
 
@@ -512,7 +643,7 @@ Read-only tools + read-only workspace:
         },
         tools: {
           allow: ["read", "sessions_list", "sessions_history", "sessions_send", "sessions_spawn", "session_status"],
-          deny: ["write", "edit", "bash", "process", "browser"]
+          deny: ["write", "edit", "apply_patch", "exec", "process", "browser"]
         }
       }
     ]
@@ -535,7 +666,7 @@ No filesystem access (messaging/session tools enabled):
         },
         tools: {
           allow: ["sessions_list", "sessions_history", "sessions_send", "sessions_spawn", "session_status", "whatsapp", "telegram", "slack", "discord", "gateway"],
-          deny: ["read", "write", "edit", "bash", "process", "browser", "canvas", "nodes", "cron", "gateway", "image"]
+          deny: ["read", "write", "edit", "apply_patch", "exec", "process", "browser", "canvas", "nodes", "cron", "gateway", "image"]
         }
       }
     ]
@@ -1026,6 +1157,27 @@ Each `agents.defaults.models` entry can include:
 - `alias` (optional model shortcut, e.g. `/opus`).
 - `params` (optional provider-specific API params passed through to the model request).
 
+`params` is also applied to streaming runs (embedded agent + compaction). Supported keys today: `temperature`, `maxTokens`. These merge with call-time options; caller-supplied values win. `temperature` is an advanced knob—leave unset unless you know the model’s defaults and need a change.
+
+Example:
+
+```json5
+{
+  agents: {
+    defaults: {
+      models: {
+        "anthropic/claude-sonnet-4-5-20250929": {
+          params: { temperature: 0.6 }
+        },
+        "openai/gpt-5.2": {
+          params: { maxTokens: 8192 }
+        }
+      }
+    }
+  }
+}
+```
+
 Z.AI GLM-4.x models automatically enable thinking mode unless you:
 - set `--thinking off`, or
 - define `agents.defaults.models["zai/<model>"].params.thinking` yourself.
@@ -1127,7 +1279,7 @@ Example:
         maxConcurrent: 1,
         archiveAfterMinutes: 60
       },
-      bash: {
+      exec: {
         backgroundMs: 10000,
         timeoutSec: 1800,
         cleanupMs: 1800000
@@ -1221,6 +1373,42 @@ Example (adaptive tuned):
 
 See [/concepts/session-pruning](/concepts/session-pruning) for behavior details.
 
+#### `agents.defaults.compaction` (reserve headroom + memory flush)
+
+`agents.defaults.compaction.reserveTokensFloor` enforces a minimum `reserveTokens`
+value for Pi compaction (default: `20000`). Set it to `0` to disable the floor.
+
+`agents.defaults.compaction.memoryFlush` runs a **silent** agentic turn before
+auto-compaction, instructing the model to store durable memories on disk (e.g.
+`memory/YYYY-MM-DD.md`). It triggers when the session token estimate crosses a
+soft threshold below the compaction limit.
+
+Defaults:
+- `memoryFlush.enabled`: `true`
+- `memoryFlush.softThresholdTokens`: `4000`
+- `memoryFlush.prompt` / `memoryFlush.systemPrompt`: built-in defaults with `NO_REPLY`
+- Note: memory flush is skipped when the session workspace is read-only
+  (`agents.defaults.sandbox.workspaceAccess: "ro"` or `"none"`).
+
+Example (tuned):
+```json5
+{
+  agents: {
+    defaults: {
+      compaction: {
+        reserveTokensFloor: 24000,
+        memoryFlush: {
+          enabled: true,
+          softThresholdTokens: 6000,
+          systemPrompt: "Session nearing compaction. Store durable memories now.",
+          prompt: "Write any lasting notes to memory/YYYY-MM-DD.md; reply with NO_REPLY if nothing to store."
+        }
+      }
+    }
+  }
+}
+```
+
 Block streaming:
 - `agents.defaults.blockStreamingDefault`: `"on"`/`"off"` (default off).
 - Provider overrides: `*.blockStreaming` (and per-account variants) to force block streaming on/off.
@@ -1275,15 +1463,19 @@ Z.AI models are available as `zai/<model>` (e.g. `zai/glm-4.7`) and require
 - `target`: optional delivery provider (`last`, `whatsapp`, `telegram`, `discord`, `slack`, `signal`, `imessage`, `none`). Default: `last`.
 - `to`: optional recipient override (provider-specific id, e.g. E.164 for WhatsApp, chat id for Telegram).
 - `prompt`: optional override for the heartbeat body (default: `Read HEARTBEAT.md if exists. Consider outstanding tasks. Checkup sometimes on your human during (user local) day time.`). Overrides are sent verbatim; include a `Read HEARTBEAT.md if exists` line if you still want the file read.
-- `ackMaxChars`: max chars allowed after `HEARTBEAT_OK` before delivery (default: 30).
+- `ackMaxChars`: max chars allowed after `HEARTBEAT_OK` before delivery (default: 300).
 
 Heartbeats run full agent turns. Shorter intervals burn more tokens; be mindful
 of `every`, keep `HEARTBEAT.md` tiny, and/or choose a cheaper `model`.
 
-`tools.bash` configures background bash defaults:
+`tools.exec` configures background exec defaults:
 - `backgroundMs`: time before auto-background (ms, default 10000)
 - `timeoutSec`: auto-kill after this runtime (seconds, default 1800)
 - `cleanupMs`: how long to keep finished sessions in memory (ms, default 1800000)
+- `applyPatch.enabled`: enable experimental `apply_patch` (OpenAI/OpenAI Codex only; default false)
+- `applyPatch.allowModels`: optional allowlist of model ids (e.g. `gpt-5.2` or `openai/gpt-5.2`)
+Note: `applyPatch` is only under `tools.exec` (no `tools.bash` alias).
+Legacy: `tools.bash` is still accepted as an alias.
 
 `agents.defaults.subagents` configures sub-agent defaults:
 - `maxConcurrent`: max concurrent sub-agent runs (default 1)
@@ -1300,7 +1492,7 @@ Example (disable browser/canvas everywhere):
 }
 ```
 
-`tools.elevated` controls elevated (host) bash access:
+`tools.elevated` controls elevated (host) exec access:
 - `enabled`: allow elevated mode (default true)
 - `allowFrom`: per-provider allowlists (empty = disabled)
   - `whatsapp`: E.164 numbers
@@ -1344,8 +1536,8 @@ Per-agent override (further restrict):
 Notes:
 - `tools.elevated` is the global baseline. `agents.list[].tools.elevated` can only further restrict (both must allow).
 - `/elevated on|off` stores state per session key; inline directives apply to a single message.
-- Elevated `bash` runs on the host and bypasses sandboxing.
-- Tool policy still applies; if `bash` is denied, elevated cannot be used.
+- Elevated `exec` runs on the host and bypasses sandboxing.
+- Tool policy still applies; if `exec` is denied, elevated cannot be used.
 
 `agents.defaults.maxConcurrent` sets the maximum number of embedded agent runs that can
 execute in parallel across sessions. Each session is still serialized (one run
@@ -1363,10 +1555,10 @@ Defaults (if enabled):
 - Debian bookworm-slim based image
 - agent workspace access: `workspaceAccess: "none"` (default)
   - `"none"`: use a per-scope sandbox workspace under `~/.clawdbot/sandboxes`
-  - `"ro"`: keep the sandbox workspace at `/workspace`, and mount the agent workspace read-only at `/agent` (disables `write`/`edit`)
+- `"ro"`: keep the sandbox workspace at `/workspace`, and mount the agent workspace read-only at `/agent` (disables `write`/`edit`/`apply_patch`)
   - `"rw"`: mount the agent workspace read/write at `/workspace`
 - auto-prune: idle > 24h OR age > 7d
-- tool policy: allow only `bash`, `process`, `read`, `write`, `edit`, `sessions_list`, `sessions_history`, `sessions_send`, `sessions_spawn`, `session_status` (deny wins)
+- tool policy: allow only `exec`, `process`, `read`, `write`, `edit`, `apply_patch`, `sessions_list`, `sessions_history`, `sessions_send`, `sessions_spawn`, `session_status` (deny wins)
   - configure via `tools.sandbox.tools`, override per-agent via `agents.list[].tools.sandbox.tools`
 - optional sandboxed browser (Chromium + CDP, noVNC observer)
 - hardening knobs: `network`, `user`, `pidsLimit`, `memory`, `cpus`, `ulimits`, `seccompProfile`, `apparmorProfile`
@@ -1437,7 +1629,7 @@ Legacy: `perSession` is still supported (`true` → `scope: "session"`,
   tools: {
     sandbox: {
       tools: {
-        allow: ["bash", "process", "read", "write", "edit", "sessions_list", "sessions_history", "sessions_send", "sessions_spawn", "session_status"],
+        allow: ["exec", "process", "read", "write", "edit", "apply_patch", "sessions_list", "sessions_history", "sessions_send", "sessions_spawn", "session_status"],
         deny: ["browser", "canvas", "nodes", "cron", "discord", "gateway"]
       }
     }
@@ -1577,9 +1769,51 @@ Notes:
   override (see the custom providers section above).
 - Use a fake placeholder in docs/configs; never commit real API keys.
 
+### Moonshot AI (Kimi)
+
+Use Moonshot's OpenAI-compatible endpoint:
+
+```json5
+{
+  env: { MOONSHOT_API_KEY: "sk-..." },
+  agents: {
+    defaults: {
+      model: { primary: "moonshot/kimi-k2-0905-preview" },
+      models: { "moonshot/kimi-k2-0905-preview": { alias: "Kimi K2" } }
+    }
+  },
+  models: {
+    mode: "merge",
+    providers: {
+      moonshot: {
+        baseUrl: "https://api.moonshot.ai/v1",
+        apiKey: "${MOONSHOT_API_KEY}",
+        api: "openai-completions",
+        models: [
+          {
+            id: "kimi-k2-0905-preview",
+            name: "Kimi K2 0905 Preview",
+            reasoning: false,
+            input: ["text"],
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            contextWindow: 256000,
+            maxTokens: 8192
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+Notes:
+- Set `MOONSHOT_API_KEY` in the environment or use `clawdbot onboard --auth-choice moonshot-api-key`.
+- Model ref: `moonshot/kimi-k2-0905-preview`.
+- Use `https://api.moonshot.cn/v1` if you need the China endpoint.
+
 ### Local models (LM Studio) — recommended setup
 
-Best current local setup (what we’re running): **MiniMax M2.1** on a beefy Mac Studio
+Best current local setup (what we’re running): **MiniMax M2.1** on a powerful local machine
 via **LM Studio** using the **Responses API**.
 
 ```json5
@@ -1622,9 +1856,9 @@ Notes:
 - Responses API enables clean reasoning/output separation; WhatsApp sees only final text.
 - Adjust `contextWindow`/`maxTokens` if your LM Studio context length differs.
 
-### MiniMax API (platform.minimax.io)
+### MiniMax M2.1
 
-Use MiniMax's Anthropic-compatible API directly without LM Studio:
+Use MiniMax M2.1 directly without LM Studio:
 
 ```json5
 {
@@ -1648,25 +1882,7 @@ Use MiniMax's Anthropic-compatible API directly without LM Studio:
             name: "MiniMax M2.1",
             reasoning: false,
             input: ["text"],
-            // Pricing: MiniMax doesn't publish public rates. Override in models.json for accurate costs.
-            cost: { input: 15, output: 60, cacheRead: 2, cacheWrite: 10 },
-            contextWindow: 200000,
-            maxTokens: 8192
-          },
-          {
-            id: "MiniMax-M2.1-lightning",
-            name: "MiniMax M2.1 Lightning",
-            reasoning: false,
-            input: ["text"],
-            cost: { input: 15, output: 60, cacheRead: 2, cacheWrite: 10 },
-            contextWindow: 200000,
-            maxTokens: 8192
-          },
-          {
-            id: "MiniMax-M2",
-            name: "MiniMax M2",
-            reasoning: true,
-            input: ["text"],
+            // Pricing: update in models.json if you need exact cost tracking.
             cost: { input: 15, output: 60, cacheRead: 2, cacheWrite: 10 },
             contextWindow: 200000,
             maxTokens: 8192
@@ -1679,9 +1895,49 @@ Use MiniMax's Anthropic-compatible API directly without LM Studio:
 ```
 
 Notes:
-- Set `MINIMAX_API_KEY` environment variable or use `clawdbot onboard --auth-choice minimax-api`
-- Available models: `MiniMax-M2.1` (default), `MiniMax-M2.1-lightning` (~100 tps), `MiniMax-M2` (reasoning)
-- Pricing is a placeholder; MiniMax doesn't publish public rates. Override in `models.json` for accurate cost tracking.
+- Set `MINIMAX_API_KEY` environment variable or use `clawdbot onboard --auth-choice minimax-api`.
+- Available model: `MiniMax-M2.1` (default).
+- Update pricing in `models.json` if you need exact cost tracking.
+
+### Cerebras (GLM 4.6 / 4.7)
+
+Use Cerebras via their OpenAI-compatible endpoint:
+
+```json5
+{
+  env: { CEREBRAS_API_KEY: "sk-..." },
+  agents: {
+    defaults: {
+      model: {
+        primary: "cerebras/zai-glm-4.7",
+        fallbacks: ["cerebras/zai-glm-4.6"]
+      },
+      models: {
+        "cerebras/zai-glm-4.7": { alias: "GLM 4.7 (Cerebras)" },
+        "cerebras/zai-glm-4.6": { alias: "GLM 4.6 (Cerebras)" }
+      }
+    }
+  },
+  models: {
+    mode: "merge",
+    providers: {
+      cerebras: {
+        baseUrl: "https://api.cerebras.ai/v1",
+        apiKey: "${CEREBRAS_API_KEY}",
+        api: "openai-completions",
+        models: [
+          { id: "zai-glm-4.7", name: "GLM 4.7 (Cerebras)" },
+          { id: "zai-glm-4.6", name: "GLM 4.6 (Cerebras)" }
+        ]
+      }
+    }
+  }
+}
+```
+
+Notes:
+- Use `cerebras/zai-glm-4.7` for Cerebras; use `zai/glm-4.7` for Z.AI direct.
+- Set `CEREBRAS_API_KEY` in the environment or config.
 
 Notes:
 - Supported APIs: `openai-completions`, `openai-responses`, `anthropic-messages`,
@@ -1770,6 +2026,44 @@ Example:
       },
       peekaboo: { enabled: true },
       sag: { enabled: false }
+    }
+  }
+}
+```
+
+### `plugins` (extensions)
+
+Controls plugin discovery, allow/deny, and per-plugin config. Plugins are loaded
+from `~/.clawdbot/extensions`, `<workspace>/.clawdbot/extensions`, plus any
+`plugins.load.paths` entries. **Config changes require a gateway restart.**
+See [/plugin](/plugin) for full usage.
+
+Fields:
+- `enabled`: master toggle for plugin loading (default: true).
+- `allow`: optional allowlist of plugin ids; when set, only listed plugins load.
+- `deny`: optional denylist of plugin ids (deny wins).
+- `load.paths`: extra plugin files or directories to load (absolute or `~`).
+- `entries.<pluginId>`: per-plugin overrides.
+  - `enabled`: set `false` to disable.
+  - `config`: plugin-specific config object (validated by the plugin if provided).
+
+Example:
+
+```json5
+{
+  plugins: {
+    enabled: true,
+    allow: ["voice-call"],
+    load: {
+      paths: ["~/Projects/oss/voice-call-extension"]
+    },
+    entries: {
+      "voice-call": {
+        enabled: true,
+        config: {
+          provider: "twilio"
+        }
+      }
     }
   }
 }
@@ -1942,6 +2236,7 @@ Requires full Gateway restart:
 - `bridge`
 - `discovery`
 - `canvasHost`
+- `plugins`
 - Any unknown/unsupported config path (defaults to restart for safety)
 
 ### Multi-instance isolation

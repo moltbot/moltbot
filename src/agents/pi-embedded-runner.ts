@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import type {
   AgentMessage,
   AgentTool,
+  StreamFn,
   ThinkingLevel,
 } from "@mariozechner/pi-agent-core";
 import type {
@@ -13,7 +14,9 @@ import type {
   AssistantMessage,
   ImageContent,
   Model,
+  SimpleStreamOptions,
 } from "@mariozechner/pi-ai";
+import { streamSimple } from "@mariozechner/pi-ai";
 import {
   createAgentSession,
   discoverAuthStorage,
@@ -33,12 +36,14 @@ import { isCacheEnabled, resolveCacheTtlMs } from "../config/cache-utils.js";
 import type { ClawdbotConfig } from "../config/config.js";
 import { resolveProviderCapabilities } from "../config/provider-capabilities.js";
 import { getMachineDisplayName } from "../infra/machine-name.js";
+import { registerUnhandledRejectionHandler } from "../infra/unhandled-rejections.js";
 import { createSubsystemLogger } from "../logging.js";
 import {
   type enqueueCommand,
   enqueueCommandInLane,
 } from "../process/command-queue.js";
 import { normalizeMessageProvider } from "../utils/message-provider.js";
+import { isReasoningTagProvider } from "../utils/provider-utils.js";
 import { resolveUserPath } from "../utils.js";
 import { resolveClawdbotAgentDir } from "./agent-paths.js";
 import { resolveSessionAgentIds } from "./agent-scope.js";
@@ -47,7 +52,7 @@ import {
   markAuthProfileGood,
   markAuthProfileUsed,
 } from "./auth-profiles.js";
-import type { BashElevatedDefaults } from "./bash-tools.js";
+import type { ExecElevatedDefaults, ExecToolDefaults } from "./bash-tools.js";
 import {
   CONTEXT_WINDOW_HARD_MIN_TOKENS,
   CONTEXT_WINDOW_WARN_BELOW_TOKENS,
@@ -69,6 +74,10 @@ import {
 import { normalizeModelCompat } from "./model-compat.js";
 import { ensureClawdbotModelsJson } from "./models-config.js";
 import type { MessagingToolSend } from "./pi-embedded-messaging.js";
+import {
+  ensurePiCompactionReserveTokens,
+  resolveCompactionReserveTokensFloor,
+} from "./pi-settings.js";
 import { acquireSessionWriteLock } from "./session-write-lock.js";
 
 export type { MessagingToolSend } from "./pi-embedded-messaging.js";
@@ -81,6 +90,7 @@ import {
   formatAssistantErrorText,
   isAuthAssistantError,
   isCloudCodeAssistFormatError,
+  isCompactionFailureError,
   isContextOverflowError,
   isFailoverAssistantError,
   isFailoverErrorMessage,
@@ -116,6 +126,7 @@ import {
   type SkillSnapshot,
 } from "./skills.js";
 import { buildAgentSystemPrompt } from "./system-prompt.js";
+import { buildToolSummaryMap } from "./tool-summaries.js";
 import { normalizeUsage, type UsageLike } from "./usage.js";
 import {
   filterBootstrapFilesForSession,
@@ -185,6 +196,76 @@ export function resolveExtraParams(params: {
   }
 
   return extraParams;
+}
+
+/**
+ * Create a wrapped streamFn that injects extra params (like temperature) from config.
+ *
+ * @internal
+ */
+function createStreamFnWithExtraParams(
+  baseStreamFn: StreamFn | undefined,
+  extraParams: Record<string, unknown> | undefined,
+): StreamFn | undefined {
+  if (!extraParams || Object.keys(extraParams).length === 0) {
+    return undefined; // No wrapper needed
+  }
+
+  const streamParams: Partial<SimpleStreamOptions> = {};
+  if (typeof extraParams.temperature === "number") {
+    streamParams.temperature = extraParams.temperature;
+  }
+  if (typeof extraParams.maxTokens === "number") {
+    streamParams.maxTokens = extraParams.maxTokens;
+  }
+
+  if (Object.keys(streamParams).length === 0) {
+    return undefined;
+  }
+
+  log.debug(
+    `creating streamFn wrapper with params: ${JSON.stringify(streamParams)}`,
+  );
+
+  const underlying = baseStreamFn ?? streamSimple;
+  const wrappedStreamFn: StreamFn = (model, context, options) =>
+    underlying(model, context, {
+      ...streamParams,
+      ...options, // Caller options take precedence
+    });
+
+  return wrappedStreamFn;
+}
+
+/**
+ * Apply extra params (like temperature) to an agent's streamFn.
+ *
+ * @internal Exported for testing
+ */
+export function applyExtraParamsToAgent(
+  agent: { streamFn?: StreamFn },
+  cfg: ClawdbotConfig | undefined,
+  provider: string,
+  modelId: string,
+  thinkLevel?: string,
+): void {
+  const extraParams = resolveExtraParams({
+    cfg,
+    provider,
+    modelId,
+    thinkLevel,
+  });
+  const wrappedStreamFn = createStreamFnWithExtraParams(
+    agent.streamFn,
+    extraParams,
+  );
+
+  if (wrappedStreamFn) {
+    log.debug(
+      `applying extraParams to agent streamFn for ${provider}/${modelId}`,
+    );
+    agent.streamFn = wrappedStreamFn;
+  }
 }
 
 // We configure context pruning per-session via a WeakMap registry keyed by the SessionManager instance.
@@ -333,6 +414,13 @@ type EmbeddedPiQueueHandle = {
 const log = createSubsystemLogger("agent/embedded");
 const GOOGLE_TURN_ORDERING_CUSTOM_TYPE = "google-turn-ordering-bootstrap";
 
+registerUnhandledRejectionHandler((reason) => {
+  const message = describeUnknownError(reason);
+  if (!isCompactionFailureError(message)) return false;
+  log.error(`Auto-compaction failed (unhandled): ${message}`);
+  return true;
+});
+
 type CustomEntryLike = { type?: unknown; customType?: unknown };
 
 function hasGoogleTurnOrderingMarker(sessionManager: SessionManager): boolean {
@@ -409,6 +497,113 @@ async function sanitizeSessionHistory(params: {
     sessionManager: params.sessionManager,
     sessionId: params.sessionId,
   }).messages;
+}
+
+/**
+ * Limits conversation history to the last N user turns (and their associated
+ * assistant responses). This reduces token usage for long-running DM sessions.
+ *
+ * @param messages - The full message history
+ * @param limit - Max number of user turns to keep (undefined = no limit)
+ * @returns Messages trimmed to the last `limit` user turns
+ */
+export function limitHistoryTurns(
+  messages: AgentMessage[],
+  limit: number | undefined,
+): AgentMessage[] {
+  if (!limit || limit <= 0 || messages.length === 0) return messages;
+
+  // Count user messages from the end, find cutoff point
+  let userCount = 0;
+  let lastUserIndex = messages.length;
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "user") {
+      userCount++;
+      if (userCount > limit) {
+        // We exceeded the limit; keep from the last valid user turn onwards
+        return messages.slice(lastUserIndex);
+      }
+      lastUserIndex = i;
+    }
+  }
+  // Fewer than limit user turns, keep all
+  return messages;
+}
+
+/**
+ * Extracts the provider name and user ID from a session key and looks up
+ * dmHistoryLimit from the provider config, with per-DM override support.
+ *
+ * Session key formats:
+ * - `telegram:dm:123` → provider = telegram, userId = 123
+ * - `agent:main:telegram:dm:123` → provider = telegram, userId = 123
+ *
+ * Resolution order:
+ * 1. Per-DM override: provider.dms[userId].historyLimit
+ * 2. Provider default: provider.dmHistoryLimit
+ */
+export function getDmHistoryLimitFromSessionKey(
+  sessionKey: string | undefined,
+  config: ClawdbotConfig | undefined,
+): number | undefined {
+  if (!sessionKey || !config) return undefined;
+
+  const parts = sessionKey.split(":").filter(Boolean);
+  // Handle agent-prefixed keys: agent:<agentId>:<provider>:...
+  const providerParts =
+    parts.length >= 3 && parts[0] === "agent" ? parts.slice(2) : parts;
+
+  const provider = providerParts[0]?.toLowerCase();
+  if (!provider) return undefined;
+
+  // Extract userId: format is provider:dm:userId or provider:dm:userId:...
+  // The userId may contain colons (e.g., email addresses), so join remaining parts
+  const kind = providerParts[1]?.toLowerCase();
+  const userId = providerParts.slice(2).join(":");
+  if (kind !== "dm") return undefined;
+
+  // Helper to get limit with per-DM override support
+  const getLimit = (
+    providerConfig:
+      | {
+          dmHistoryLimit?: number;
+          dms?: Record<string, { historyLimit?: number }>;
+        }
+      | undefined,
+  ): number | undefined => {
+    if (!providerConfig) return undefined;
+    // Check per-DM override first
+    if (
+      userId &&
+      kind === "dm" &&
+      providerConfig.dms?.[userId]?.historyLimit !== undefined
+    ) {
+      return providerConfig.dms[userId].historyLimit;
+    }
+    // Fall back to provider default
+    return providerConfig.dmHistoryLimit;
+  };
+
+  // Map provider to config key
+  switch (provider) {
+    case "telegram":
+      return getLimit(config.telegram);
+    case "whatsapp":
+      return getLimit(config.whatsapp);
+    case "discord":
+      return getLimit(config.discord);
+    case "slack":
+      return getLimit(config.slack);
+    case "signal":
+      return getLimit(config.signal);
+    case "imessage":
+      return getLimit(config.imessage);
+    case "msteams":
+      return getLimit(config.msteams);
+    default:
+      return undefined;
+  }
 }
 
 const ACTIVE_EMBEDDED_RUNS = new Map<string, EmbeddedPiQueueHandle>();
@@ -577,11 +772,11 @@ function describeUnknownError(error: unknown): string {
 
 export function buildEmbeddedSandboxInfo(
   sandbox?: Awaited<ReturnType<typeof resolveSandboxContext>>,
-  bashElevated?: BashElevatedDefaults,
+  execElevated?: ExecElevatedDefaults,
 ): EmbeddedSandboxInfo | undefined {
   if (!sandbox?.enabled) return undefined;
   const elevatedAllowed = Boolean(
-    bashElevated?.enabled && bashElevated.allowed,
+    execElevated?.enabled && execElevated.allowed,
   );
   return {
     enabled: true,
@@ -599,7 +794,7 @@ export function buildEmbeddedSandboxInfo(
       ? {
           elevated: {
             allowed: true,
-            defaultLevel: bashElevated?.defaultLevel ?? "off",
+            defaultLevel: execElevated?.defaultLevel ?? "off",
           },
         }
       : {}),
@@ -643,6 +838,7 @@ function buildEmbeddedSystemPrompt(params: {
     runtimeInfo: params.runtimeInfo,
     sandboxInfo: params.sandboxInfo,
     toolNames: params.tools.map((tool) => tool.name),
+    toolSummaries: buildToolSummaryMap(params.tools),
     modelAliasLines: params.modelAliasLines,
     userTimezone: params.userTimezone,
     userTime: params.userTime,
@@ -757,6 +953,16 @@ function mapThinkingLevel(level?: ThinkLevel): ThinkingLevel {
   return level;
 }
 
+function resolveExecToolDefaults(
+  config?: ClawdbotConfig,
+): ExecToolDefaults | undefined {
+  const tools = config?.tools;
+  if (!tools) return undefined;
+  if (!tools.exec) return tools.bash;
+  if (!tools.bash) return tools.exec;
+  return { ...tools.bash, ...tools.exec };
+}
+
 function resolveModel(
   provider: string,
   modelId: string,
@@ -795,7 +1001,7 @@ export async function compactEmbeddedPiSession(params: {
   model?: string;
   thinkLevel?: ThinkLevel;
   reasoningLevel?: ReasoningLevel;
-  bashElevated?: BashElevatedDefaults;
+  bashElevated?: ExecElevatedDefaults;
   customInstructions?: string;
   lane?: string;
   enqueue?: typeof enqueueCommand;
@@ -895,8 +1101,8 @@ export async function compactEmbeddedPiSession(params: {
         const contextFiles = buildBootstrapContextFiles(bootstrapFiles);
         const runAbortController = new AbortController();
         const tools = createClawdbotCodingTools({
-          bash: {
-            ...params.config?.tools?.bash,
+          exec: {
+            ...resolveExecToolDefaults(params.config),
             elevated: params.bashElevated,
           },
           sandbox,
@@ -908,6 +1114,7 @@ export async function compactEmbeddedPiSession(params: {
           config: params.config,
           abortSignal: runAbortController.signal,
           modelProvider: model.provider,
+          modelId,
           modelAuthMode: resolveModelAuthMode(model.provider, params.config),
           // No currentChannelId/currentThreadTs for compaction - not in message context
         });
@@ -935,7 +1142,7 @@ export async function compactEmbeddedPiSession(params: {
           sandbox,
           params.bashElevated,
         );
-        const reasoningTagHint = provider === "ollama";
+        const reasoningTagHint = isReasoningTagProvider(provider);
         const userTimezone = resolveUserTimezone(
           params.config?.agents?.defaults?.userTimezone,
         );
@@ -981,6 +1188,12 @@ export async function compactEmbeddedPiSession(params: {
             effectiveWorkspace,
             agentDir,
           );
+          ensurePiCompactionReserveTokens({
+            settingsManager,
+            minReserveTokens: resolveCompactionReserveTokensFloor(
+              params.config,
+            ),
+          });
           const additionalExtensionPaths = buildEmbeddedExtensionPaths({
             cfg: params.config,
             sessionManager,
@@ -1014,6 +1227,15 @@ export async function compactEmbeddedPiSession(params: {
             additionalExtensionPaths,
           }));
 
+          // Wire up config-driven model params (e.g., temperature/maxTokens)
+          applyExtraParamsToAgent(
+            session.agent,
+            params.config,
+            provider,
+            modelId,
+            params.thinkLevel,
+          );
+
           try {
             const prior = await sanitizeSessionHistory({
               messages: session.messages,
@@ -1022,8 +1244,12 @@ export async function compactEmbeddedPiSession(params: {
               sessionId: params.sessionId,
             });
             const validated = validateGeminiTurns(prior);
-            if (validated.length > 0) {
-              session.agent.replaceMessages(validated);
+            const limited = limitHistoryTurns(
+              validated,
+              getDmHistoryLimitFromSessionKey(params.sessionKey, params.config),
+            );
+            if (limited.length > 0) {
+              session.agent.replaceMessages(limited);
             }
             const result = await session.compact(params.customInstructions);
             return {
@@ -1083,7 +1309,7 @@ export async function runEmbeddedPiAgent(params: {
   thinkLevel?: ThinkLevel;
   verboseLevel?: VerboseLevel;
   reasoningLevel?: ReasoningLevel;
-  bashElevated?: BashElevatedDefaults;
+  bashElevated?: ExecElevatedDefaults;
   timeoutMs: number;
   runId: string;
   abortSignal?: AbortSignal;
@@ -1097,6 +1323,8 @@ export async function runEmbeddedPiAgent(params: {
     mediaUrls?: string[];
     audioAsVoice?: boolean;
   }) => void | Promise<void>;
+  /** Flush pending block replies (e.g., before tool execution to preserve message boundaries). */
+  onBlockReplyFlush?: () => void | Promise<void>;
   blockReplyBreak?: "text_end" | "message_end";
   blockReplyChunking?: BlockReplyChunking;
   onReasoningStream?: (payload: {
@@ -1255,11 +1483,6 @@ export async function runEmbeddedPiAgent(params: {
             : sandbox.workspaceDir
           : resolvedWorkspace;
         await fs.mkdir(effectiveWorkspace, { recursive: true });
-        await ensureSessionHeader({
-          sessionFile: params.sessionFile,
-          sessionId: params.sessionId,
-          cwd: effectiveWorkspace,
-        });
 
         let restoreSkillEnv: (() => void) | undefined;
         process.chdir(effectiveWorkspace);
@@ -1293,8 +1516,8 @@ export async function runEmbeddedPiAgent(params: {
           // Tool schemas must be provider-compatible (OpenAI requires top-level `type: "object"`).
           // `createClawdbotCodingTools()` normalizes schemas so the session can pass them through unchanged.
           const tools = createClawdbotCodingTools({
-            bash: {
-              ...params.config?.tools?.bash,
+            exec: {
+              ...resolveExecToolDefaults(params.config),
               elevated: params.bashElevated,
             },
             sandbox,
@@ -1306,6 +1529,7 @@ export async function runEmbeddedPiAgent(params: {
             config: params.config,
             abortSignal: runAbortController.signal,
             modelProvider: model.provider,
+            modelId,
             modelAuthMode: resolveModelAuthMode(model.provider, params.config),
             currentChannelId: params.currentChannelId,
             currentThreadTs: params.currentThreadTs,
@@ -1324,7 +1548,7 @@ export async function runEmbeddedPiAgent(params: {
             sandbox,
             params.bashElevated,
           );
-          const reasoningTagHint = provider === "ollama";
+          const reasoningTagHint = isReasoningTagProvider(provider);
           const userTimezone = resolveUserTimezone(
             params.config?.agents?.defaults?.userTimezone,
           );
@@ -1369,6 +1593,12 @@ export async function runEmbeddedPiAgent(params: {
             effectiveWorkspace,
             agentDir,
           );
+          ensurePiCompactionReserveTokens({
+            settingsManager,
+            minReserveTokens: resolveCompactionReserveTokensFloor(
+              params.config,
+            ),
+          });
           const additionalExtensionPaths = buildEmbeddedExtensionPaths({
             cfg: params.config,
             sessionManager,
@@ -1404,6 +1634,15 @@ export async function runEmbeddedPiAgent(params: {
             additionalExtensionPaths,
           }));
 
+          // Wire up config-driven model params (e.g., temperature/maxTokens)
+          applyExtraParamsToAgent(
+            session.agent,
+            params.config,
+            provider,
+            modelId,
+            params.thinkLevel,
+          );
+
           try {
             const prior = await sanitizeSessionHistory({
               messages: session.messages,
@@ -1412,8 +1651,12 @@ export async function runEmbeddedPiAgent(params: {
               sessionId: params.sessionId,
             });
             const validated = validateGeminiTurns(prior);
-            if (validated.length > 0) {
-              session.agent.replaceMessages(validated);
+            const limited = limitHistoryTurns(
+              validated,
+              getDmHistoryLimitFromSessionKey(params.sessionKey, params.config),
+            );
+            if (limited.length > 0) {
+              session.agent.replaceMessages(limited);
             }
           } catch (err) {
             session.dispose();
@@ -1439,6 +1682,7 @@ export async function runEmbeddedPiAgent(params: {
               onToolResult: params.onToolResult,
               onReasoningStream: params.onReasoningStream,
               onBlockReply: params.onBlockReply,
+              onBlockReplyFlush: params.onBlockReplyFlush,
               blockReplyBreak: params.blockReplyBreak,
               blockReplyChunking: params.blockReplyChunking,
               onPartialReply: params.onPartialReply,

@@ -1,4 +1,9 @@
 import crypto from "node:crypto";
+import {
+  resolveAgentConfig,
+  resolveAgentWorkspaceDir,
+  resolveDefaultAgentId,
+} from "../agents/agent-scope.js";
 import { runCliAgent } from "../agents/cli-runner.js";
 import { getCliSessionId, setCliSessionId } from "../agents/cli-session.js";
 import { lookupContextTokens } from "../agents/context.js";
@@ -21,15 +26,7 @@ import { runEmbeddedPiAgent } from "../agents/pi-embedded.js";
 import { buildWorkspaceSkillSnapshot } from "../agents/skills.js";
 import { resolveAgentTimeoutMs } from "../agents/timeout.js";
 import { hasNonzeroUsage } from "../agents/usage.js";
-import {
-  DEFAULT_AGENT_WORKSPACE_DIR,
-  ensureAgentWorkspace,
-} from "../agents/workspace.js";
-import {
-  chunkMarkdownText,
-  chunkText,
-  resolveTextChunkLimit,
-} from "../auto-reply/chunk.js";
+import { ensureAgentWorkspace } from "../agents/workspace.js";
 import {
   DEFAULT_HEARTBEAT_ACK_MAX_CHARS,
   stripHeartbeatToken,
@@ -40,21 +37,32 @@ import type { ClawdbotConfig } from "../config/config.js";
 import {
   DEFAULT_IDLE_MINUTES,
   loadSessionStore,
-  resolveAgentIdFromSessionKey,
-  resolveMainSessionKey,
+  resolveAgentMainSessionKey,
   resolveSessionTranscriptPath,
   resolveStorePath,
   type SessionEntry,
   saveSessionStore,
 } from "../config/sessions.js";
+import type { AgentDefaultsConfig } from "../config/types.js";
 import { registerAgentRunContext } from "../infra/agent-events.js";
-import { parseTelegramTarget } from "../telegram/targets.js";
-import { resolveTelegramToken } from "../telegram/token.js";
-import { normalizeE164, truncateUtf16Safe } from "../utils.js";
+import { deliverOutboundPayloads } from "../infra/outbound/deliver.js";
+import { resolveMessageProviderSelection } from "../infra/outbound/provider-selection.js";
 import {
-  isWhatsAppGroupJid,
-  normalizeWhatsAppTarget,
-} from "../whatsapp/normalize.js";
+  type OutboundProvider,
+  resolveOutboundTarget,
+} from "../infra/outbound/targets.js";
+import { normalizeProviderId } from "../providers/plugins/index.js";
+import type { ProviderId } from "../providers/plugins/types.js";
+import { DEFAULT_CHAT_PROVIDER } from "../providers/registry.js";
+import {
+  buildAgentMainSessionKey,
+  normalizeAgentId,
+} from "../routing/session-key.js";
+import {
+  INTERNAL_MESSAGE_PROVIDER,
+  normalizeMessageProvider,
+} from "../utils/message-provider.js";
+import { truncateUtf16Safe } from "../utils.js";
 import type { CronJob } from "./types.js";
 
 export type RunCronAgentTurnResult = {
@@ -109,135 +117,75 @@ function isHeartbeatOnlyResponse(
   });
 }
 
-function getMediaList(payload: DeliveryPayload) {
-  return payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
-}
-
-async function deliverPayloadsWithMedia(params: {
-  payloads: DeliveryPayload[];
-  sendText: (text: string) => Promise<unknown>;
-  sendMedia: (caption: string, mediaUrl: string) => Promise<unknown>;
-}) {
-  for (const payload of params.payloads) {
-    const mediaList = getMediaList(payload);
-    if (mediaList.length === 0) {
-      await params.sendText(payload.text ?? "");
-      continue;
-    }
-    let first = true;
-    for (const url of mediaList) {
-      const caption = first ? (payload.text ?? "") : "";
-      first = false;
-      await params.sendMedia(caption, url);
-    }
-  }
-}
-
-async function deliverChunkedPayloads(params: {
-  payloads: DeliveryPayload[];
-  chunkText: (text: string) => string[];
-  sendText: (text: string) => Promise<unknown>;
-  sendMedia: (caption: string, mediaUrl: string) => Promise<unknown>;
-}) {
-  for (const payload of params.payloads) {
-    const mediaList = getMediaList(payload);
-    if (mediaList.length === 0) {
-      for (const chunk of params.chunkText(payload.text ?? "")) {
-        await params.sendText(chunk);
-      }
-      continue;
-    }
-    let first = true;
-    for (const url of mediaList) {
-      const caption = first ? (payload.text ?? "") : "";
-      first = false;
-      await params.sendMedia(caption, url);
-    }
-  }
-}
-function resolveDeliveryTarget(
+async function resolveDeliveryTarget(
   cfg: ClawdbotConfig,
+  agentId: string,
   jobPayload: {
-    provider?:
-      | "last"
-      | "whatsapp"
-      | "telegram"
-      | "discord"
-      | "slack"
-      | "signal"
-      | "imessage"
-      | "msteams";
+    provider?: "last" | ProviderId;
     to?: string;
   },
-) {
-  const requestedProvider =
+): Promise<{
+  provider: string;
+  to?: string;
+  accountId?: string;
+  mode: "explicit" | "implicit";
+  error?: Error;
+}> {
+  const requestedRaw =
     typeof jobPayload.provider === "string" ? jobPayload.provider : "last";
+  const requestedProvider =
+    normalizeMessageProvider(requestedRaw) ?? requestedRaw;
   const explicitTo =
     typeof jobPayload.to === "string" && jobPayload.to.trim()
       ? jobPayload.to.trim()
       : undefined;
 
   const sessionCfg = cfg.session;
-  const mainSessionKey = resolveMainSessionKey(cfg);
-  const agentId = resolveAgentIdFromSessionKey(mainSessionKey);
+  const mainSessionKey = resolveAgentMainSessionKey({ cfg, agentId });
   const storePath = resolveStorePath(sessionCfg?.store, { agentId });
   const store = loadSessionStore(storePath);
   const main = store[mainSessionKey];
   const lastProvider =
-    main?.lastProvider && main.lastProvider !== "webchat"
-      ? main.lastProvider
+    main?.lastProvider && main.lastProvider !== INTERNAL_MESSAGE_PROVIDER
+      ? (normalizeProviderId(main.lastProvider) ?? main.lastProvider)
       : undefined;
   const lastTo = typeof main?.lastTo === "string" ? main.lastTo.trim() : "";
+  const lastAccountId = main?.lastAccountId;
 
-  const provider = (() => {
-    if (
-      requestedProvider === "whatsapp" ||
-      requestedProvider === "telegram" ||
-      requestedProvider === "discord" ||
-      requestedProvider === "slack" ||
-      requestedProvider === "signal" ||
-      requestedProvider === "imessage"
-    ) {
-      return requestedProvider;
+  let provider =
+    requestedProvider === "last"
+      ? lastProvider
+      : requestedProvider === INTERNAL_MESSAGE_PROVIDER
+        ? undefined
+        : normalizeProviderId(requestedProvider);
+  if (!provider) {
+    try {
+      const selection = await resolveMessageProviderSelection({ cfg });
+      provider = selection.provider;
+    } catch {
+      provider = lastProvider ?? DEFAULT_CHAT_PROVIDER;
     }
-    return lastProvider ?? "whatsapp";
-  })();
+  }
 
-  const rawTo = explicitTo ?? (lastTo || undefined);
-  const telegramTarget =
-    provider === "telegram" && rawTo ? parseTelegramTarget(rawTo) : undefined;
+  const toCandidate = explicitTo ?? (lastTo || undefined);
+  const mode: "explicit" | "implicit" = explicitTo ? "explicit" : "implicit";
+  if (!toCandidate) {
+    return { provider, to: undefined, accountId: lastAccountId, mode };
+  }
 
-  const sanitizedWhatsappTo = (() => {
-    if (provider !== "whatsapp") return rawTo;
-    if (rawTo && isWhatsAppGroupJid(rawTo)) {
-      return normalizeWhatsAppTarget(rawTo) ?? rawTo;
-    }
-    const rawAllow = cfg.whatsapp?.allowFrom ?? [];
-    if (rawAllow.includes("*")) {
-      return rawTo ? (normalizeWhatsAppTarget(rawTo) ?? rawTo) : rawTo;
-    }
-    const allowFrom = rawAllow
-      .map((val) => normalizeE164(val))
-      .filter((val) => val.length > 1);
-    if (allowFrom.length === 0) {
-      return rawTo ? (normalizeWhatsAppTarget(rawTo) ?? rawTo) : rawTo;
-    }
-    if (!rawTo) return allowFrom[0];
-    const normalized = normalizeWhatsAppTarget(rawTo);
-    if (normalized && allowFrom.includes(normalized)) return normalized;
-    return allowFrom[0];
-  })();
-
-  const to = (() => {
-    if (provider === "telegram" && telegramTarget) return telegramTarget.chatId;
-    if (provider === "whatsapp") return sanitizedWhatsappTo;
-    return rawTo;
-  })();
-
+  const resolved = resolveOutboundTarget({
+    provider: provider as Exclude<OutboundProvider, "none">,
+    to: toCandidate,
+    cfg,
+    accountId: provider === lastProvider ? lastAccountId : undefined,
+    mode,
+  });
   return {
     provider,
-    to,
-    messageThreadId: telegramTarget?.messageThreadId,
+    to: resolved.ok ? resolved.to : undefined,
+    accountId: provider === lastProvider ? lastAccountId : undefined,
+    mode,
+    error: resolved.ok ? undefined : resolved.error,
   };
 }
 
@@ -245,6 +193,7 @@ function resolveCronSession(params: {
   cfg: ClawdbotConfig;
   sessionKey: string;
   nowMs: number;
+  agentId: string;
 }) {
   const sessionCfg = params.cfg.session;
   const idleMinutes = Math.max(
@@ -252,7 +201,9 @@ function resolveCronSession(params: {
     1,
   );
   const idleMs = idleMinutes * 60_000;
-  const storePath = resolveStorePath(sessionCfg?.store);
+  const storePath = resolveStorePath(sessionCfg?.store, {
+    agentId: params.agentId,
+  });
   const store = loadSessionStore(storePath);
   const entry = store[params.sessionKey];
   const fresh = entry && params.nowMs - entry.updatedAt <= idleMs;
@@ -279,10 +230,50 @@ export async function runCronIsolatedAgentTurn(params: {
   job: CronJob;
   message: string;
   sessionKey: string;
+  agentId?: string;
   lane?: string;
 }): Promise<RunCronAgentTurnResult> {
-  const agentCfg = params.cfg.agents?.defaults;
-  const workspaceDirRaw = agentCfg?.workspace ?? DEFAULT_AGENT_WORKSPACE_DIR;
+  const defaultAgentId = resolveDefaultAgentId(params.cfg);
+  const requestedAgentId =
+    typeof params.agentId === "string" && params.agentId.trim()
+      ? params.agentId
+      : typeof params.job.agentId === "string" && params.job.agentId.trim()
+        ? params.job.agentId
+        : undefined;
+  const normalizedRequested = requestedAgentId
+    ? normalizeAgentId(requestedAgentId)
+    : undefined;
+  const agentConfigOverride = normalizedRequested
+    ? resolveAgentConfig(params.cfg, normalizedRequested)
+    : undefined;
+  const { model: overrideModel, ...agentOverrideRest } =
+    agentConfigOverride ?? {};
+  const agentId = agentConfigOverride
+    ? (normalizedRequested ?? defaultAgentId)
+    : defaultAgentId;
+  const agentCfg: AgentDefaultsConfig = {
+    ...(params.cfg.agents?.defaults ?? {}),
+    ...(agentOverrideRest as Partial<AgentDefaultsConfig>),
+  };
+  if (typeof overrideModel === "string") {
+    agentCfg.model = { primary: overrideModel };
+  } else if (overrideModel) {
+    agentCfg.model = overrideModel;
+  }
+  const cfgWithAgentDefaults: ClawdbotConfig = {
+    ...params.cfg,
+    agents: { ...(params.cfg.agents ?? {}), defaults: agentCfg },
+  };
+
+  const baseSessionKey = (
+    params.sessionKey?.trim() || `cron:${params.job.id}`
+  ).trim();
+  const agentSessionKey = buildAgentMainSessionKey({
+    agentId,
+    mainKey: baseSessionKey,
+  });
+
+  const workspaceDirRaw = resolveAgentWorkspaceDir(params.cfg, agentId);
   const workspace = await ensureAgentWorkspace({
     dir: workspaceDirRaw,
     ensureBootstrapFiles: !agentCfg?.skipBootstrap,
@@ -290,7 +281,7 @@ export async function runCronIsolatedAgentTurn(params: {
   const workspaceDir = workspace.dir;
 
   const resolvedDefault = resolveConfiguredModelRef({
-    cfg: params.cfg,
+    cfg: cfgWithAgentDefaults,
     defaultProvider: DEFAULT_PROVIDER,
     defaultModel: DEFAULT_MODEL,
   });
@@ -299,12 +290,12 @@ export async function runCronIsolatedAgentTurn(params: {
   let catalog: Awaited<ReturnType<typeof loadModelCatalog>> | undefined;
   const loadCatalog = async () => {
     if (!catalog) {
-      catalog = await loadModelCatalog({ config: params.cfg });
+      catalog = await loadModelCatalog({ config: cfgWithAgentDefaults });
     }
     return catalog;
   };
   // Resolve model - prefer hooks.gmail.model for Gmail hooks.
-  const isGmailHook = params.sessionKey.startsWith("hook:gmail:");
+  const isGmailHook = baseSessionKey.startsWith("hook:gmail:");
   const hooksGmailModelRef = isGmailHook
     ? resolveHooksGmailModel({
         cfg: params.cfg,
@@ -333,7 +324,7 @@ export async function runCronIsolatedAgentTurn(params: {
       return { status: "error", error: "invalid model: expected string" };
     }
     const resolvedOverride = resolveAllowedModelRef({
-      cfg: params.cfg,
+      cfg: cfgWithAgentDefaults,
       catalog: await loadCatalog(),
       raw: modelOverrideRaw,
       defaultProvider: resolvedDefault.provider,
@@ -348,7 +339,8 @@ export async function runCronIsolatedAgentTurn(params: {
   const now = Date.now();
   const cronSession = resolveCronSession({
     cfg: params.cfg,
-    sessionKey: params.sessionKey,
+    sessionKey: agentSessionKey,
+    agentId,
     nowMs: now,
   });
   const isFirstTurnInSession =
@@ -367,7 +359,7 @@ export async function runCronIsolatedAgentTurn(params: {
   let thinkLevel = jobThink ?? hooksGmailThinking ?? thinkOverride;
   if (!thinkLevel) {
     thinkLevel = resolveThinkingDefault({
-      cfg: params.cfg,
+      cfg: cfgWithAgentDefaults,
       provider,
       model,
       catalog: await loadCatalog(),
@@ -375,7 +367,7 @@ export async function runCronIsolatedAgentTurn(params: {
   }
 
   const timeoutMs = resolveAgentTimeoutMs({
-    cfg: params.cfg,
+    cfg: cfgWithAgentDefaults,
     overrideSeconds:
       params.job.payload.kind === "agentTurn"
         ? params.job.payload.timeoutSeconds
@@ -389,17 +381,20 @@ export async function runCronIsolatedAgentTurn(params: {
     params.job.payload.kind === "agentTurn" &&
     params.job.payload.bestEffortDeliver === true;
 
-  const resolvedDelivery = resolveDeliveryTarget(params.cfg, {
-    provider:
-      params.job.payload.kind === "agentTurn"
-        ? params.job.payload.provider
-        : "last",
-    to:
-      params.job.payload.kind === "agentTurn"
-        ? params.job.payload.to
-        : undefined,
-  });
-  const { token: telegramToken } = resolveTelegramToken(params.cfg);
+  const resolvedDelivery = await resolveDeliveryTarget(
+    cfgWithAgentDefaults,
+    agentId,
+    {
+      provider:
+        params.job.payload.kind === "agentTurn"
+          ? params.job.payload.provider
+          : "last",
+      to:
+        params.job.payload.kind === "agentTurn"
+          ? params.job.payload.to
+          : undefined,
+    },
+  );
 
   const base =
     `[cron:${params.job.id} ${params.job.name}] ${params.message}`.trim();
@@ -409,7 +404,9 @@ export async function runCronIsolatedAgentTurn(params: {
   const needsSkillsSnapshot =
     cronSession.isNewSession || !cronSession.sessionEntry.skillsSnapshot;
   const skillsSnapshot = needsSkillsSnapshot
-    ? buildWorkspaceSkillSnapshot(workspaceDir, { config: params.cfg })
+    ? buildWorkspaceSkillSnapshot(workspaceDir, {
+        config: cfgWithAgentDefaults,
+      })
     : cronSession.sessionEntry.skillsSnapshot;
   if (needsSkillsSnapshot && skillsSnapshot) {
     cronSession.sessionEntry = {
@@ -417,17 +414,17 @@ export async function runCronIsolatedAgentTurn(params: {
       updatedAt: Date.now(),
       skillsSnapshot,
     };
-    cronSession.store[params.sessionKey] = cronSession.sessionEntry;
+    cronSession.store[agentSessionKey] = cronSession.sessionEntry;
     await saveSessionStore(cronSession.storePath, cronSession.store);
   }
 
   // Persist systemSent before the run, mirroring the inbound auto-reply behavior.
   if (isFirstTurnInSession) {
     cronSession.sessionEntry.systemSent = true;
-    cronSession.store[params.sessionKey] = cronSession.sessionEntry;
+    cronSession.store[agentSessionKey] = cronSession.sessionEntry;
     await saveSessionStore(cronSession.storePath, cronSession.store);
   } else {
-    cronSession.store[params.sessionKey] = cronSession.sessionEntry;
+    cronSession.store[agentSessionKey] = cronSession.sessionEntry;
     await saveSessionStore(cronSession.storePath, cronSession.store);
   }
 
@@ -437,31 +434,32 @@ export async function runCronIsolatedAgentTurn(params: {
   try {
     const sessionFile = resolveSessionTranscriptPath(
       cronSession.sessionEntry.sessionId,
+      agentId,
     );
     const resolvedVerboseLevel =
       (cronSession.sessionEntry.verboseLevel as "on" | "off" | undefined) ??
       (agentCfg?.verboseDefault as "on" | "off" | undefined);
     registerAgentRunContext(cronSession.sessionEntry.sessionId, {
-      sessionKey: params.sessionKey,
+      sessionKey: agentSessionKey,
       verboseLevel: resolvedVerboseLevel,
     });
     const messageProvider = resolvedDelivery.provider;
     const fallbackResult = await runWithModelFallback({
-      cfg: params.cfg,
+      cfg: cfgWithAgentDefaults,
       provider,
       model,
       run: (providerOverride, modelOverride) => {
-        if (isCliProvider(providerOverride, params.cfg)) {
+        if (isCliProvider(providerOverride, cfgWithAgentDefaults)) {
           const cliSessionId = getCliSessionId(
             cronSession.sessionEntry,
             providerOverride,
           );
           return runCliAgent({
             sessionId: cronSession.sessionEntry.sessionId,
-            sessionKey: params.sessionKey,
+            sessionKey: agentSessionKey,
             sessionFile,
             workspaceDir,
-            config: params.cfg,
+            config: cfgWithAgentDefaults,
             prompt: commandBody,
             provider: providerOverride,
             model: modelOverride,
@@ -473,11 +471,11 @@ export async function runCronIsolatedAgentTurn(params: {
         }
         return runEmbeddedPiAgent({
           sessionId: cronSession.sessionEntry.sessionId,
-          sessionKey: params.sessionKey,
+          sessionKey: agentSessionKey,
           messageProvider,
           sessionFile,
           workspaceDir,
-          config: params.cfg,
+          config: cfgWithAgentDefaults,
           skillsSnapshot,
           prompt: commandBody,
           lane: params.lane ?? "cron",
@@ -513,7 +511,7 @@ export async function runCronIsolatedAgentTurn(params: {
     cronSession.sessionEntry.modelProvider = providerUsed;
     cronSession.sessionEntry.model = modelUsed;
     cronSession.sessionEntry.contextTokens = contextTokens;
-    if (isCliProvider(providerUsed, params.cfg)) {
+    if (isCliProvider(providerUsed, cfgWithAgentDefaults)) {
       const cliSessionId = runResult.meta.agentMeta?.sessionId?.trim();
       if (cliSessionId) {
         setCliSessionId(cronSession.sessionEntry, providerUsed, cliSessionId);
@@ -529,7 +527,7 @@ export async function runCronIsolatedAgentTurn(params: {
       cronSession.sessionEntry.totalTokens =
         promptTokens > 0 ? promptTokens : (usage.total ?? input);
     }
-    cronSession.store[params.sessionKey] = cronSession.sessionEntry;
+    cronSession.store[agentSessionKey] = cronSession.sessionEntry;
     await saveSessionStore(cronSession.storePath, cronSession.store);
   }
   const firstText = payloads[0]?.text ?? "";
@@ -540,200 +538,61 @@ export async function runCronIsolatedAgentTurn(params: {
   // This allows cron jobs to silently ack when nothing to report but still deliver
   // actual content when there is something to say.
   const ackMaxChars =
-    params.cfg.agents?.defaults?.heartbeat?.ackMaxChars ??
-    DEFAULT_HEARTBEAT_ACK_MAX_CHARS;
+    agentCfg?.heartbeat?.ackMaxChars ?? DEFAULT_HEARTBEAT_ACK_MAX_CHARS;
   const skipHeartbeatDelivery =
     delivery && isHeartbeatOnlyResponse(payloads, Math.max(0, ackMaxChars));
 
   if (delivery && !skipHeartbeatDelivery) {
-    if (resolvedDelivery.provider === "whatsapp") {
-      if (!resolvedDelivery.to) {
-        if (!bestEffortDeliver)
-          return {
-            status: "error",
-            summary,
-            error: "Cron delivery to WhatsApp requires a recipient.",
-          };
+    if (!resolvedDelivery.to) {
+      const reason =
+        resolvedDelivery.error?.message ??
+        "Cron delivery requires a recipient (--to).";
+      if (!bestEffortDeliver) {
         return {
-          status: "skipped",
-          summary: "Delivery skipped (no WhatsApp recipient).",
+          status: "error",
+          summary,
+          error: reason,
         };
       }
-      const rawTo = resolvedDelivery.to;
-      const to = normalizeWhatsAppTarget(rawTo) ?? rawTo;
-      try {
-        await deliverPayloadsWithMedia({
-          payloads,
-          sendText: (text) =>
-            params.deps.sendMessageWhatsApp(to, text, { verbose: false }),
-          sendMedia: (caption, mediaUrl) =>
-            params.deps.sendMessageWhatsApp(to, caption, {
-              verbose: false,
-              mediaUrl,
-            }),
-        });
-      } catch (err) {
-        if (!bestEffortDeliver)
-          return { status: "error", summary, error: String(err) };
-        return { status: "ok", summary };
+      return {
+        status: "skipped",
+        summary: `Delivery skipped (${reason}).`,
+      };
+    }
+    try {
+      await deliverOutboundPayloads({
+        cfg: cfgWithAgentDefaults,
+        provider: resolvedDelivery.provider as Exclude<
+          OutboundProvider,
+          "none"
+        >,
+        to: resolvedDelivery.to,
+        accountId: resolvedDelivery.accountId,
+        payloads,
+        bestEffort: bestEffortDeliver,
+        deps: {
+          sendWhatsApp: params.deps.sendMessageWhatsApp,
+          sendTelegram: params.deps.sendMessageTelegram,
+          sendDiscord: params.deps.sendMessageDiscord,
+          sendSlack: params.deps.sendMessageSlack,
+          sendSignal: params.deps.sendMessageSignal,
+          sendIMessage: params.deps.sendMessageIMessage,
+          sendMSTeams: params.deps.sendMessageMSTeams
+            ? async (to, text, opts) =>
+                await params.deps.sendMessageMSTeams({
+                  cfg: params.cfg,
+                  to,
+                  text,
+                  mediaUrl: opts?.mediaUrl,
+                })
+            : undefined,
+        },
+      });
+    } catch (err) {
+      if (!bestEffortDeliver) {
+        return { status: "error", summary, error: String(err) };
       }
-    } else if (resolvedDelivery.provider === "telegram") {
-      if (!resolvedDelivery.to) {
-        if (!bestEffortDeliver)
-          return {
-            status: "error",
-            summary,
-            error: "Cron delivery to Telegram requires a chatId.",
-          };
-        return {
-          status: "skipped",
-          summary: "Delivery skipped (no Telegram chatId).",
-        };
-      }
-      const chatId = resolvedDelivery.to;
-      const messageThreadId = resolvedDelivery.messageThreadId;
-      const textLimit = resolveTextChunkLimit(params.cfg, "telegram");
-      try {
-        await deliverChunkedPayloads({
-          payloads,
-          chunkText: (text) => chunkMarkdownText(text, textLimit),
-          sendText: (text) =>
-            params.deps.sendMessageTelegram(chatId, text, {
-              verbose: false,
-              token: telegramToken || undefined,
-              messageThreadId,
-            }),
-          sendMedia: (caption, mediaUrl) =>
-            params.deps.sendMessageTelegram(chatId, caption, {
-              verbose: false,
-              mediaUrl,
-              token: telegramToken || undefined,
-              messageThreadId,
-            }),
-        });
-      } catch (err) {
-        if (!bestEffortDeliver)
-          return { status: "error", summary, error: String(err) };
-        return { status: "ok", summary };
-      }
-    } else if (resolvedDelivery.provider === "discord") {
-      if (!resolvedDelivery.to) {
-        if (!bestEffortDeliver)
-          return {
-            status: "error",
-            summary,
-            error:
-              "Cron delivery to Discord requires --provider discord and --to <channelId|user:ID>",
-          };
-        return {
-          status: "skipped",
-          summary: "Delivery skipped (no Discord destination).",
-        };
-      }
-      const discordTarget = resolvedDelivery.to;
-      try {
-        await deliverPayloadsWithMedia({
-          payloads,
-          sendText: (text) =>
-            params.deps.sendMessageDiscord(discordTarget, text, {
-              token: process.env.DISCORD_BOT_TOKEN,
-            }),
-          sendMedia: (caption, mediaUrl) =>
-            params.deps.sendMessageDiscord(discordTarget, caption, {
-              token: process.env.DISCORD_BOT_TOKEN,
-              mediaUrl,
-            }),
-        });
-      } catch (err) {
-        if (!bestEffortDeliver)
-          return { status: "error", summary, error: String(err) };
-        return { status: "ok", summary };
-      }
-    } else if (resolvedDelivery.provider === "slack") {
-      if (!resolvedDelivery.to) {
-        if (!bestEffortDeliver)
-          return {
-            status: "error",
-            summary,
-            error:
-              "Cron delivery to Slack requires --provider slack and --to <channelId|user:ID>",
-          };
-        return {
-          status: "skipped",
-          summary: "Delivery skipped (no Slack destination).",
-        };
-      }
-      const slackTarget = resolvedDelivery.to;
-      const textLimit = resolveTextChunkLimit(params.cfg, "slack");
-      try {
-        await deliverChunkedPayloads({
-          payloads,
-          chunkText: (text) => chunkMarkdownText(text, textLimit),
-          sendText: (text) => params.deps.sendMessageSlack(slackTarget, text),
-          sendMedia: (caption, mediaUrl) =>
-            params.deps.sendMessageSlack(slackTarget, caption, { mediaUrl }),
-        });
-      } catch (err) {
-        if (!bestEffortDeliver)
-          return { status: "error", summary, error: String(err) };
-        return { status: "ok", summary };
-      }
-    } else if (resolvedDelivery.provider === "signal") {
-      if (!resolvedDelivery.to) {
-        if (!bestEffortDeliver)
-          return {
-            status: "error",
-            summary,
-            error: "Cron delivery to Signal requires a recipient.",
-          };
-        return {
-          status: "skipped",
-          summary: "Delivery skipped (no Signal recipient).",
-        };
-      }
-      const to = resolvedDelivery.to;
-      const textLimit = resolveTextChunkLimit(params.cfg, "signal");
-      try {
-        await deliverChunkedPayloads({
-          payloads,
-          chunkText: (text) => chunkText(text, textLimit),
-          sendText: (text) => params.deps.sendMessageSignal(to, text),
-          sendMedia: (caption, mediaUrl) =>
-            params.deps.sendMessageSignal(to, caption, { mediaUrl }),
-        });
-      } catch (err) {
-        if (!bestEffortDeliver)
-          return { status: "error", summary, error: String(err) };
-        return { status: "ok", summary };
-      }
-    } else if (resolvedDelivery.provider === "imessage") {
-      if (!resolvedDelivery.to) {
-        if (!bestEffortDeliver)
-          return {
-            status: "error",
-            summary,
-            error: "Cron delivery to iMessage requires a recipient.",
-          };
-        return {
-          status: "skipped",
-          summary: "Delivery skipped (no iMessage recipient).",
-        };
-      }
-      const to = resolvedDelivery.to;
-      const textLimit = resolveTextChunkLimit(params.cfg, "imessage");
-      try {
-        await deliverChunkedPayloads({
-          payloads,
-          chunkText: (text) => chunkText(text, textLimit),
-          sendText: (text) => params.deps.sendMessageIMessage(to, text),
-          sendMedia: (caption, mediaUrl) =>
-            params.deps.sendMessageIMessage(to, caption, { mediaUrl }),
-        });
-      } catch (err) {
-        if (!bestEffortDeliver)
-          return { status: "error", summary, error: String(err) };
-        return { status: "ok", summary };
-      }
+      return { status: "ok", summary };
     }
   }
 

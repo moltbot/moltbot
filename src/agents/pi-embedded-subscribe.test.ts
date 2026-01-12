@@ -16,7 +16,7 @@ describe("subscribeEmbeddedPiSession", () => {
     { tag: "thought", open: "<thought>", close: "</thought>" },
     { tag: "antthinking", open: "<antthinking>", close: "</antthinking>" },
   ] as const;
-  it("filters to <final> and falls back when tags are malformed", () => {
+  it("filters to <final> and suppresses output without a start tag", () => {
     let handler: ((evt: unknown) => void) | undefined;
     const session: StubSession = {
       subscribe: (fn) => {
@@ -38,6 +38,7 @@ describe("subscribeEmbeddedPiSession", () => {
       onAgentEvent,
     });
 
+    handler?.({ type: "message_start", message: { role: "assistant" } });
     handler?.({
       type: "message_update",
       message: { role: "assistant" },
@@ -53,11 +54,7 @@ describe("subscribeEmbeddedPiSession", () => {
 
     onPartialReply.mockReset();
 
-    handler?.({
-      type: "message_end",
-      message: { role: "assistant" },
-    });
-
+    handler?.({ type: "message_start", message: { role: "assistant" } });
     handler?.({
       type: "message_update",
       message: { role: "assistant" },
@@ -67,8 +64,7 @@ describe("subscribeEmbeddedPiSession", () => {
       },
     });
 
-    const secondPayload = onPartialReply.mock.calls[0][0];
-    expect(secondPayload.text).toContain("Oops no start");
+    expect(onPartialReply).not.toHaveBeenCalled();
   });
 
   it("does not require <final> when enforcement is off", () => {
@@ -633,6 +629,53 @@ describe("subscribeEmbeddedPiSession", () => {
     handler?.({ type: "message_end", message: assistantMessage });
 
     expect(onBlockReply).not.toHaveBeenCalled();
+  });
+
+  it("does not suppress message_end replies when message tool reports error", () => {
+    let handler: ((evt: unknown) => void) | undefined;
+    const session: StubSession = {
+      subscribe: (fn) => {
+        handler = fn;
+        return () => {};
+      },
+    };
+
+    const onBlockReply = vi.fn();
+
+    subscribeEmbeddedPiSession({
+      session: session as unknown as Parameters<
+        typeof subscribeEmbeddedPiSession
+      >[0]["session"],
+      runId: "run",
+      onBlockReply,
+      blockReplyBreak: "message_end",
+    });
+
+    const messageText = "Please retry the send.";
+
+    handler?.({
+      type: "tool_execution_start",
+      toolName: "message",
+      toolCallId: "tool-message-err",
+      args: { action: "send", to: "+1555", message: messageText },
+    });
+
+    handler?.({
+      type: "tool_execution_end",
+      toolName: "message",
+      toolCallId: "tool-message-err",
+      isError: false,
+      result: { details: { status: "error" } },
+    });
+
+    const assistantMessage = {
+      role: "assistant",
+      content: [{ type: "text", text: messageText }],
+    } as AssistantMessage;
+
+    handler?.({ type: "message_end", message: assistantMessage });
+
+    expect(onBlockReply).toHaveBeenCalledTimes(1);
   });
 
   it("clears block reply state on message_start", () => {
@@ -1706,5 +1749,151 @@ describe("subscribeEmbeddedPiSession", () => {
     });
 
     expect(onToolResult).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onBlockReplyFlush before tool_execution_start to preserve message boundaries", () => {
+    let handler: SessionEventHandler | undefined;
+    const session: StubSession = {
+      subscribe: (fn) => {
+        handler = fn;
+        return () => {};
+      },
+    };
+
+    const onBlockReplyFlush = vi.fn();
+    const onBlockReply = vi.fn();
+
+    subscribeEmbeddedPiSession({
+      session: session as unknown as Parameters<
+        typeof subscribeEmbeddedPiSession
+      >[0]["session"],
+      runId: "run-flush-test",
+      onBlockReply,
+      onBlockReplyFlush,
+      blockReplyBreak: "text_end",
+    });
+
+    // Simulate text arriving before tool
+    handler?.({
+      type: "message_start",
+      message: { role: "assistant" },
+    });
+
+    handler?.({
+      type: "message_update",
+      message: { role: "assistant" },
+      assistantMessageEvent: {
+        type: "text_delta",
+        delta: "First message before tool.",
+      },
+    });
+
+    expect(onBlockReplyFlush).not.toHaveBeenCalled();
+
+    // Tool execution starts - should trigger flush
+    handler?.({
+      type: "tool_execution_start",
+      toolName: "bash",
+      toolCallId: "tool-flush-1",
+      args: { command: "echo hello" },
+    });
+
+    expect(onBlockReplyFlush).toHaveBeenCalledTimes(1);
+
+    // Another tool - should flush again
+    handler?.({
+      type: "tool_execution_start",
+      toolName: "read",
+      toolCallId: "tool-flush-2",
+      args: { path: "/tmp/test.txt" },
+    });
+
+    expect(onBlockReplyFlush).toHaveBeenCalledTimes(2);
+  });
+
+  it("flushes buffered block chunks before tool execution", () => {
+    let handler: SessionEventHandler | undefined;
+    const session: StubSession = {
+      subscribe: (fn) => {
+        handler = fn;
+        return () => {};
+      },
+    };
+
+    const onBlockReply = vi.fn();
+    const onBlockReplyFlush = vi.fn();
+
+    subscribeEmbeddedPiSession({
+      session: session as unknown as Parameters<
+        typeof subscribeEmbeddedPiSession
+      >[0]["session"],
+      runId: "run-flush-buffer",
+      onBlockReply,
+      onBlockReplyFlush,
+      blockReplyBreak: "text_end",
+      blockReplyChunking: { minChars: 50, maxChars: 200 },
+    });
+
+    handler?.({
+      type: "message_start",
+      message: { role: "assistant" },
+    });
+
+    handler?.({
+      type: "message_update",
+      message: { role: "assistant" },
+      assistantMessageEvent: {
+        type: "text_delta",
+        delta: "Short chunk.",
+      },
+    });
+
+    expect(onBlockReply).not.toHaveBeenCalled();
+
+    handler?.({
+      type: "tool_execution_start",
+      toolName: "bash",
+      toolCallId: "tool-flush-buffer-1",
+      args: { command: "echo flush" },
+    });
+
+    expect(onBlockReply).toHaveBeenCalledTimes(1);
+    expect(onBlockReply.mock.calls[0]?.[0]?.text).toBe("Short chunk.");
+    expect(onBlockReplyFlush).toHaveBeenCalledTimes(1);
+    expect(onBlockReply.mock.invocationCallOrder[0]).toBeLessThan(
+      onBlockReplyFlush.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("does not call onBlockReplyFlush when callback is not provided", () => {
+    let handler: SessionEventHandler | undefined;
+    const session: StubSession = {
+      subscribe: (fn) => {
+        handler = fn;
+        return () => {};
+      },
+    };
+
+    const onBlockReply = vi.fn();
+
+    // No onBlockReplyFlush provided
+    subscribeEmbeddedPiSession({
+      session: session as unknown as Parameters<
+        typeof subscribeEmbeddedPiSession
+      >[0]["session"],
+      runId: "run-no-flush",
+      onBlockReply,
+      blockReplyBreak: "text_end",
+    });
+
+    // This should not throw even without onBlockReplyFlush
+    expect(() => {
+      handler?.({
+        type: "tool_execution_start",
+        toolName: "bash",
+        toolCallId: "tool-no-flush",
+        args: { command: "echo test" },
+      });
+    }).not.toThrow();
   });
 });

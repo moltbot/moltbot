@@ -34,6 +34,15 @@ Clawdbot’s stance:
 - **Scope next:** decide where the bot is allowed to act (group allowlists + mention gating, tools, sandboxing, device permissions).
 - **Model last:** assume the model can be manipulated; design so manipulation has limited blast radius.
 
+## Plugins/extensions
+
+Plugins run **in-process** with the Gateway. Treat them as trusted code:
+
+- Only install plugins from sources you trust.
+- Prefer explicit `plugins.allow` allowlists.
+- Review plugin config before enabling.
+- Restart the Gateway after plugin changes.
+
 ## DM access model (pairing / allowlist / open / disabled)
 
 All current DM-capable providers support a DM policy (`dmPolicy` or `*.dm.policy`) that gates inbound DMs **before** the message is processed:
@@ -61,8 +70,9 @@ Clawdbot has two separate “who can trigger me?” layers:
 - **Group allowlist** (provider-specific): which groups/channels/guilds the bot will accept messages from at all.
   - Common patterns:
     - `whatsapp.groups`, `telegram.groups`, `imessage.groups`: per-group defaults like `requireMention`; when set, it also acts as a group allowlist (include `"*"` to keep allow-all behavior).
-    - `groupPolicy="allowlist"` + `groupAllowFrom`: restrict who can trigger the bot *inside* a group session (WhatsApp/Telegram/Signal/iMessage).
+    - `groupPolicy="allowlist"` + `groupAllowFrom`: restrict who can trigger the bot *inside* a group session (WhatsApp/Telegram/Signal/iMessage/Microsoft Teams).
     - `discord.guilds` / `slack.channels`: per-surface allowlists + mention defaults.
+  - **Security note:** treat `dmPolicy="open"` and `groupPolicy="open"` as last-resort settings. They should be barely used; prefer pairing + allowlists unless you fully trust every member of the room.
 
 Details: [Configuration](/gateway/configuration) and [Groups](/concepts/groups)
 
@@ -175,7 +185,7 @@ Consider running your AI on a separate phone number from your personal one:
 
 You can already build a read-only profile by combining:
 - `agents.defaults.sandbox.workspaceAccess: "ro"` (or `"none"` for no workspace access)
-- tool allow/deny lists that block `write`, `edit`, `bash`, `process`, etc.
+- tool allow/deny lists that block `write`, `edit`, `apply_patch`, `exec`, `process`, etc.
 
 We may add a single `readOnlyMode` flag later to simplify this configuration.
 
@@ -194,10 +204,10 @@ single container/workspace.
 
 Also consider agent workspace access inside the sandbox:
 - `agents.defaults.sandbox.workspaceAccess: "none"` (default) keeps the agent workspace off-limits; tools run against a sandbox workspace under `~/.clawdbot/sandboxes`
-- `agents.defaults.sandbox.workspaceAccess: "ro"` mounts the agent workspace read-only at `/agent` (disables `write`/`edit`)
+- `agents.defaults.sandbox.workspaceAccess: "ro"` mounts the agent workspace read-only at `/agent` (disables `write`/`edit`/`apply_patch`)
 - `agents.defaults.sandbox.workspaceAccess: "rw"` mounts the agent workspace read/write at `/workspace`
 
-Important: `tools.elevated` is the global baseline escape hatch that runs bash on the host. Keep `tools.elevated.allowFrom` tight and don’t enable it for strangers. You can further restrict elevated per agent via `agents.list[].tools.elevated`. See [Elevated Mode](/tools/elevated).
+Important: `tools.elevated` is the global baseline escape hatch that runs exec on the host. Keep `tools.elevated.allowFrom` tight and don’t enable it for strangers. You can further restrict elevated per agent via `agents.list[].tools.elevated`. See [Elevated Mode](/tools/elevated).
 
 ## Browser control risks
 
@@ -252,7 +262,7 @@ Common use cases:
         },
         tools: {
           allow: ["read"],
-          deny: ["write", "edit", "bash", "process", "browser"]
+          deny: ["write", "edit", "apply_patch", "exec", "process", "browser"]
         }
       }
     ]
@@ -276,7 +286,7 @@ Common use cases:
         },
         tools: {
           allow: ["sessions_list", "sessions_history", "sessions_send", "sessions_spawn", "session_status", "whatsapp", "telegram", "slack", "discord", "gateway"],
-          deny: ["read", "write", "edit", "bash", "process", "browser", "canvas", "nodes", "cron", "gateway", "image"]
+          deny: ["read", "write", "edit", "apply_patch", "exec", "process", "browser", "canvas", "nodes", "cron", "gateway", "image"]
         }
       }
     ]

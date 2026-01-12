@@ -1,11 +1,15 @@
 import type { Command } from "commander";
 import type { CronJob, CronSchedule } from "../cron/types.js";
 import { danger } from "../globals.js";
+import { PROVIDER_IDS } from "../providers/registry.js";
+import { normalizeAgentId } from "../routing/session-key.js";
 import { defaultRuntime } from "../runtime.js";
 import { formatDocsLink } from "../terminal/links.js";
 import { colorize, isRich, theme } from "../terminal/theme.js";
 import type { GatewayRpcOpts } from "./gateway-rpc.js";
 import { addGatewayClientOptions, callGatewayFromCli } from "./gateway-rpc.js";
+
+const CRON_PROVIDER_OPTIONS = ["last", ...PROVIDER_IDS].join("|");
 
 async function warnIfCronSchedulerDisabled(opts: GatewayRpcOpts) {
   try {
@@ -69,6 +73,7 @@ const CRON_NEXT_PAD = 10;
 const CRON_LAST_PAD = 10;
 const CRON_STATUS_PAD = 9;
 const CRON_TARGET_PAD = 9;
+const CRON_AGENT_PAD = 10;
 
 const pad = (value: string, width: number) => value.padEnd(width);
 
@@ -136,6 +141,7 @@ function printCronList(jobs: CronJob[], runtime = defaultRuntime) {
     pad("Last", CRON_LAST_PAD),
     pad("Status", CRON_STATUS_PAD),
     pad("Target", CRON_TARGET_PAD),
+    pad("Agent", CRON_AGENT_PAD),
   ].join(" ");
 
   runtime.log(rich ? theme.heading(header) : header);
@@ -159,6 +165,10 @@ function printCronList(jobs: CronJob[], runtime = defaultRuntime) {
     const statusRaw = formatStatus(job);
     const statusLabel = pad(statusRaw, CRON_STATUS_PAD);
     const targetLabel = pad(job.sessionTarget, CRON_TARGET_PAD);
+    const agentLabel = pad(
+      truncate(job.agentId ?? "default", CRON_AGENT_PAD),
+      CRON_AGENT_PAD,
+    );
 
     const coloredStatus = (() => {
       if (statusRaw === "ok") return colorize(rich, theme.success, statusLabel);
@@ -175,6 +185,9 @@ function printCronList(jobs: CronJob[], runtime = defaultRuntime) {
       job.sessionTarget === "isolated"
         ? colorize(rich, theme.accentBright, targetLabel)
         : colorize(rich, theme.accent, targetLabel);
+    const coloredAgent = job.agentId
+      ? colorize(rich, theme.info, agentLabel)
+      : colorize(rich, theme.muted, agentLabel);
 
     const line = [
       colorize(rich, theme.accent, idLabel),
@@ -184,6 +197,7 @@ function printCronList(jobs: CronJob[], runtime = defaultRuntime) {
       colorize(rich, theme.muted, lastLabel),
       coloredStatus,
       coloredTarget,
+      coloredAgent,
     ].join(" ");
 
     runtime.log(line.trimEnd());
@@ -280,6 +294,7 @@ export function registerCronCli(program: Command) {
       .requiredOption("--name <name>", "Job name")
       .option("--description <text>", "Optional description")
       .option("--disabled", "Create job disabled", false)
+      .option("--agent <id>", "Agent id for this job")
       .option("--session <target>", "Session target (main|isolated)", "main")
       .option(
         "--wake <mode>",
@@ -296,11 +311,15 @@ export function registerCronCli(program: Command) {
         "--thinking <level>",
         "Thinking level for agent jobs (off|minimal|low|medium|high)",
       )
+      .option(
+        "--model <model>",
+        "Model override for agent jobs (provider/model or alias)",
+      )
       .option("--timeout-seconds <n>", "Timeout seconds for agent jobs")
       .option("--deliver", "Deliver agent output", false)
       .option(
         "--provider <provider>",
-        "Delivery provider (last|whatsapp|telegram|discord|slack|signal|imessage)",
+        `Delivery provider (${CRON_PROVIDER_OPTIONS})`,
         "last",
       )
       .option(
@@ -368,6 +387,11 @@ export function registerCronCli(program: Command) {
             throw new Error("--wake must be now or next-heartbeat");
           }
 
+          const agentId =
+            typeof opts.agent === "string" && opts.agent.trim()
+              ? normalizeAgentId(opts.agent)
+              : undefined;
+
           const payload = (() => {
             const systemEvent =
               typeof opts.systemEvent === "string"
@@ -391,6 +415,10 @@ export function registerCronCli(program: Command) {
             return {
               kind: "agentTurn" as const,
               message,
+              model:
+                typeof opts.model === "string" && opts.model.trim()
+                  ? opts.model.trim()
+                  : undefined,
               thinking:
                 typeof opts.thinking === "string" && opts.thinking.trim()
                   ? opts.thinking.trim()
@@ -440,6 +468,7 @@ export function registerCronCli(program: Command) {
             name,
             description,
             enabled: !opts.disabled,
+            agentId,
             schedule,
             sessionTarget,
             wakeMode,
@@ -550,6 +579,8 @@ export function registerCronCli(program: Command) {
       .option("--enable", "Enable job", false)
       .option("--disable", "Disable job", false)
       .option("--session <target>", "Session target (main|isolated)")
+      .option("--agent <id>", "Set agent id")
+      .option("--clear-agent", "Unset agent and use default", false)
       .option("--wake <mode>", "Wake mode (now|next-heartbeat)")
       .option("--at <when>", "Set one-shot time (ISO) or duration like 20m")
       .option("--every <duration>", "Set interval duration like 10m")
@@ -558,11 +589,12 @@ export function registerCronCli(program: Command) {
       .option("--system-event <text>", "Set systemEvent payload")
       .option("--message <text>", "Set agentTurn payload message")
       .option("--thinking <level>", "Thinking level for agent jobs")
+      .option("--model <model>", "Model override for agent jobs")
       .option("--timeout-seconds <n>", "Timeout seconds for agent jobs")
       .option("--deliver", "Deliver agent output", false)
       .option(
         "--provider <provider>",
-        "Delivery provider (last|whatsapp|telegram|discord|slack|signal|imessage)",
+        `Delivery provider (${CRON_PROVIDER_OPTIONS})`,
       )
       .option(
         "--to <dest>",
@@ -601,6 +633,15 @@ export function registerCronCli(program: Command) {
           if (typeof opts.session === "string")
             patch.sessionTarget = opts.session;
           if (typeof opts.wake === "string") patch.wakeMode = opts.wake;
+          if (opts.agent && opts.clearAgent) {
+            throw new Error("Use --agent or --clear-agent, not both");
+          }
+          if (typeof opts.agent === "string" && opts.agent.trim()) {
+            patch.agentId = normalizeAgentId(opts.agent);
+          }
+          if (opts.clearAgent) {
+            patch.agentId = null;
+          }
 
           const scheduleChosen = [opts.at, opts.every, opts.cron].filter(
             Boolean,
@@ -637,14 +678,22 @@ export function registerCronCli(program: Command) {
               text: String(opts.systemEvent),
             };
           } else if (opts.message) {
+            const model =
+              typeof opts.model === "string" && opts.model.trim()
+                ? opts.model.trim()
+                : undefined;
+            const thinking =
+              typeof opts.thinking === "string" && opts.thinking.trim()
+                ? opts.thinking.trim()
+                : undefined;
             const timeoutSeconds = opts.timeoutSeconds
               ? Number.parseInt(String(opts.timeoutSeconds), 10)
               : undefined;
             patch.payload = {
               kind: "agentTurn",
               message: String(opts.message),
-              thinking:
-                typeof opts.thinking === "string" ? opts.thinking : undefined,
+              model,
+              thinking,
               timeoutSeconds:
                 timeoutSeconds && Number.isFinite(timeoutSeconds)
                   ? timeoutSeconds

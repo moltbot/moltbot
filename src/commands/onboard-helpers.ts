@@ -19,6 +19,10 @@ import { pickPrimaryTailnetIPv4 } from "../infra/tailnet.js";
 import { runCommandWithTimeout } from "../process/exec.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { stylePromptTitle } from "../terminal/prompt-style.js";
+import {
+  GATEWAY_CLIENT_MODES,
+  GATEWAY_CLIENT_NAMES,
+} from "../utils/message-provider.js";
 import { CONFIG_DIR, resolveUserPath } from "../utils.js";
 import { VERSION } from "../version.js";
 import type {
@@ -27,12 +31,12 @@ import type {
   ResetScope,
 } from "./onboard-types.js";
 
-export function guardCancel<T>(value: T, runtime: RuntimeEnv): T {
+export function guardCancel<T>(value: T | symbol, runtime: RuntimeEnv): T {
   if (isCancel(value)) {
     cancel(stylePromptTitle("Setup cancelled.") ?? "Setup cancelled.");
     runtime.exit(0);
   }
-  return value;
+  return value as T;
 }
 
 export function summarizeExistingConfig(config: ClawdbotConfig): string {
@@ -332,8 +336,8 @@ export async function probeGatewayReachable(params: {
       password: params.password,
       method: "health",
       timeoutMs,
-      clientName: "clawdbot-probe",
-      mode: "probe",
+      clientName: GATEWAY_CLIENT_NAMES.PROBE,
+      mode: GATEWAY_CLIENT_MODES.PROBE,
     });
     return { ok: true };
   } catch (err) {

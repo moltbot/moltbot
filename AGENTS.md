@@ -4,6 +4,7 @@
 - Source code: `src/` (CLI wiring in `src/cli`, commands in `src/commands`, web provider in `src/provider-web.ts`, infra in `src/infra`, media pipeline in `src/media`).
 - Tests: colocated `*.test.ts`.
 - Docs: `docs/` (images, queue, Pi config). Built output lives in `dist/`.
+- Installers served from `https://clawd.bot/*`: live in the sibling repo `../clawd.bot` (`public/install.sh`, `public/install-cli.sh`, `public/install.ps1`).
 
 ## Docs Linking (Mintlify)
 - Docs are hosted on Mintlify (docs.clawd.bot).
@@ -11,6 +12,7 @@
 - Section cross-references: use anchors on root-relative paths (example: `[Hooks](/configuration#hooks)`).
 - When Peter asks for links, reply with full `https://docs.clawd.bot/...` URLs (not root-relative).
 - README (GitHub): keep absolute docs URLs (`https://docs.clawd.bot/...`) so links work on GitHub.
+- Docs content must be generic: no personal device names/hostnames/paths; use placeholders like `user@gateway-host` and “gateway host”.
 
 ## Build, Test, and Development Commands
 - Runtime baseline: Node **22+** (keep Node + Bun paths working).
@@ -61,6 +63,7 @@
 ## Security & Configuration Tips
 - Web provider stores creds at `~/.clawdbot/credentials/`; rerun `clawdbot login` if logged out.
 - Pi sessions live under `~/.clawdbot/sessions/` by default; the base directory is not configurable.
+- Environment variables: see `~/.profile`.
 - Never commit or publish real phone numbers, videos, or live configuration values. Use obviously fake placeholders in docs, tests, and examples.
 
 ## Troubleshooting

@@ -48,6 +48,8 @@ clawdbot [--dev] [--profile <name>] <command>
   onboard
   configure (alias: config)
   doctor
+  reset
+  uninstall
   update
   providers
     list
@@ -61,6 +63,17 @@ clawdbot [--dev] [--profile <name>] <command>
     list
     info
     check
+  plugins
+    list
+    info
+    install
+    enable
+    disable
+    doctor
+  memory
+    status
+    index
+    search
   message
   agent
   agents
@@ -165,6 +178,28 @@ clawdbot [--dev] [--profile <name>] <command>
   tui
 ```
 
+Note: plugins can add additional top-level commands (for example `clawdbot voicecall`).
+
+## Plugins
+
+Manage extensions and their config:
+
+- `clawdbot plugins list` — discover plugins (use `--json` for machine output).
+- `clawdbot plugins info <id>` — show details for a plugin.
+- `clawdbot plugins install <path|.tgz|npm-spec>` — install a plugin (or add a plugin path to `plugins.load.paths`).
+- `clawdbot plugins enable <id>` / `disable <id>` — toggle `plugins.entries.<id>.enabled`.
+- `clawdbot plugins doctor` — report plugin load errors.
+
+Most plugin changes require a gateway restart. See [/plugin](/plugin).
+
+## Memory
+
+Vector search over `MEMORY.md` + `memory/*.md`:
+
+- `clawdbot memory status` — show index stats.
+- `clawdbot memory index` — reindex memory files.
+- `clawdbot memory search "<query>"` — semantic search over memory.
+
 ## Chat slash commands
 
 Chat messages support `/...` commands (text and native). See [/tools/slash-commands](/tools/slash-commands).
@@ -198,13 +233,15 @@ Options:
 - `--non-interactive`
 - `--mode <local|remote>`
 - `--flow <quickstart|advanced>`
-- `--auth-choice <setup-token|claude-cli|token|openai-codex|openai-api-key|codex-cli|antigravity|gemini-api-key|zai-api-key|apiKey|minimax-cloud|minimax-api|minimax|opencode-zen|skip>`
+- `--auth-choice <setup-token|claude-cli|token|openai-codex|openai-api-key|openrouter-api-key|moonshot-api-key|codex-cli|antigravity|gemini-api-key|zai-api-key|apiKey|minimax-api|opencode-zen|skip>`
 - `--token-provider <id>` (non-interactive; used with `--auth-choice token`)
 - `--token <token>` (non-interactive; used with `--auth-choice token`)
 - `--token-profile-id <id>` (non-interactive; default: `<provider>:manual`)
 - `--token-expires-in <duration>` (non-interactive; e.g. `365d`, `12h`)
 - `--anthropic-api-key <key>`
 - `--openai-api-key <key>`
+- `--openrouter-api-key <key>`
+- `--moonshot-api-key <key>`
 - `--gemini-api-key <key>`
 - `--zai-api-key <key>`
 - `--minimax-api-key <key>`
@@ -253,7 +290,7 @@ Subcommands:
 - `providers add`: wizard-style setup when no flags are passed; flags switch to non-interactive mode.
 - `providers remove`: disable by default; pass `--delete` to remove config entries without prompts.
 - `providers login`: interactive provider login (WhatsApp Web only).
-- `providers logout`: log out of a provider session (WhatsApp Web only).
+- `providers logout`: log out of a provider session (if supported).
 
 Common options:
 - `--provider <name>`: `whatsapp|telegram|discord|slack|signal|imessage|msteams`
@@ -266,7 +303,7 @@ Common options:
 - `--verbose`
 
 `providers logout` options:
-- `--provider <provider>` (default `whatsapp`; supports `whatsapp`/`web`)
+- `--provider <provider>` (default `whatsapp`)
 - `--account <id>`
 
 `providers list` options:
@@ -441,6 +478,36 @@ Options:
 - `--verbose`
 - `--store <path>`
 - `--active <minutes>`
+
+## Reset / Uninstall
+
+### `reset`
+Reset local config/state (keeps the CLI installed).
+
+Options:
+- `--scope <config|config+creds+sessions|full>`
+- `--yes`
+- `--non-interactive`
+- `--dry-run`
+
+Notes:
+- `--non-interactive` requires `--scope` and `--yes`.
+
+### `uninstall`
+Uninstall the gateway service + local data (CLI remains).
+
+Options:
+- `--service`
+- `--state`
+- `--workspace`
+- `--app`
+- `--all`
+- `--yes`
+- `--non-interactive`
+- `--dry-run`
+
+Notes:
+- `--non-interactive` requires `--yes` and explicit scopes (or `--all`).
 
 ## Gateway
 
@@ -691,7 +758,7 @@ Manage:
 
 Inspect:
 - `browser screenshot [targetId] [--full-page] [--ref <ref>] [--element <selector>] [--type png|jpeg]`
-- `browser snapshot [--format aria|ai] [--target-id <id>] [--limit <n>] [--out <path>]`
+- `browser snapshot [--format aria|ai] [--target-id <id>] [--limit <n>] [--interactive] [--compact] [--depth <n>] [--selector <sel>] [--out <path>]`
 
 Actions:
 - `browser navigate <url> [--target-id <id>]`

@@ -22,9 +22,20 @@ You can globally allow/deny tools via `tools.allow` / `tools.deny` in `clawdbot.
 }
 ```
 
+## Plugins + tools
+
+Plugins can register **additional tools** (and CLI commands) beyond the core set.
+See [Plugins](/plugin) for install + config, and [Skills](/tools/skills) for how
+tool usage guidance is injected into prompts. Some plugins ship their own skills
+alongside tools (for example, the voice-call plugin).
+
 ## Tool inventory
 
-### `bash`
+### `apply_patch`
+Apply structured patches across one or more files. Use for multi-hunk edits.
+Experimental: enable via `tools.exec.applyPatch.enabled` (OpenAI models only).
+
+### `exec`
 Run shell commands in the workspace.
 
 Core parameters:
@@ -38,12 +49,12 @@ Core parameters:
 Notes:
 - Returns `status: "running"` with a `sessionId` when backgrounded.
 - Use `process` to poll/log/write/kill/clear background sessions.
-- If `process` is disallowed, `bash` runs synchronously and ignores `yieldMs`/`background`.
+- If `process` is disallowed, `exec` runs synchronously and ignores `yieldMs`/`background`.
 - `elevated` is gated by `tools.elevated` plus any `agents.list[].tools.elevated` override (both must allow) and runs on the host.
 - `elevated` only changes behavior when the agent is sandboxed (otherwise it’s a no-op).
 
 ### `process`
-Manage background bash sessions.
+Manage background exec sessions.
 
 Core actions:
 - `list`, `poll`, `log`, `write`, `kill`, `clear`, `remove`
@@ -80,8 +91,9 @@ Notes:
 - Profile names: lowercase alphanumeric + hyphens only (max 64 chars).
 - Port range: 18800-18899 (~100 profiles max).
 - Remote profiles are attach-only (no start/stop/reset).
-- `snapshot` defaults to `ai`; use `aria` for the accessibility tree.
-- `act` requires `ref` from `snapshot --format ai`; use `evaluate` for rare CSS selector needs.
+- `snapshot` defaults to `ai` when Playwright is installed; use `aria` for the accessibility tree.
+- `snapshot` also supports role-snapshot options (`interactive`, `compact`, `depth`, `selector`) which return refs like `e12`.
+- `act` requires `ref` from `snapshot` (numeric `12` from AI snapshots, or `e12` from role snapshots); use `evaluate` for rare CSS selector needs.
 - Avoid `act` → `wait` by default; use it only in exceptional cases (no reliable UI state to wait on).
 - `upload` can optionally pass a `ref` to auto-click after arming.
 - `upload` also supports `inputRef` (aria ref) or `element` (CSS selector) to set `<input type="file">` directly.

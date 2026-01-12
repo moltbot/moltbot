@@ -17,7 +17,7 @@ This is not a perfect security boundary, but it materially limits filesystem
 and process access when the model does something dumb.
 
 ## What gets sandboxed
-- Tool execution (`bash`, `read`, `write`, `edit`, `process`, etc.).
+- Tool execution (`exec`, `read`, `write`, `edit`, `apply_patch`, `process`, etc.).
 - Optional sandboxed browser (`agents.defaults.sandbox.browser`).
   - By default, the sandbox browser auto-starts (ensures CDP is reachable) when the browser tool needs it.
     Configure via `agents.defaults.sandbox.browser.autoStart` and `agents.defaults.sandbox.browser.autoStartTimeoutMs`.
@@ -27,7 +27,7 @@ and process access when the model does something dumb.
 Not sandboxed:
 - The Gateway process itself.
 - Any tool explicitly allowed to run on the host (e.g. `tools.elevated`).
-  - **Elevated bash runs on the host and bypasses sandboxing.**
+  - **Elevated exec runs on the host and bypasses sandboxing.**
   - If sandboxing is off, `tools.elevated` does not change execution (already on host). See [Elevated Mode](/tools/elevated).
 
 ## Modes
@@ -47,7 +47,7 @@ Group/channel sessions use their own keys, so they count as non-main and will be
 ## Workspace access
 `agents.defaults.sandbox.workspaceAccess` controls **what the sandbox can see**:
 - `"none"` (default): tools see a sandbox workspace under `~/.clawdbot/sandboxes`.
-- `"ro"`: mounts the agent workspace read-only at `/agent` (disables `write`/`edit`).
+- `"ro"`: mounts the agent workspace read-only at `/agent` (disables `write`/`edit`/`apply_patch`).
 - `"rw"`: mounts the agent workspace read/write at `/workspace`.
 
 Inbound media is copied into the active sandbox workspace (`media/inbound/*`).
@@ -79,7 +79,7 @@ Docker installs and the containerized gateway live here:
 Tool allow/deny policies still apply before sandbox rules. If a tool is denied
 globally or per-agent, sandboxing doesn’t bring it back.
 
-`tools.elevated` is an explicit escape hatch that runs `bash` on the host.
+`tools.elevated` is an explicit escape hatch that runs `exec` on the host.
 
 Debugging:
 - Use `clawdbot sandbox explain` to inspect effective sandbox mode, tool policy, and fix-it config keys.

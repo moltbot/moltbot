@@ -17,9 +17,9 @@ import { hasControlCommand } from "../auto-reply/command-detection.js";
 import {
   buildCommandText,
   listNativeCommandSpecsForConfig,
+  normalizeCommandBody,
 } from "../auto-reply/commands-registry.js";
 import { formatAgentEnvelope } from "../auto-reply/envelope.js";
-import { resolveTelegramDraftStreamingChunking } from "../auto-reply/reply/block-streaming.js";
 import {
   buildHistoryContextFromMap,
   clearHistoryEntries,
@@ -62,6 +62,7 @@ import { resolveAgentRoute } from "../routing/resolve-route.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { loadWebMedia } from "../web/media.js";
 import { resolveTelegramAccount } from "./accounts.js";
+import { resolveTelegramDraftStreamingChunking } from "./draft-chunking.js";
 import { createTelegramDraftStream } from "./draft-stream.js";
 import { resolveTelegramFetch } from "./fetch.js";
 import { markdownToTelegramHtml } from "./format.js";
@@ -557,7 +558,7 @@ export function createTelegramBot(opts: TelegramBotOptions) {
       !wasMentioned &&
       !hasAnyMention &&
       commandAuthorized &&
-      hasControlCommand(msg.text ?? msg.caption ?? "", cfg);
+      hasControlCommand(msg.text ?? msg.caption ?? "", cfg, { botUsername });
     const effectiveWasMentioned = wasMentioned || shouldBypassMention;
     const canDetectMention = Boolean(botUsername) || mentionRegexes.length > 0;
     if (isGroup && requireMention && canDetectMention) {
@@ -682,10 +683,11 @@ export function createTelegramBot(opts: TelegramBotOptions) {
     ].filter((entry): entry is string => Boolean(entry));
     const groupSystemPrompt =
       systemPromptParts.length > 0 ? systemPromptParts.join("\n\n") : undefined;
+    const commandBody = normalizeCommandBody(rawBody, { botUsername });
     const ctxPayload = {
       Body: combinedBody,
       RawBody: rawBody,
-      CommandBody: rawBody,
+      CommandBody: commandBody,
       From: isGroup
         ? buildTelegramGroupFrom(chatId, messageThreadId)
         : `telegram:${chatId}`,
@@ -1209,7 +1211,7 @@ export function createTelegramBot(opts: TelegramBotOptions) {
           }
         }
         // Group policy filtering: controls how group messages are handled
-        // - "open" (default): groups bypass allowFrom, only mention-gating applies
+        // - "open": groups bypass allowFrom, only mention-gating applies
         // - "disabled": block all group messages entirely
         // - "allowlist": only allow group messages from senders in groupAllowFrom/allowFrom
         const groupPolicy = telegramCfg.groupPolicy ?? "open";

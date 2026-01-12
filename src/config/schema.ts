@@ -23,6 +23,19 @@ export type ConfigSchemaResponse = {
   generatedAt: string;
 };
 
+export type PluginUiMetadata = {
+  id: string;
+  name?: string;
+  description?: string;
+  configUiHints?: Record<
+    string,
+    Pick<
+      ConfigUiHint,
+      "label" | "help" | "advanced" | "sensitive" | "placeholder"
+    >
+  >;
+};
+
 const GROUP_LABELS: Record<string, string> = {
   wizard: "Wizard",
   logging: "Logging",
@@ -47,6 +60,7 @@ const GROUP_LABELS: Record<string, string> = {
   imessage: "iMessage",
   whatsapp: "WhatsApp",
   skills: "Skills",
+  plugins: "Plugins",
   discovery: "Discovery",
   presence: "Presence",
   voicewake: "Voice Wake",
@@ -75,6 +89,7 @@ const GROUP_ORDER: Record<string, number> = {
   imessage: 180,
   whatsapp: 190,
   skills: 200,
+  plugins: 205,
   discovery: 210,
   presence: 220,
   voicewake: 230,
@@ -92,12 +107,31 @@ const FIELD_LABELS: Record<string, string> = {
   "tools.audio.transcription.args": "Audio Transcription Args",
   "tools.audio.transcription.timeoutSeconds":
     "Audio Transcription Timeout (sec)",
+  "tools.exec.applyPatch.enabled": "Enable apply_patch",
+  "tools.exec.applyPatch.allowModels": "apply_patch Model Allowlist",
   "gateway.controlUi.basePath": "Control UI Base Path",
   "gateway.http.endpoints.chatCompletions.enabled":
     "OpenAI Chat Completions Endpoint",
   "gateway.reload.mode": "Config Reload Mode",
   "gateway.reload.debounceMs": "Config Reload Debounce (ms)",
   "agents.defaults.workspace": "Workspace",
+  "agents.defaults.memorySearch": "Memory Search",
+  "agents.defaults.memorySearch.enabled": "Enable Memory Search",
+  "agents.defaults.memorySearch.provider": "Memory Search Provider",
+  "agents.defaults.memorySearch.model": "Memory Search Model",
+  "agents.defaults.memorySearch.fallback": "Memory Search Fallback",
+  "agents.defaults.memorySearch.local.modelPath": "Local Embedding Model Path",
+  "agents.defaults.memorySearch.store.path": "Memory Search Index Path",
+  "agents.defaults.memorySearch.chunking.tokens": "Memory Chunk Tokens",
+  "agents.defaults.memorySearch.chunking.overlap":
+    "Memory Chunk Overlap Tokens",
+  "agents.defaults.memorySearch.sync.onSessionStart": "Index on Session Start",
+  "agents.defaults.memorySearch.sync.onSearch": "Index on Search (Lazy)",
+  "agents.defaults.memorySearch.sync.watch": "Watch Memory Files",
+  "agents.defaults.memorySearch.sync.watchDebounceMs":
+    "Memory Watch Debounce (ms)",
+  "agents.defaults.memorySearch.query.maxResults": "Memory Search Max Results",
+  "agents.defaults.memorySearch.query.minScore": "Memory Search Min Score",
   "auth.profiles": "Auth Profiles",
   "auth.order": "Auth Profile Order",
   "auth.cooldowns.billingBackoffHours": "Billing Backoff (hours)",
@@ -153,6 +187,13 @@ const FIELD_LABELS: Record<string, string> = {
   "slack.appToken": "Slack App Token",
   "signal.account": "Signal Account",
   "imessage.cliPath": "iMessage CLI Path",
+  "plugins.enabled": "Enable Plugins",
+  "plugins.allow": "Plugin Allowlist",
+  "plugins.deny": "Plugin Denylist",
+  "plugins.load.paths": "Plugin Load Paths",
+  "plugins.entries": "Plugin Entries",
+  "plugins.entries.*.enabled": "Plugin Enabled",
+  "plugins.entries.*.config": "Plugin Config",
 };
 
 const FIELD_HELP: Record<string, string> = {
@@ -172,6 +213,10 @@ const FIELD_HELP: Record<string, string> = {
     'Hot reload strategy for config changes ("hybrid" recommended).',
   "gateway.reload.debounceMs":
     "Debounce window (ms) before applying config changes.",
+  "tools.exec.applyPatch.enabled":
+    "Experimental. Enables apply_patch for OpenAI models when allowed by tool policy.",
+  "tools.exec.applyPatch.allowModels":
+    'Optional allowlist of model ids (e.g. "gpt-5.2" or "openai/gpt-5.2").',
   "slack.allowBots":
     "Allow bot-authored messages to trigger Slack replies (default: false).",
   "auth.profiles": "Named auth profiles (provider + mode + optional email).",
@@ -187,6 +232,31 @@ const FIELD_HELP: Record<string, string> = {
     "Failure window (hours) for backoff counters (default: 24).",
   "agents.defaults.models":
     "Configured model catalog (keys are full provider/model IDs).",
+  "agents.defaults.memorySearch":
+    "Vector search over MEMORY.md and memory/*.md (per-agent overrides supported).",
+  "agents.defaults.memorySearch.provider":
+    'Embedding provider ("openai" or "local").',
+  "agents.defaults.memorySearch.local.modelPath":
+    "Local GGUF model path or hf: URI (node-llama-cpp).",
+  "agents.defaults.memorySearch.fallback":
+    'Fallback to OpenAI when local embeddings fail ("openai" or "none").',
+  "agents.defaults.memorySearch.store.path":
+    "SQLite index path (default: ~/.clawdbot/memory/{agentId}.sqlite).",
+  "agents.defaults.memorySearch.sync.onSearch":
+    "Lazy sync: reindex on first search after a change.",
+  "agents.defaults.memorySearch.sync.watch":
+    "Watch memory files for changes (chokidar).",
+  "plugins.enabled": "Enable plugin/extension loading (default: true).",
+  "plugins.allow":
+    "Optional allowlist of plugin ids; when set, only listed plugins load.",
+  "plugins.deny": "Optional denylist of plugin ids; deny wins over allowlist.",
+  "plugins.load.paths": "Additional plugin files or directories to load.",
+  "plugins.entries":
+    "Per-plugin settings keyed by plugin id (enable/disable + config payloads).",
+  "plugins.entries.*.enabled":
+    "Overrides plugin enable/disable for this entry (restart required).",
+  "plugins.entries.*.config":
+    "Plugin-defined config payload (schema is provided by the plugin).",
   "agents.defaults.model.primary": "Primary model (provider/model).",
   "agents.defaults.model.fallbacks":
     "Ordered fallback models (provider/model). Used when the primary model fails.",
@@ -307,10 +377,52 @@ function applySensitiveHints(hints: ConfigUiHints): ConfigUiHints {
   return next;
 }
 
-let cached: ConfigSchemaResponse | null = null;
+function applyPluginHints(
+  hints: ConfigUiHints,
+  plugins: PluginUiMetadata[],
+): ConfigUiHints {
+  const next: ConfigUiHints = { ...hints };
+  for (const plugin of plugins) {
+    const id = plugin.id.trim();
+    if (!id) continue;
+    const name = (plugin.name ?? id).trim() || id;
+    const basePath = `plugins.entries.${id}`;
 
-export function buildConfigSchema(): ConfigSchemaResponse {
-  if (cached) return cached;
+    next[basePath] = {
+      ...next[basePath],
+      label: name,
+      help: plugin.description
+        ? `${plugin.description} (plugin: ${id})`
+        : `Plugin entry for ${id}.`,
+    };
+    next[`${basePath}.enabled`] = {
+      ...next[`${basePath}.enabled`],
+      label: `Enable ${name}`,
+    };
+    next[`${basePath}.config`] = {
+      ...next[`${basePath}.config`],
+      label: `${name} Config`,
+      help: `Plugin-defined config payload for ${id}.`,
+    };
+
+    const uiHints = plugin.configUiHints ?? {};
+    for (const [relPathRaw, hint] of Object.entries(uiHints)) {
+      const relPath = relPathRaw.trim().replace(/^\./, "");
+      if (!relPath) continue;
+      const key = `${basePath}.config.${relPath}`;
+      next[key] = {
+        ...next[key],
+        ...hint,
+      };
+    }
+  }
+  return next;
+}
+
+let cachedBase: ConfigSchemaResponse | null = null;
+
+function buildBaseConfigSchema(): ConfigSchemaResponse {
+  if (cachedBase) return cachedBase;
   const schema = ClawdbotSchema.toJSONSchema({
     target: "draft-07",
     unrepresentable: "any",
@@ -323,6 +435,19 @@ export function buildConfigSchema(): ConfigSchemaResponse {
     version: VERSION,
     generatedAt: new Date().toISOString(),
   };
-  cached = next;
+  cachedBase = next;
   return next;
+}
+
+export function buildConfigSchema(params?: {
+  plugins?: PluginUiMetadata[];
+}): ConfigSchemaResponse {
+  const base = buildBaseConfigSchema();
+  const plugins = params?.plugins ?? [];
+  if (plugins.length === 0) return base;
+  const merged = applySensitiveHints(applyPluginHints(base.uiHints, plugins));
+  return {
+    ...base,
+    uiHints: merged,
+  };
 }

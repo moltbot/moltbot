@@ -7,7 +7,7 @@ import {
   resolvePreferredProviderForAuthChoice,
   warnIfModelConfigLooksOff,
 } from "../commands/auth-choice.js";
-import { buildAuthChoiceOptions } from "../commands/auth-choice-options.js";
+import { promptAuthChoiceGrouped } from "../commands/auth-choice-prompt.js";
 import {
   DEFAULT_GATEWAY_DAEMON_RUNTIME,
   GATEWAY_DAEMON_RUNTIME_OPTIONS,
@@ -37,7 +37,6 @@ import { setupProviders } from "../commands/onboard-providers.js";
 import { promptRemoteGatewayConfig } from "../commands/onboard-remote.js";
 import { setupSkills } from "../commands/onboard-skills.js";
 import type {
-  AuthChoice,
   GatewayAuthChoice,
   OnboardMode,
   OnboardOptions,
@@ -54,11 +53,16 @@ import {
 } from "../config/config.js";
 import { resolveGatewayLaunchAgentLabel } from "../daemon/constants.js";
 import { resolveGatewayProgramArguments } from "../daemon/program-args.js";
-import { resolvePreferredNodePath } from "../daemon/runtime-paths.js";
+import {
+  renderSystemNodeWarning,
+  resolvePreferredNodePath,
+  resolveSystemNodeInfo,
+} from "../daemon/runtime-paths.js";
 import { resolveGatewayService } from "../daemon/service.js";
 import { buildServiceEnvironment } from "../daemon/service-env.js";
 import { isSystemdUserServiceAvailable } from "../daemon/systemd.js";
 import { ensureControlUiAssetsBuilt } from "../infra/control-ui-assets.js";
+import { listProviderPlugins } from "../providers/plugins/index.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { defaultRuntime } from "../runtime.js";
 import { runTui } from "../tui/tui.js";
@@ -332,14 +336,12 @@ export async function runOnboardingWizard(
   const authChoiceFromPrompt = opts.authChoice === undefined;
   const authChoice =
     opts.authChoice ??
-    ((await prompter.select({
-      message: "Model/auth choice",
-      options: buildAuthChoiceOptions({
-        store: authStore,
-        includeSkip: true,
-        includeClaudeCliIfMissing: true,
-      }),
-    })) as AuthChoice);
+    (await promptAuthChoiceGrouped({
+      prompter,
+      store: authStore,
+      includeSkip: true,
+      includeClaudeCliIfMissing: true,
+    }));
 
   const authResult = await applyAuthChoice({
     authChoice,
@@ -541,10 +543,15 @@ export async function runOnboardingWizard(
   if (opts.skipProviders) {
     await prompter.note("Skipping provider setup.", "Providers");
   } else {
+    const quickstartAllowFromProviders =
+      flow === "quickstart"
+        ? listProviderPlugins()
+            .filter((plugin) => plugin.meta.quickstartAllowFrom)
+            .map((plugin) => plugin.id)
+        : [];
     nextConfig = await setupProviders(nextConfig, runtime, prompter, {
       allowSignalInstall: true,
-      forceAllowFromProviders:
-        flow === "quickstart" ? ["telegram", "whatsapp"] : [],
+      forceAllowFromProviders: quickstartAllowFromProviders,
       skipDmPolicyPrompt: flow === "quickstart",
       skipConfirm: flow === "quickstart",
       quickstartDefaults: flow === "quickstart",
@@ -669,6 +676,14 @@ export async function runOnboardingWizard(
           runtime: daemonRuntime,
           nodePath,
         });
+      if (daemonRuntime === "node") {
+        const systemNode = await resolveSystemNodeInfo({ env: process.env });
+        const warning = renderSystemNodeWarning(
+          systemNode,
+          programArguments[0],
+        );
+        if (warning) await prompter.note(warning, "Gateway runtime");
+      }
       const environment = buildServiceEnvironment({
         env: process.env,
         port,

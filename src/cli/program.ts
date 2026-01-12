@@ -14,9 +14,11 @@ import { doctorCommand } from "../commands/doctor.js";
 import { healthCommand } from "../commands/health.js";
 import { messageCommand } from "../commands/message.js";
 import { onboardCommand } from "../commands/onboard.js";
+import { resetCommand } from "../commands/reset.js";
 import { sessionsCommand } from "../commands/sessions.js";
 import { setupCommand } from "../commands/setup.js";
 import { statusCommand } from "../commands/status.js";
+import { uninstallCommand } from "../commands/uninstall.js";
 import {
   isNixMode,
   loadConfig,
@@ -26,6 +28,9 @@ import {
 } from "../config/config.js";
 import { danger, setVerbose } from "../globals.js";
 import { autoMigrateLegacyState } from "../infra/state-migrations.js";
+import { registerPluginCliCommands } from "../plugins/cli.js";
+import { listProviderPlugins } from "../providers/plugins/index.js";
+import { DEFAULT_CHAT_PROVIDER } from "../providers/registry.js";
 import { defaultRuntime } from "../runtime.js";
 import { formatDocsLink } from "../terminal/links.js";
 import { isRich, theme } from "../terminal/theme.js";
@@ -45,9 +50,11 @@ import { registerDocsCli } from "./docs-cli.js";
 import { registerGatewayCli } from "./gateway-cli.js";
 import { registerHooksCli } from "./hooks-cli.js";
 import { registerLogsCli } from "./logs-cli.js";
+import { registerMemoryCli } from "./memory-cli.js";
 import { registerModelsCli } from "./models-cli.js";
 import { registerNodesCli } from "./nodes-cli.js";
 import { registerPairingCli } from "./pairing-cli.js";
+import { registerPluginsCli } from "./plugins-cli.js";
 import { forceFreePort } from "./ports.js";
 import { runProviderLogin, runProviderLogout } from "./provider-auth.js";
 import { registerProvidersCli } from "./providers-cli.js";
@@ -65,6 +72,9 @@ function collectOption(value: string, previous: string[] = []): string[] {
 export function buildProgram() {
   const program = new Command();
   const PROGRAM_VERSION = VERSION;
+  const providerOptions = listProviderPlugins().map((plugin) => plugin.id);
+  const messageProviderOptions = providerOptions.join("|");
+  const agentProviderOptions = ["last", ...providerOptions].join("|");
 
   program
     .name("clawdbot")
@@ -253,7 +263,7 @@ export function buildProgram() {
     .option("--mode <mode>", "Wizard mode: local|remote")
     .option(
       "--auth-choice <choice>",
-      "Auth: setup-token|claude-cli|token|openai-codex|openai-api-key|openrouter-api-key|codex-cli|antigravity|gemini-api-key|zai-api-key|apiKey|minimax-cloud|minimax-api|minimax|opencode-zen|skip",
+      "Auth: setup-token|claude-cli|token|openai-codex|openai-api-key|openrouter-api-key|moonshot-api-key|codex-cli|antigravity|gemini-api-key|zai-api-key|apiKey|minimax-api|minimax-api-lightning|opencode-zen|skip",
     )
     .option(
       "--token-provider <id>",
@@ -274,6 +284,7 @@ export function buildProgram() {
     .option("--anthropic-api-key <key>", "Anthropic API key")
     .option("--openai-api-key <key>", "OpenAI API key")
     .option("--openrouter-api-key <key>", "OpenRouter API key")
+    .option("--moonshot-api-key <key>", "Moonshot API key")
     .option("--gemini-api-key <key>", "Gemini API key")
     .option("--zai-api-key <key>", "Z.AI API key")
     .option("--minimax-api-key <key>", "MiniMax API key")
@@ -321,6 +332,7 @@ export function buildProgram() {
               | "openai-codex"
               | "openai-api-key"
               | "openrouter-api-key"
+              | "moonshot-api-key"
               | "codex-cli"
               | "antigravity"
               | "gemini-api-key"
@@ -328,6 +340,7 @@ export function buildProgram() {
               | "apiKey"
               | "minimax-cloud"
               | "minimax-api"
+              | "minimax-api-lightning"
               | "minimax"
               | "opencode-zen"
               | "skip"
@@ -339,6 +352,7 @@ export function buildProgram() {
             anthropicApiKey: opts.anthropicApiKey as string | undefined,
             openaiApiKey: opts.openaiApiKey as string | undefined,
             openrouterApiKey: opts.openrouterApiKey as string | undefined,
+            moonshotApiKey: opts.moonshotApiKey as string | undefined,
             geminiApiKey: opts.geminiApiKey as string | undefined,
             zaiApiKey: opts.zaiApiKey as string | undefined,
             minimaxApiKey: opts.minimaxApiKey as string | undefined,
@@ -468,6 +482,63 @@ export function buildProgram() {
       }
     });
 
+  program
+    .command("reset")
+    .description("Reset local config/state (keeps the CLI installed)")
+    .option(
+      "--scope <scope>",
+      "config|config+creds+sessions|full (default: interactive prompt)",
+    )
+    .option("--yes", "Skip confirmation prompts", false)
+    .option(
+      "--non-interactive",
+      "Disable prompts (requires --scope + --yes)",
+      false,
+    )
+    .option("--dry-run", "Print actions without removing files", false)
+    .action(async (opts) => {
+      try {
+        await resetCommand(defaultRuntime, {
+          scope: opts.scope,
+          yes: Boolean(opts.yes),
+          nonInteractive: Boolean(opts.nonInteractive),
+          dryRun: Boolean(opts.dryRun),
+        });
+      } catch (err) {
+        defaultRuntime.error(String(err));
+        defaultRuntime.exit(1);
+      }
+    });
+
+  program
+    .command("uninstall")
+    .description("Uninstall the gateway service + local data (CLI remains)")
+    .option("--service", "Remove the gateway service", false)
+    .option("--state", "Remove state + config", false)
+    .option("--workspace", "Remove workspace dirs", false)
+    .option("--app", "Remove the macOS app", false)
+    .option("--all", "Remove service + state + workspace + app", false)
+    .option("--yes", "Skip confirmation prompts", false)
+    .option("--non-interactive", "Disable prompts (requires --yes)", false)
+    .option("--dry-run", "Print actions without removing files", false)
+    .action(async (opts) => {
+      try {
+        await uninstallCommand(defaultRuntime, {
+          service: Boolean(opts.service),
+          state: Boolean(opts.state),
+          workspace: Boolean(opts.workspace),
+          app: Boolean(opts.app),
+          all: Boolean(opts.all),
+          yes: Boolean(opts.yes),
+          nonInteractive: Boolean(opts.nonInteractive),
+          dryRun: Boolean(opts.dryRun),
+        });
+      } catch (err) {
+        defaultRuntime.error(String(err));
+        defaultRuntime.exit(1);
+      }
+    });
+
   // Deprecated hidden aliases: use `clawdbot providers login/logout`. Remove in a future major.
   program
     .command("login", { hidden: true })
@@ -532,10 +603,7 @@ ${theme.muted("Docs:")} ${formatDocsLink("/message", "docs.clawd.bot/message")}`
 
   const withMessageBase = (command: Command) =>
     command
-      .option(
-        "--provider <provider>",
-        "Provider: whatsapp|telegram|discord|slack|signal|imessage",
-      )
+      .option("--provider <provider>", `Provider: ${messageProviderOptions}`)
       .option("--account <id>", "Provider account id")
       .option("--json", "Output result as JSON", false)
       .option("--dry-run", "Print payload and skip sending", false)
@@ -1002,7 +1070,7 @@ ${theme.muted("Docs:")} ${formatDocsLink("/message", "docs.clawd.bot/message")}`
     .option("--verbose <on|off>", "Persist agent verbose level for the session")
     .option(
       "--provider <provider>",
-      "Delivery provider: whatsapp|telegram|discord|slack|signal|imessage (default: whatsapp)",
+      `Delivery provider: ${agentProviderOptions} (default: ${DEFAULT_CHAT_PROVIDER})`,
     )
     .option(
       "--local",
@@ -1146,6 +1214,7 @@ ${theme.muted("Docs:")} ${formatDocsLink(
   registerDaemonCli(program);
   registerGatewayCli(program);
   registerLogsCli(program);
+  registerMemoryCli(program);
   registerModelsCli(program);
   registerNodesCli(program);
   registerSandboxCli(program);
@@ -1155,13 +1224,15 @@ ${theme.muted("Docs:")} ${formatDocsLink(
   registerDocsCli(program);
   registerHooksCli(program);
   registerPairingCli(program);
+  registerPluginsCli(program);
   registerProvidersCli(program);
   registerSkillsCli(program);
   registerUpdateCli(program);
+  registerPluginCliCommands(program, loadConfig());
 
   program
     .command("status")
-    .description("Show local status (gateway, agents, sessions, auth)")
+    .description("Show provider health and recent session recipients")
     .option("--json", "Output JSON instead of text", false)
     .option("--all", "Full diagnosis (read-only, pasteable)", false)
     .option("--usage", "Show provider usage/quota snapshots", false)

@@ -91,13 +91,11 @@ for arg in "$@"; do
       log "  CLAWDBOT_GATEWAY_WAIT_SECONDS=0  Wait time before gateway port check (unsigned only)"
       log ""
       log "Unsigned recovery:"
-      log "  defaults write <bundle-id> clawdbot.gateway.attachExistingOnly -bool YES"
       log "  node dist/entry.js daemon install --force --runtime node"
       log "  node dist/entry.js daemon restart"
       log ""
       log "Reset unsigned overrides:"
       log "  rm ~/.clawdbot/disable-launchagent"
-      log "  defaults write <bundle-id> clawdbot.gateway.attachExistingOnly -bool NO"
       log ""
       log "Default behavior: Auto-detect signing keys, fallback to --no-sign if none found"
       exit 0
@@ -177,8 +175,8 @@ elif [ "$SIGN" -eq 1 ]; then
   unset SIGN_IDENTITY
 fi
 
-# 3) Package app (default to bundling the embedded gateway + CLI).
-run_step "package app" bash -lc "cd '${ROOT_DIR}' && SKIP_TSC=${SKIP_TSC:-1} SKIP_GATEWAY_PACKAGE=${SKIP_GATEWAY_PACKAGE:-0} '${ROOT_DIR}/scripts/package-mac-app.sh'"
+# 3) Package app (no embedded gateway).
+run_step "package app" bash -lc "cd '${ROOT_DIR}' && SKIP_TSC=${SKIP_TSC:-1} '${ROOT_DIR}/scripts/package-mac-app.sh'"
 
 choose_app_bundle() {
   if [[ -n "${APP_BUNDLE}" && -d "${APP_BUNDLE}" ]]; then
@@ -203,20 +201,9 @@ choose_app_bundle() {
 
 choose_app_bundle
 
-APP_BUNDLE_ID="$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "${APP_BUNDLE}/Contents/Info.plist" 2>/dev/null || true)"
-
-# When unsigned, avoid the app overwriting the LaunchAgent with the relay binary.
-if [ "$NO_SIGN" -eq 1 ]; then
-  if [[ -n "${APP_BUNDLE_ID}" ]]; then
-    run_step "set attach-existing-only" \
-      /usr/bin/defaults write "${APP_BUNDLE_ID}" clawdbot.gateway.attachExistingOnly -bool YES
-  fi
-elif [[ -f "${LAUNCHAGENT_DISABLE_MARKER}" ]]; then
+# When signed, clear any previous launchagent override marker.
+if [[ "$NO_SIGN" -ne 1 && -f "${LAUNCHAGENT_DISABLE_MARKER}" ]]; then
   run_step "clear launchagent disable marker" /bin/rm -f "${LAUNCHAGENT_DISABLE_MARKER}"
-  if [[ -n "${APP_BUNDLE_ID}" ]]; then
-    run_step "unset attach-existing-only" \
-      /usr/bin/defaults write "${APP_BUNDLE_ID}" clawdbot.gateway.attachExistingOnly -bool NO
-  fi
 fi
 
 # 4) Launch the installed app in the foreground so the menu bar extra appears.
@@ -239,8 +226,7 @@ else
   fail "App exited immediately. Check ${LOG_PATH} or Console.app (User Reports)."
 fi
 
-# When unsigned, launchd cannot exec the app relay binary. Ensure the gateway
-# LaunchAgent targets the repo CLI instead (after the app has launched).
+# When unsigned, ensure the gateway LaunchAgent targets the repo CLI (after the app launches).
 if [ "$NO_SIGN" -eq 1 ]; then
   run_step "install gateway launch agent (unsigned)" bash -lc "cd '${ROOT_DIR}' && node dist/entry.js daemon install --force --runtime node"
   run_step "restart gateway daemon (unsigned)" bash -lc "cd '${ROOT_DIR}' && node dist/entry.js daemon restart"

@@ -27,6 +27,8 @@ A cron job is a stored record with:
 - a **schedule** (when it should run),
 - a **payload** (what it should do),
 - optional **delivery** (where output should be sent).
+- optional **agent binding** (`agentId`): run the job under a specific agent; if
+  missing or unknown, the gateway falls back to the default agent.
 
 Jobs are identified by a stable `jobId` (used by CLI/Gateway APIs).
 In agent tool calls, `jobId` is canonical; legacy `id` is accepted for compatibility.
@@ -61,8 +63,39 @@ Key behaviors:
 - `wakeMode: "now"` triggers an immediate heartbeat after posting the summary.
 - If `payload.deliver: true`, output is delivered to a provider; otherwise it stays internal.
 
-Use isolated jobs for noisy, frequent, or “background chores” that shouldn’t spam
+Use isolated jobs for noisy, frequent, or "background chores" that shouldn't spam
 your main chat history.
+
+### Payload shapes (what runs)
+Two payload kinds are supported:
+- `systemEvent`: main-session only, routed through the heartbeat prompt.
+- `agentTurn`: isolated-session only, runs a dedicated agent turn.
+
+Common `agentTurn` fields:
+- `message`: required text prompt.
+- `model` / `thinking`: optional overrides (see below).
+- `timeoutSeconds`: optional timeout override.
+- `deliver`: `true` to send output to a provider target.
+- `provider`: `last` or a specific provider.
+- `to`: provider-specific target (phone/chat/channel id).
+- `bestEffortDeliver`: avoid failing the job if delivery fails.
+
+Isolation options (only for `session=isolated`):
+- `postToMainPrefix` (CLI: `--post-prefix`): prefix for the summary system event in main.
+
+### Model and thinking overrides
+Isolated jobs (`agentTurn`) can override the model and thinking level:
+- `model`: Provider/model string (e.g., `anthropic/claude-sonnet-4-20250514`) or alias (e.g., `opus`)
+- `thinking`: Thinking level (`off`, `minimal`, `low`, `medium`, `high`)
+
+Note: You can set `model` on main-session jobs too, but it changes the shared main
+session model. We recommend model overrides only for isolated jobs to avoid
+unexpected context shifts.
+
+Resolution priority:
+1. Job payload override (highest)
+2. Hook-specific defaults (e.g., `hooks.gmail.model`)
+3. Agent config default
 
 ### Delivery (provider + target)
 Isolated jobs can deliver output to a provider. The job payload can specify:
@@ -71,6 +104,10 @@ Isolated jobs can deliver output to a provider. The job payload can specify:
 
 If `provider` or `to` is omitted, cron can fall back to the main session’s “last route”
 (the last place the agent replied).
+
+Target format reminders:
+- Slack/Discord targets should use explicit prefixes (e.g. `channel:<id>`, `user:<id>`) to avoid ambiguity.
+- Telegram topics should use the `:topic:` form (see below).
 
 #### Telegram delivery targets (topics / forum threads)
 Telegram supports forum topics via `message_thread_id`. For cron delivery, you can encode
@@ -142,9 +179,42 @@ clawdbot cron add \
   --to "-1001234567890:topic:123"
 ```
 
+Isolated job with model and thinking override:
+```bash
+clawdbot cron add \
+  --name "Deep analysis" \
+  --cron "0 6 * * 1" \
+  --tz "America/Los_Angeles" \
+  --session isolated \
+  --message "Weekly deep analysis of project progress." \
+  --model "opus" \
+  --thinking high \
+  --deliver \
+  --provider whatsapp \
+  --to "+15551234567"
+
+Agent selection (multi-agent setups):
+```bash
+# Pin a job to agent "ops" (falls back to default if that agent is missing)
+clawdbot cron add --name "Ops sweep" --cron "0 6 * * *" --session isolated --message "Check ops queue" --agent ops
+
+# Switch or clear the agent on an existing job
+clawdbot cron edit <jobId> --agent ops
+clawdbot cron edit <jobId> --clear-agent
+```
+```
+
 Manual run (debug):
 ```bash
 clawdbot cron run <jobId> --force
+```
+
+Edit an existing job (patch fields):
+```bash
+clawdbot cron edit <jobId> \
+  --message "Updated prompt" \
+  --model "opus" \
+  --thinking low
 ```
 
 Run history:
