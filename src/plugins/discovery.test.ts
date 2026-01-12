@@ -103,4 +103,60 @@ describe("discoverClawdbotPlugins", () => {
     expect(ids).toContain("pack/one");
     expect(ids).toContain("pack/two");
   });
+
+  it("derives unscoped ids for scoped packages", async () => {
+    const stateDir = makeTempDir();
+    const globalExt = path.join(stateDir, "extensions", "voice-call-pack");
+    fs.mkdirSync(path.join(globalExt, "src"), { recursive: true });
+
+    fs.writeFileSync(
+      path.join(globalExt, "package.json"),
+      JSON.stringify({
+        name: "@clawdbot/voice-call",
+        clawdbot: { extensions: ["./src/index.ts"] },
+      }),
+      "utf-8",
+    );
+    fs.writeFileSync(
+      path.join(globalExt, "src", "index.ts"),
+      "export default function () {}",
+      "utf-8",
+    );
+
+    const { candidates } = await withStateDir(stateDir, async () => {
+      const { discoverClawdbotPlugins } = await import("./discovery.js");
+      return discoverClawdbotPlugins({});
+    });
+
+    const ids = candidates.map((c) => c.idHint);
+    expect(ids).toContain("voice-call");
+  });
+
+  it("treats configured directory paths as plugin packages", async () => {
+    const stateDir = makeTempDir();
+    const packDir = path.join(stateDir, "packs", "demo-plugin-dir");
+    fs.mkdirSync(packDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(packDir, "package.json"),
+      JSON.stringify({
+        name: "@clawdbot/demo-plugin-dir",
+        clawdbot: { extensions: ["./index.js"] },
+      }),
+      "utf-8",
+    );
+    fs.writeFileSync(
+      path.join(packDir, "index.js"),
+      "module.exports = {}",
+      "utf-8",
+    );
+
+    const { candidates } = await withStateDir(stateDir, async () => {
+      const { discoverClawdbotPlugins } = await import("./discovery.js");
+      return discoverClawdbotPlugins({ extraPaths: [packDir] });
+    });
+
+    const ids = candidates.map((c) => c.idHint);
+    expect(ids).toContain("demo-plugin-dir");
+  });
 });

@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
+import {
+  resolveAgentWorkspaceDir,
+  resolveDefaultAgentId,
+} from "../agents/agent-scope.js";
 import type { ModelCatalogEntry } from "../agents/model-catalog.js";
 import { resolveThinkingDefault } from "../agents/model-selection.js";
 import {
@@ -33,6 +37,7 @@ import {
   loadVoiceWakeConfig,
   setVoiceWakeTriggers,
 } from "../infra/voicewake.js";
+import { loadClawdbotPlugins } from "../plugins/loader.js";
 import { clearCommandLane } from "../process/command-queue.js";
 import { normalizeProviderId } from "../providers/plugins/index.js";
 import { normalizeMainKey } from "../routing/session-key.js";
@@ -202,7 +207,29 @@ export function createBridgeHandlers(ctx: BridgeHandlersContext) {
               },
             };
           }
-          const schema = buildConfigSchema();
+          const cfg = loadConfig();
+          const workspaceDir = resolveAgentWorkspaceDir(
+            cfg,
+            resolveDefaultAgentId(cfg),
+          );
+          const pluginRegistry = loadClawdbotPlugins({
+            config: cfg,
+            workspaceDir,
+            logger: {
+              info: () => {},
+              warn: () => {},
+              error: () => {},
+              debug: () => {},
+            },
+          });
+          const schema = buildConfigSchema({
+            plugins: pluginRegistry.plugins.map((plugin) => ({
+              id: plugin.id,
+              name: plugin.name,
+              description: plugin.description,
+              configUiHints: plugin.configUiHints,
+            })),
+          });
           return { ok: true, payloadJSON: JSON.stringify(schema) };
         }
         case "config.set": {
@@ -839,9 +866,8 @@ export function createBridgeHandlers(ctx: BridgeHandlersContext) {
             }
           }
 
-          const { cfg, storePath, store, entry } = loadSessionEntry(
-            p.sessionKey,
-          );
+          const { cfg, storePath, store, entry, canonicalKey } =
+            loadSessionEntry(p.sessionKey);
           const timeoutMs = resolveAgentTimeoutMs({
             cfg,
             overrideMs: p.timeoutMs,
@@ -919,7 +945,7 @@ export function createBridgeHandlers(ctx: BridgeHandlersContext) {
             });
 
             if (store) {
-              store[p.sessionKey] = sessionEntry;
+              store[canonicalKey] = sessionEntry;
               if (storePath) {
                 await saveSessionStore(storePath, store);
               }
@@ -1032,12 +1058,15 @@ export function createBridgeHandlers(ctx: BridgeHandlersContext) {
         if (text.length > 20_000) return;
         const sessionKeyRaw =
           typeof obj.sessionKey === "string" ? obj.sessionKey.trim() : "";
-        const mainKey = normalizeMainKey(loadConfig().session?.mainKey);
-        const sessionKey = sessionKeyRaw.length > 0 ? sessionKeyRaw : mainKey;
-        const { storePath, store, entry } = loadSessionEntry(sessionKey);
+        const cfg = loadConfig();
+        const rawMainKey = normalizeMainKey(cfg.session?.mainKey);
+        const sessionKey =
+          sessionKeyRaw.length > 0 ? sessionKeyRaw : rawMainKey;
+        const { storePath, store, entry, canonicalKey } =
+          loadSessionEntry(sessionKey);
         const now = Date.now();
         const sessionId = entry?.sessionId ?? randomUUID();
-        store[sessionKey] = {
+        store[canonicalKey] = {
           sessionId,
           updatedAt: now,
           thinkingLevel: entry?.thinkingLevel,
@@ -1111,10 +1140,11 @@ export function createBridgeHandlers(ctx: BridgeHandlersContext) {
         const sessionKeyRaw = (link?.sessionKey ?? "").trim();
         const sessionKey =
           sessionKeyRaw.length > 0 ? sessionKeyRaw : `node-${nodeId}`;
-        const { storePath, store, entry } = loadSessionEntry(sessionKey);
+        const { storePath, store, entry, canonicalKey } =
+          loadSessionEntry(sessionKey);
         const now = Date.now();
         const sessionId = entry?.sessionId ?? randomUUID();
-        store[sessionKey] = {
+        store[canonicalKey] = {
           sessionId,
           updatedAt: now,
           thinkingLevel: entry?.thinkingLevel,

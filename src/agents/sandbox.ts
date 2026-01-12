@@ -19,12 +19,9 @@ import {
   loadConfig,
   STATE_DIR_CLAWDBOT,
 } from "../config/config.js";
+import { resolveAgentMainSessionKey } from "../config/sessions.js";
 import { PROVIDER_IDS } from "../providers/registry.js";
-import {
-  buildAgentMainSessionKey,
-  normalizeAgentId,
-  normalizeMainKey,
-} from "../routing/session-key.js";
+import { normalizeAgentId, normalizeMainKey } from "../routing/session-key.js";
 import { defaultRuntime } from "../runtime.js";
 import { resolveUserPath } from "../utils.js";
 import {
@@ -546,11 +543,45 @@ export function resolveSandboxConfigForAgent(
 function shouldSandboxSession(
   cfg: SandboxConfig,
   sessionKey: string,
-  mainKey: string,
+  mainSessionKey: string,
 ) {
   if (cfg.mode === "off") return false;
   if (cfg.mode === "all") return true;
-  return sessionKey.trim() !== mainKey.trim();
+  return sessionKey.trim() !== mainSessionKey.trim();
+}
+
+function resolveMainSessionKeyForSandbox(params: {
+  cfg?: ClawdbotConfig;
+  agentId: string;
+}): string {
+  if (params.cfg?.session?.scope === "global") return "global";
+  return resolveAgentMainSessionKey({
+    cfg: params.cfg,
+    agentId: params.agentId,
+  });
+}
+
+function resolveComparableSessionKeyForSandbox(params: {
+  cfg?: ClawdbotConfig;
+  agentId: string;
+  sessionKey: string;
+}): string {
+  const trimmed = params.sessionKey.trim();
+  if (!trimmed) return trimmed;
+
+  const mainKey = normalizeMainKey(params.cfg?.session?.mainKey);
+  const agentMainSessionKey = resolveAgentMainSessionKey({
+    cfg: params.cfg,
+    agentId: params.agentId,
+  });
+  const isMainAlias =
+    trimmed === "main" ||
+    trimmed === mainKey ||
+    trimmed === agentMainSessionKey;
+
+  if (params.cfg?.session?.scope === "global" && isMainAlias) return "global";
+  if (isMainAlias) return agentMainSessionKey;
+  return trimmed;
 }
 
 export function resolveSandboxRuntimeStatus(params: {
@@ -571,12 +602,13 @@ export function resolveSandboxRuntimeStatus(params: {
   });
   const cfg = params.cfg;
   const sandboxCfg = resolveSandboxConfigForAgent(cfg, agentId);
-  const mainSessionKey = buildAgentMainSessionKey({
-    agentId,
-    mainKey: normalizeMainKey(cfg?.session?.mainKey),
-  });
+  const mainSessionKey = resolveMainSessionKeyForSandbox({ cfg, agentId });
   const sandboxed = sessionKey
-    ? shouldSandboxSession(sandboxCfg, sessionKey, mainSessionKey)
+    ? shouldSandboxSession(
+        sandboxCfg,
+        resolveComparableSessionKeyForSandbox({ cfg, agentId, sessionKey }),
+        mainSessionKey,
+      )
     : false;
   return {
     agentId,
@@ -1293,8 +1325,17 @@ export async function resolveSandboxContext(params: {
   if (!rawSessionKey) return null;
   const agentId = resolveAgentIdFromSessionKey(rawSessionKey);
   const cfg = resolveSandboxConfigForAgent(params.config, agentId);
-  const mainKey = normalizeMainKey(params.config?.session?.mainKey);
-  if (!shouldSandboxSession(cfg, rawSessionKey, mainKey)) return null;
+  const mainSessionKey = resolveMainSessionKeyForSandbox({
+    cfg: params.config,
+    agentId,
+  });
+  const comparableSessionKey = resolveComparableSessionKeyForSandbox({
+    cfg: params.config,
+    agentId,
+    sessionKey: rawSessionKey,
+  });
+  if (!shouldSandboxSession(cfg, comparableSessionKey, mainSessionKey))
+    return null;
 
   await maybePruneSandboxes(cfg);
 
@@ -1373,8 +1414,17 @@ export async function ensureSandboxWorkspaceForSession(params: {
   if (!rawSessionKey) return null;
   const agentId = resolveAgentIdFromSessionKey(rawSessionKey);
   const cfg = resolveSandboxConfigForAgent(params.config, agentId);
-  const mainKey = normalizeMainKey(params.config?.session?.mainKey);
-  if (!shouldSandboxSession(cfg, rawSessionKey, mainKey)) return null;
+  const mainSessionKey = resolveMainSessionKeyForSandbox({
+    cfg: params.config,
+    agentId,
+  });
+  const comparableSessionKey = resolveComparableSessionKeyForSandbox({
+    cfg: params.config,
+    agentId,
+    sessionKey: rawSessionKey,
+  });
+  if (!shouldSandboxSession(cfg, comparableSessionKey, mainSessionKey))
+    return null;
 
   const agentWorkspaceDir = resolveUserPath(
     params.workspaceDir?.trim() || DEFAULT_AGENT_WORKSPACE_DIR,

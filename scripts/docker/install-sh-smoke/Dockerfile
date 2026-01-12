@@ -6,6 +6,7 @@ RUN apt-get update \
     ca-certificates \
     curl \
     git \
+    sudo \
   && rm -rf /var/lib/apt/lists/*
 
 COPY run.sh /usr/local/bin/clawdbot-install-smoke

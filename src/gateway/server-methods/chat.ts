@@ -222,7 +222,9 @@ export const chatHandlers: GatewayRequestHandlers = {
         return;
       }
     }
-    const { cfg, storePath, store, entry } = loadSessionEntry(p.sessionKey);
+    const { cfg, storePath, store, entry, canonicalKey } = loadSessionEntry(
+      p.sessionKey,
+    );
     const timeoutMs = resolveAgentTimeoutMs({
       cfg,
       overrideMs: p.timeoutMs,
@@ -307,7 +309,7 @@ export const chatHandlers: GatewayRequestHandlers = {
       });
 
       if (store) {
-        store[p.sessionKey] = sessionEntry;
+        store[canonicalKey] = sessionEntry;
         if (storePath) {
           await saveSessionStore(storePath, store);
         }
