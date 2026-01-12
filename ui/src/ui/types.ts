@@ -152,6 +152,25 @@ export type SlackStatus = {
   lastProbeAt?: number | null;
 };
 
+export type MatrixProbe = {
+  ok: boolean;
+  status?: number | null;
+  error?: string | null;
+  elapsedMs?: number | null;
+  userId?: string | null;
+  deviceId?: string | null;
+};
+
+export type MatrixStatus = {
+  configured: boolean;
+  running: boolean;
+  lastStartAt?: number | null;
+  lastStopAt?: number | null;
+  lastError?: string | null;
+  probe?: MatrixProbe | null;
+  lastProbeAt?: number | null;
+};
+
 export type SignalProbe = {
   ok: boolean;
   status?: number | null;

@@ -8,6 +8,7 @@ import type {
 import {
   ClientEvent,
   EventType,
+  MatrixEventEvent,
   RelationType,
   RoomEvent,
   RoomMemberEvent,
@@ -501,6 +502,23 @@ export async function monitorMatrixProvider(
     try {
       if (!room) return;
       if (toStartOfTimeline) return;
+      if (
+        event.getType() === EventType.RoomMessageEncrypted ||
+        event.isDecryptionFailure()
+      ) {
+        // Wait for decryption before processing to avoid missing encrypted messages.
+        const onDecrypted = () => {
+          if (event.isDecryptionFailure()) {
+            event.once(MatrixEventEvent.Decrypted, onDecrypted);
+            return;
+          }
+          void handleTimeline(event, room, toStartOfTimeline);
+        };
+        event.once(MatrixEventEvent.Decrypted, onDecrypted);
+        void client.decryptEventIfNeeded(event).catch(() => {});
+        return;
+      }
+
       // Handle both regular messages and poll events
       const eventType = event.getType();
       const isPollEvent = isPollStartType(eventType);

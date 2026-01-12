@@ -456,6 +456,7 @@ export function applyConfigSnapshot(state: ConfigState, snapshot: ConfigSnapshot
   state.telegramConfigStatus = configInvalid;
   state.discordConfigStatus = configInvalid;
   state.slackConfigStatus = configInvalid;
+  state.matrixConfigStatus = configInvalid;
   state.signalConfigStatus = configInvalid;
   state.imessageConfigStatus = configInvalid;
 

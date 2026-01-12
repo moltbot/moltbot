@@ -100,9 +100,6 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.2.1
-      fake-indexeddb:
-        specifier: ^6.2.5
-        version: 6.2.5
       file-type:
         specifier: ^21.3.0
         version: 21.3.0
@@ -122,8 +119,8 @@ importers:
         specifier: ^14.1.0
         version: 14.1.0
       matrix-js-sdk:
-        specifier: 39.4.0
-        version: 39.4.0
+        specifier: 40.0.0-rc.0
+        version: 40.0.0-rc.0
       node-llama-cpp:
         specifier: 3.14.5
         version: 3.14.5(typescript@5.9.3)
@@ -1034,6 +1031,10 @@ packages:
 
   '@matrix-org/matrix-sdk-crypto-wasm@15.3.0':
     resolution: {integrity: sha512-QyxHvncvkl7nf+tnn92PjQ54gMNV8hMSpiukiDgNrqF6IYwgySTlcSdkPYdw8QjZJ0NR6fnVrNzMec0OohM3wA==}
+    engines: {node: '>= 18'}
+
+  '@matrix-org/matrix-sdk-crypto-wasm@16.0.0':
+    resolution: {integrity: sha512-c+0eu/ckG+ik62CaOFvHAulJlspw2CBKcLrWbiEQsXv4J3PC4xaaDI5VHFAl7FDU+U9Ww2DDNTieszCh4Lk0/Q==}
     engines: {node: '>= 18'}
 
   '@microsoft/agents-activity@1.1.1':
@@ -2540,10 +2541,6 @@ packages:
   extend@3.0.2:
     resolution: {integrity: sha512-fjquC59cD7CyW6urNXK0FBufkZcoiGG80wTuPujX590cB5Ttln20E2UB4S/WARVqhXffZl2LNgS+gQdPIIim/g==}
 
-  fake-indexeddb@6.2.5:
-    resolution: {integrity: sha512-CGnyrvbhPlWYMngksqrSSUT1BAVP49dZocrHuK0SvtR0D5TMs5wP0o3j7jexDJW01KSadjBp1M/71o/KR3nD1w==}
-    engines: {node: '>=18'}
-
   fast-content-type-parse@3.0.0:
     resolution: {integrity: sha512-ZvLdcY8P+N8mGQJahJV5G4U88CSvT1rP8ApL6uETe88MBXrBHAkZlSEySdUlyztF7ccb+Znos3TFqaepHxdhBg==}
 
@@ -3145,8 +3142,8 @@ packages:
   matrix-events-sdk@0.0.1:
     resolution: {integrity: sha512-1QEOsXO+bhyCroIe2/A5OwaxHvBm7EsSQ46DEDn8RBIfQwN5HWBpFvyWWR4QY0KHPPnnJdI99wgRiAl7Ad5qaA==}
 
-  matrix-js-sdk@39.4.0:
-    resolution: {integrity: sha512-0RZLcwbMxMTU+ORPhpFUnX8nDbKwLtdW20T6VesSxEwjKL5j2TM/mIt4u3h0HJiMh63PpAb2QUcNr0R82YfTOA==}
+  matrix-js-sdk@40.0.0-rc.0:
+    resolution: {integrity: sha512-RFeU+arhtKfqoE6iZaaB8XyRRxSeaGnsQxwnqTXIkGOGEBZKrOzS/FQl+yxooaUY5QrhJXxWCK6IR+EjgcWKWA==}
     engines: {node: '>=22.0.0'}
 
   matrix-widget-api@1.15.0:
@@ -5244,6 +5241,8 @@ snapshots:
 
   '@matrix-org/matrix-sdk-crypto-wasm@15.3.0': {}
 
+  '@matrix-org/matrix-sdk-crypto-wasm@16.0.0': {}
+
   '@microsoft/agents-activity@1.1.1':
     dependencies:
       debug: 4.4.3
@@ -6875,8 +6874,6 @@ snapshots:
 
   extend@3.0.2: {}
 
-  fake-indexeddb@6.2.5: {}
-
   fast-content-type-parse@3.0.0: {}
 
   fast-deep-equal@3.1.3: {}
@@ -7499,10 +7496,10 @@ snapshots:
 
   matrix-events-sdk@0.0.1: {}
 
-  matrix-js-sdk@39.4.0:
+  matrix-js-sdk@40.0.0-rc.0:
     dependencies:
       '@babel/runtime': 7.28.4
-      '@matrix-org/matrix-sdk-crypto-wasm': 15.3.0
+      '@matrix-org/matrix-sdk-crypto-wasm': 16.0.0
       another-json: 0.2.0
       bs58: 6.0.0
       content-type: 1.0.5

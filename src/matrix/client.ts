@@ -396,18 +396,8 @@ export async function ensureMatrixCrypto(
   if (!enabled) return;
   if (client.getCrypto()) return;
 
-  const { setupNodeIndexedDB, sanitizeUserIdForPrefix } = await import(
-    "./crypto-store.js"
-  );
-  await setupNodeIndexedDB();
-
-  const prefix = userId
-    ? `matrix_crypto_${sanitizeUserIdForPrefix(userId)}`
-    : "matrix_crypto";
-
   await client.initRustCrypto({
-    useIndexedDB: true,
-    cryptoDatabasePrefix: prefix,
+    useIndexedDB: false,
   });
 }
 
