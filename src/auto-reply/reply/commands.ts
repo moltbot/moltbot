@@ -592,6 +592,10 @@ export async function handleCommands(params: {
     "/clawd-revert": { path: "~/clawd-scripts/clawd_revert.sh", restart: true },
     "/clawd-push": { path: "~/clawd-scripts/clawd_push.sh", restart: false },
     "/clawd-git-status": { path: "~/clawd-scripts/clawd_git_status.sh", restart: false },
+    "/clawd-doctor": { path: "~/clawd-scripts/clawd_doctor.sh", restart: false },
+    "/clawd-logs": { path: "~/clawd-scripts/clawd_logs.sh", restart: false },
+    "/crons": { path: "~/clawd-scripts/clawd_crons.sh", restart: false },
+    "/copilot-models": { path: "~/clawd-scripts/clawd_models.sh", restart: false },
   };
 
   const scriptDef = clawdScriptCommands[command.commandBodyNormalized];
