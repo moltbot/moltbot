@@ -3,6 +3,7 @@
 ## 2026.1.12-4
 
 ### Fixes
+- WhatsApp: pass resolved accountId to active listener check so heartbeat/webhook delivery works with custom account names (not just `default`); add single-listener fallback for single-account multi-agent setups. (#776)
 - Onboarding/Configure: refuse to proceed with invalid configs; run `clawdbot doctor` first to avoid wiping custom fields. (#764 — thanks @mukhtharcm)
 - Anthropic: merge consecutive user turns (preserve newest metadata) before validation to avoid “Incorrect role information” errors. (#804 — thanks @ThomsenDrake)
 - Discord/Slack: centralize reply-thread planning so auto-thread replies stay in the created thread without parent reply refs.

@@ -367,7 +367,7 @@ export const whatsappPlugin: ProviderPlugin<ResolvedWhatsAppAccount> = {
       }
       const listenerActive = deps?.hasActiveWebListener
         ? deps.hasActiveWebListener()
-        : Boolean(getActiveWebListener());
+        : Boolean(getActiveWebListener(account.accountId));
       if (!listenerActive) {
         return { ok: false, reason: "whatsapp-not-running" };
       }

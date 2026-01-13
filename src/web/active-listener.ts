@@ -40,6 +40,10 @@ export function requireActiveWebListener(accountId?: string | null): {
 } {
   const id = resolveWebAccountId(accountId);
   const listener = listeners.get(id) ?? null;
+  if (!listener && listeners.size === 1) {
+    const [singleId, singleListener] = [...listeners.entries()][0];
+    return { accountId: singleId, listener: singleListener };
+  }
   if (!listener) {
     throw new Error(
       `No active WhatsApp Web listener (account: ${id}). Start the gateway, then link WhatsApp with: clawdbot providers login --provider whatsapp --account ${id}.`,
@@ -80,5 +84,9 @@ export function getActiveWebListener(
   accountId?: string | null,
 ): ActiveWebListener | null {
   const id = resolveWebAccountId(accountId);
-  return listeners.get(id) ?? null;
+  const listener = listeners.get(id) ?? null;
+  if (!listener && listeners.size === 1) {
+    return [...listeners.values()][0];
+  }
+  return listener;
 }
