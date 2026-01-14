@@ -114,8 +114,9 @@ async function fetchOk(
 async function listTabsViaPlaywright(cdpUrl: string): Promise<BrowserTab[]> {
   try {
     const mod = await import("./pw-session.js");
-    const page = await mod.getPageForTargetId({ cdpUrl }).catch(() => null);
-    if (!page) return [];
+    
+    // Get existing connection (pw-session handles caching and reconnection)
+    const page = await mod.getPageForTargetId({ cdpUrl });
 
     // Get all pages from the browser context
     const browser = page.context().browser();
@@ -160,18 +161,14 @@ async function openTabViaPlaywright(
   try {
     const mod = await import("./pw-session.js");
 
-    // First ensure we have a connection
-    let page = await mod.getPageForTargetId({ cdpUrl }).catch(() => null);
-
-    // Get or create a browser context
-    const browser = page?.context()?.browser();
+    // Get existing connection (pw-session handles caching and reconnection)
+    const page = await mod.getPageForTargetId({ cdpUrl });
+    const context = page.context();
+    const browser = context.browser();
+    
     if (!browser) {
-      // Force a new connection by getting any page
-      page = await mod.getPageForTargetId({ cdpUrl });
+      throw new Error("Could not get browser from context");
     }
-
-    const context = page?.context();
-    if (!context) throw new Error("No browser context available");
 
     // Create a new page and navigate
     const newPage = await context.newPage();

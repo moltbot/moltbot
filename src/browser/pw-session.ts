@@ -205,7 +205,11 @@ function observeBrowser(browser: Browser) {
 
 async function connectBrowser(cdpUrl: string): Promise<ConnectedBrowser> {
   const normalized = normalizeCdpUrl(cdpUrl);
-  if (cached?.cdpUrl === normalized) return cached;
+  console.log("[pw-session] connectBrowser called, normalized:", normalized, "cached:", cached?.cdpUrl ?? "none");
+  if (cached?.cdpUrl === normalized) {
+    console.log("[pw-session] returning cached connection");
+    return cached;
+  }
   if (connecting) return await connecting;
 
   const connectWithRetry = async (): Promise<ConnectedBrowser> => {
@@ -303,24 +307,23 @@ export function refLocator(page: Page, ref: string) {
   if (/^e\d+$/.test(normalized)) {
     const state = pageStates.get(page);
     const info = state?.roleRefs?.[normalized];
-    if (!info) {
-      throw new Error(
-        `Unknown ref "${normalized}". Run a new snapshot and use a ref from that snapshot.`,
-      );
+    if (info) {
+      // Found in role refs map - use getByRole
+      const scope = state?.roleRefsFrameSelector
+        ? page.frameLocator(state.roleRefsFrameSelector)
+        : page;
+      const locAny = scope as unknown as {
+        getByRole: (
+          role: never,
+          opts?: { name?: string; exact?: boolean },
+        ) => ReturnType<Page["getByRole"]>;
+      };
+      const locator = info.name
+        ? locAny.getByRole(info.role as never, { name: info.name, exact: true })
+        : locAny.getByRole(info.role as never);
+      return info.nth !== undefined ? locator.nth(info.nth) : locator;
     }
-    const scope = state?.roleRefsFrameSelector
-      ? page.frameLocator(state.roleRefsFrameSelector)
-      : page;
-    const locAny = scope as unknown as {
-      getByRole: (
-        role: never,
-        opts?: { name?: string; exact?: boolean },
-      ) => ReturnType<Page["getByRole"]>;
-    };
-    const locator = info.name
-      ? locAny.getByRole(info.role as never, { name: info.name, exact: true })
-      : locAny.getByRole(info.role as never);
-    return info.nth !== undefined ? locator.nth(info.nth) : locator;
+    // Not in role refs - fall through to aria-ref (AI snapshot)
   }
 
   return page.locator(`aria-ref=${normalized}`);

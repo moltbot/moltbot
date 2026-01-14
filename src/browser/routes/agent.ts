@@ -1137,8 +1137,10 @@ export function registerBrowserAgentRoutes(
     try {
       const tab = await profileCtx.ensureTabAvailable(targetId);
       let buffer: Buffer;
-      if (ref || element) {
-        const pw = await requirePwAi(res, "element/ref screenshot");
+      const isRemote = !profileCtx.profile.cdpIsLoopback;
+
+      if (ref || element || isRemote || !tab.wsUrl) {
+        const pw = await requirePwAi(res, "playwright screenshot");
         if (!pw) return;
         const snap = await pw.takeScreenshotViaPlaywright({
           cdpUrl: profileCtx.profile.cdpUrl,
@@ -1151,7 +1153,7 @@ export function registerBrowserAgentRoutes(
         buffer = snap.buffer;
       } else {
         buffer = await captureScreenshot({
-          wsUrl: tab.wsUrl ?? "",
+          wsUrl: tab.wsUrl,
           fullPage,
           format: type,
           quality: type === "jpeg" ? 85 : undefined,
@@ -1224,7 +1226,12 @@ export function registerBrowserAgentRoutes(
       if (format === "ai") {
         const pw = await requirePwAi(res, "ai snapshot");
         if (!pw) return;
+        
+        // For remote profiles, force role-based snapshot because _snapshotForAI
+        // requires backend support that might be missing on generic remote browsers.
+        const isRemote = !profileCtx.profile.cdpIsLoopback;
         const wantsRoleSnapshot =
+          isRemote ||
           interactive === true ||
           compact === true ||
           depth !== undefined ||
