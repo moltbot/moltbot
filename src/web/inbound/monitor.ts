@@ -23,6 +23,40 @@ import { downloadInboundMedia } from "./media.js";
 import { createWebSendApi } from "./send-api.js";
 import type { WebInboundMessage, WebListenerCloseReason } from "./types.js";
 
+/**
+ * Enriches message body with media content, handling cases where the user
+ * provided a caption vs. where the body is just a media placeholder.
+ */
+function enrichBodyWithMediaContent(
+  body: string,
+  mediaContent: string,
+  options: {
+    /** Prefix to add (e.g., "[Voice Note]") - always included for voice notes */
+    prefix?: string;
+    /** Label for content when caption exists (e.g., "Transcript") */
+    contentLabel?: string;
+    /** Label for caption when caption exists (default: "User's caption") */
+    captionLabel?: string;
+  } = {},
+): string {
+  const { prefix, contentLabel, captionLabel = "User's caption" } = options;
+  const isPlaceholder = body.startsWith("<media:");
+
+  if (isPlaceholder) {
+    // No user caption - just prefix + content
+    return prefix ? `${prefix}\n${mediaContent}` : mediaContent;
+  }
+
+  // User provided a caption - format depends on options
+  if (prefix && contentLabel) {
+    // Voice note style: [Prefix]\nCaption: ...\n\nContentLabel: ...
+    return `${prefix}\nCaption: ${body}\n\n${contentLabel}: ${mediaContent}`;
+  } else {
+    // Video style: content\n\nUser's caption: ...
+    return `${mediaContent}\n\n${captionLabel}: ${body}`;
+  }
+}
+
 export async function monitorWebInbox(options: {
   verbose: boolean;
   accountId: string;
@@ -213,13 +247,10 @@ export async function monitorWebInbox(options: {
           });
           if (result?.text) {
             // Preserve user caption if present (body is not a media placeholder)
-            const isPlaceholder = body.startsWith("<media:");
-            if (isPlaceholder) {
-              body = `[Voice Note]\n${result.text}`;
-            } else {
-              // User sent a voice note with a caption
-              body = `[Voice Note]\nCaption: ${body}\n\nTranscript: ${result.text}`;
-            }
+            body = enrichBodyWithMediaContent(body, result.text, {
+              prefix: "[Voice Note]",
+              contentLabel: "Transcript",
+            });
             if (shouldLogVerbose()) {
               logVerbose(
                 `Voice note transcribed (${result.provider}): ${result.text.slice(0, 100)}...`,
@@ -244,13 +275,7 @@ export async function monitorWebInbox(options: {
           });
           if (result?.text) {
             // Preserve user caption if present (body is not a media placeholder)
-            const isPlaceholder = body.startsWith("<media:");
-            if (isPlaceholder) {
-              body = result.text;
-            } else {
-              // User sent a video with a caption - include both
-              body = `${result.text}\n\nUser's caption: ${body}`;
-            }
+            body = enrichBodyWithMediaContent(body, result.text);
             if (shouldLogVerbose()) {
               logVerbose(
                 `Video described (${result.provider}): ${result.text.slice(0, 100)}...`,
