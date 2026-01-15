@@ -1,7 +1,6 @@
-import fs from "node:fs/promises";
-
 import type { ClawdbotConfig } from "../config/config.js";
 import { logVerbose, shouldLogVerbose } from "../globals.js";
+import { atomicWriteFile } from "../utils/atomic-write.js";
 
 import { type TranscriptionResult, transcribeViaGroq } from "./groq.js";
 
@@ -73,8 +72,10 @@ async function persistTranscript(
   transcript: string,
 ): Promise<void> {
   const sidecarPath = `${audioPath}.transcript.txt`;
+
   try {
-    await fs.writeFile(sidecarPath, transcript, "utf8");
+    await atomicWriteFile(sidecarPath, transcript, "utf8");
+
     if (shouldLogVerbose()) {
       logVerbose(`Saved transcript sidecar: ${sidecarPath}`);
     }

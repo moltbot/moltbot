@@ -1,7 +1,6 @@
-import fs from "node:fs/promises";
-
 import type { ClawdbotConfig } from "../config/config.js";
 import { logVerbose, shouldLogVerbose } from "../globals.js";
+import { atomicWriteFile } from "../utils/atomic-write.js";
 
 import {
   describeVideoViaGemini,
@@ -74,8 +73,10 @@ async function persistDescription(
   description: string,
 ): Promise<void> {
   const sidecarPath = `${videoPath}.description.txt`;
+
   try {
-    await fs.writeFile(sidecarPath, description, "utf8");
+    await atomicWriteFile(sidecarPath, description, "utf8");
+
     if (shouldLogVerbose()) {
       logVerbose(`Saved video description sidecar: ${sidecarPath}`);
     }
