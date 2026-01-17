@@ -14,7 +14,10 @@ import type {
 } from "../../channels/plugins/types.js";
 import type { ClawdbotConfig } from "../../config/config.js";
 import type { GatewayClientMode, GatewayClientName } from "../../utils/message-channel.js";
-import { listConfiguredMessageChannels, resolveMessageChannelSelection } from "./channel-selection.js";
+import {
+  listConfiguredMessageChannels,
+  resolveMessageChannelSelection,
+} from "./channel-selection.js";
 import type { OutboundSendDeps } from "./deliver.js";
 import type { MessagePollResult, MessageSendResult } from "./message.js";
 import { sendMessage, sendPoll } from "./message.js";
@@ -174,7 +177,8 @@ function enforceContextIsolation(params: {
   if (params.cfg.tools?.message?.allowCrossContextSend) return;
 
   const currentProvider = params.toolContext?.currentChannelProvider;
-  const allowWithinProvider = params.cfg.tools?.message?.crossContext?.allowWithinProvider !== false;
+  const allowWithinProvider =
+    params.cfg.tools?.message?.crossContext?.allowWithinProvider !== false;
   const allowAcrossProviders =
     params.cfg.tools?.message?.crossContext?.allowAcrossProviders === true;
 
@@ -215,7 +219,9 @@ async function resolveChannel(cfg: ClawdbotConfig, params: Record<string, unknow
 }
 
 function shouldApplyCrossContextMarker(action: ChannelMessageActionName): boolean {
-  return action === "send" || action === "poll" || action === "thread-reply" || action === "sticker";
+  return (
+    action === "send" || action === "poll" || action === "thread-reply" || action === "sticker"
+  );
 }
 
 async function buildCrossContextMarker(params: {
@@ -445,7 +451,9 @@ export async function runMessageAction(
         : null;
     const useTextMarker = !(channel === "discord" && marker?.discordEmbeds?.length);
     if (useTextMarker && (marker?.prefix || marker?.suffix)) {
-      const merged = `${marker?.prefix ?? ""}${message}${marker?.suffix ?? ""}`;
+      const markerPrefix = typeof marker?.prefix === "string" ? marker.prefix : "";
+      const markerSuffix = typeof marker?.suffix === "string" ? marker.suffix : "";
+      const merged = `${markerPrefix}${message}${markerSuffix}`;
       params.message = merged;
       message = merged;
     }
