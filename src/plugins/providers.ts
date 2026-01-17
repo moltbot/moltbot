@@ -1,4 +1,5 @@
 import { createSubsystemLogger } from "../logging.js";
+import { getBuiltinProviders } from "./builtin-providers.js";
 import { loadClawdbotPlugins, type PluginLoadOptions } from "./loader.js";
 import type { ProviderPlugin } from "./types.js";
 
@@ -19,5 +20,11 @@ export function resolvePluginProviders(params: {
     },
   });
 
-  return registry.providers.map((entry) => entry.provider);
+  const pluginProviders = registry.providers.map((entry) => entry.provider);
+  const builtins = getBuiltinProviders();
+  const byId = new Map<string, ProviderPlugin>();
+  for (const provider of [...builtins, ...pluginProviders]) {
+    byId.set(provider.id, provider);
+  }
+  return Array.from(byId.values());
 }
