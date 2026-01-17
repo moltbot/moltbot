@@ -11,6 +11,12 @@ export type CoreChannelDeps = {
     body: string;
   }) => string;
   enqueueSystemEvent: (text: string, options: { sessionKey: string; contextKey?: string | null }) => void;
+  saveMediaBuffer: (
+    buffer: Uint8Array,
+    contentType: string | undefined,
+    direction: "inbound" | "outbound",
+    maxBytes: number,
+  ) => Promise<{ path: string; contentType?: string }>;
   dispatchReplyWithBufferedBlockDispatcher: (params: {
     ctx: unknown;
     cfg: unknown;
@@ -119,6 +125,7 @@ export async function loadCoreChannelDeps(): Promise<CoreChannelDeps> {
       pairingStore,
       globals,
       systemEvents,
+      mediaStore,
     ] = await Promise.all([
       importCoreModule<{ chunkMarkdownText: CoreChannelDeps["chunkMarkdownText"] }>(
         "auto-reply/chunk.js",
@@ -143,12 +150,14 @@ export async function loadCoreChannelDeps(): Promise<CoreChannelDeps> {
       importCoreModule<{ enqueueSystemEvent: CoreChannelDeps["enqueueSystemEvent"] }>(
         "infra/system-events.js",
       ),
+      importCoreModule<{ saveMediaBuffer: CoreChannelDeps["saveMediaBuffer"] }>("media/store.js"),
     ]);
 
     return {
       chunkMarkdownText: chunk.chunkMarkdownText,
       formatAgentEnvelope: envelope.formatAgentEnvelope,
       enqueueSystemEvent: systemEvents.enqueueSystemEvent,
+      saveMediaBuffer: mediaStore.saveMediaBuffer,
       dispatchReplyWithBufferedBlockDispatcher:
         dispatcher.dispatchReplyWithBufferedBlockDispatcher,
       resolveAgentRoute: routing.resolveAgentRoute,

@@ -55,6 +55,17 @@ export type BlueBubblesSendTarget =
   | { kind: "chat_identifier"; chatIdentifier: string }
   | { kind: "handle"; address: string; service?: "imessage" | "sms" | "auto" };
 
+export type BlueBubblesAttachment = {
+  guid?: string;
+  uti?: string;
+  mimeType?: string;
+  transferName?: string;
+  totalBytes?: number;
+  height?: number;
+  width?: number;
+  originalROWID?: number;
+};
+
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 export function normalizeBlueBubblesServerUrl(raw: string): string {

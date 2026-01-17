@@ -3,8 +3,9 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { loadCoreChannelDeps } from "./core-bridge.js";
 import { markBlueBubblesChatRead, sendBlueBubblesTyping } from "./chat.js";
 import { resolveChatGuidForTarget, sendMessageBlueBubbles } from "./send.js";
+import { downloadBlueBubblesAttachment } from "./attachments.js";
 import { formatBlueBubblesChatTarget, isAllowedBlueBubblesSender, normalizeBlueBubblesHandle } from "./targets.js";
-import type { BlueBubblesAccountConfig, CoreConfig } from "./types.js";
+import type { BlueBubblesAccountConfig, BlueBubblesAttachment, CoreConfig } from "./types.js";
 import type { ResolvedBlueBubblesAccount } from "./accounts.js";
 
 export type BlueBubblesRuntimeEnv = {
@@ -137,6 +138,52 @@ function readBoolean(record: Record<string, unknown> | null, key: string): boole
   return typeof value === "boolean" ? value : undefined;
 }
 
+function extractAttachments(message: Record<string, unknown>): BlueBubblesAttachment[] {
+  const raw = message["attachments"];
+  if (!Array.isArray(raw)) return [];
+  const out: BlueBubblesAttachment[] = [];
+  for (const entry of raw) {
+    const record = asRecord(entry);
+    if (!record) continue;
+    out.push({
+      guid: readString(record, "guid"),
+      uti: readString(record, "uti"),
+      mimeType: readString(record, "mimeType") ?? readString(record, "mime_type"),
+      transferName: readString(record, "transferName") ?? readString(record, "transfer_name"),
+      totalBytes: readNumberLike(record, "totalBytes") ?? readNumberLike(record, "total_bytes"),
+      height: readNumberLike(record, "height"),
+      width: readNumberLike(record, "width"),
+      originalROWID: readNumberLike(record, "originalROWID") ?? readNumberLike(record, "rowid"),
+    });
+  }
+  return out;
+}
+
+function buildAttachmentPlaceholder(attachments: BlueBubblesAttachment[]): string {
+  if (attachments.length === 0) return "";
+  const mimeTypes = attachments.map((entry) => entry.mimeType ?? "");
+  const allImages = mimeTypes.every((entry) => entry.startsWith("image/"));
+  const allVideos = mimeTypes.every((entry) => entry.startsWith("video/"));
+  const allAudio = mimeTypes.every((entry) => entry.startsWith("audio/"));
+  const tag = allImages
+    ? "<media:image>"
+    : allVideos
+      ? "<media:video>"
+      : allAudio
+        ? "<media:audio>"
+        : "<media:attachment>";
+  const label = allImages ? "image" : allVideos ? "video" : allAudio ? "audio" : "file";
+  const suffix = attachments.length === 1 ? label : `${label}s`;
+  return `${tag} (${attachments.length} ${suffix})`;
+}
+
+function buildMessagePlaceholder(message: NormalizedWebhookMessage): string {
+  const attachmentPlaceholder = buildAttachmentPlaceholder(message.attachments ?? []);
+  if (attachmentPlaceholder) return attachmentPlaceholder;
+  if (message.balloonBundleId) return "<media:sticker>";
+  return "";
+}
+
 function readNumberLike(record: Record<string, unknown> | null, key: string): number | undefined {
   if (!record) return undefined;
   const value = record[key];
@@ -167,6 +214,8 @@ type NormalizedWebhookMessage = {
   chatIdentifier?: string;
   chatName?: string;
   fromMe?: boolean;
+  attachments?: BlueBubblesAttachment[];
+  balloonBundleId?: string;
 };
 
 type NormalizedWebhookReaction = {
@@ -297,6 +346,7 @@ function normalizeWebhookMessage(payload: Record<string, unknown>): NormalizedWe
     readString(message, "id") ??
     readString(message, "messageId") ??
     undefined;
+  const balloonBundleId = readString(message, "balloonBundleId");
 
   const timestampRaw =
     readNumber(message, "date") ??
@@ -324,6 +374,8 @@ function normalizeWebhookMessage(payload: Record<string, unknown>): NormalizedWe
     chatIdentifier,
     chatName,
     fromMe,
+    attachments: extractAttachments(message),
+    balloonBundleId,
   };
 }
 
@@ -588,14 +640,16 @@ async function processMessage(
   if (message.fromMe) return;
 
   const text = message.text.trim();
-  if (!text) {
+  const attachments = message.attachments ?? [];
+  const placeholder = buildMessagePlaceholder(message);
+  if (!text && !placeholder) {
     logVerbose(deps, runtime, `drop: empty text sender=${message.senderId}`);
     return;
   }
   logVerbose(
     deps,
     runtime,
-    `msg sender=${message.senderId} group=${message.isGroup} textLen=${text.length} chatGuid=${message.chatGuid ?? ""} chatId=${message.chatId ?? ""}`,
+    `msg sender=${message.senderId} group=${message.isGroup} textLen=${text.length} attachments=${attachments.length} chatGuid=${message.chatGuid ?? ""} chatId=${message.chatId ?? ""}`,
   );
 
   const dmPolicy = account.config.dmPolicy ?? "pairing";
@@ -726,7 +780,58 @@ async function processMessage(
     },
   });
 
-  const rawBody = text.trim();
+  const baseUrl = account.config.serverUrl?.trim();
+  const password = account.config.password?.trim();
+  const maxBytes =
+    account.config.mediaMaxMb && account.config.mediaMaxMb > 0
+      ? account.config.mediaMaxMb * 1024 * 1024
+      : 8 * 1024 * 1024;
+
+  let mediaUrls: string[] = [];
+  let mediaPaths: string[] = [];
+  let mediaTypes: string[] = [];
+  if (attachments.length > 0) {
+    if (!baseUrl || !password) {
+      logVerbose(deps, runtime, "attachment download skipped (missing serverUrl/password)");
+    } else {
+      for (const attachment of attachments) {
+        if (!attachment.guid) continue;
+        if (attachment.totalBytes && attachment.totalBytes > maxBytes) {
+          logVerbose(
+            deps,
+            runtime,
+            `attachment too large guid=${attachment.guid} bytes=${attachment.totalBytes}`,
+          );
+          continue;
+        }
+        try {
+          const downloaded = await downloadBlueBubblesAttachment(attachment, {
+            cfg: config,
+            accountId: account.accountId,
+            maxBytes,
+          });
+          const saved = await deps.saveMediaBuffer(
+            downloaded.buffer,
+            downloaded.contentType,
+            "inbound",
+            maxBytes,
+          );
+          mediaPaths.push(saved.path);
+          mediaUrls.push(saved.path);
+          if (saved.contentType) {
+            mediaTypes.push(saved.contentType);
+          }
+        } catch (err) {
+          logVerbose(
+            deps,
+            runtime,
+            `attachment download failed guid=${attachment.guid} err=${String(err)}`,
+          );
+        }
+      }
+    }
+  }
+  const rawBody = text.trim() || placeholder;
   const fromLabel = message.isGroup
     ? `group:${peerId}`
     : message.senderName || `user:${message.senderId}`;
@@ -736,9 +841,6 @@ async function processMessage(
     timestamp: message.timestamp,
     body: rawBody,
   });
-
-  const baseUrl = account.config.serverUrl?.trim();
-  const password = account.config.password?.trim();
   let chatGuidForActions = chatGuid;
   if (!chatGuidForActions && baseUrl && password) {
     const target =
@@ -787,6 +889,12 @@ async function processMessage(
     RawBody: rawBody,
     CommandBody: rawBody,
     BodyForCommands: rawBody,
+    MediaUrl: mediaUrls[0],
+    MediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
+    MediaPath: mediaPaths[0],
+    MediaPaths: mediaPaths.length > 0 ? mediaPaths : undefined,
+    MediaType: mediaTypes[0],
+    MediaTypes: mediaTypes.length > 0 ? mediaTypes : undefined,
     From: message.isGroup ? `group:${peerId}` : `bluebubbles:${message.senderId}`,
     To: `bluebubbles:${outboundTarget}`,
     SessionKey: route.sessionKey,

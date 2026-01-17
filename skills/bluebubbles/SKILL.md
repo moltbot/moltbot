@@ -21,6 +21,7 @@ Use this skill when working on the BlueBubbles channel plugin.
 - `resolveChatGuidForTarget` in `extensions/bluebubbles/src/send.ts` for chat lookup.
 - `sendBlueBubblesReaction` in `extensions/bluebubbles/src/reactions.ts` for tapbacks.
 - `sendBlueBubblesTyping` + `markBlueBubblesChatRead` in `extensions/bluebubbles/src/chat.ts`.
+- `downloadBlueBubblesAttachment` in `extensions/bluebubbles/src/attachments.ts` for inbound media.
 - `buildBlueBubblesApiUrl` + `blueBubblesFetchWithTimeout` in `extensions/bluebubbles/src/types.ts` for shared REST plumbing.
 
 ## Webhooks
@@ -28,6 +29,7 @@ Use this skill when working on the BlueBubbles channel plugin.
 - Normalize sender/chat IDs defensively (payloads vary by version).
 - Skip messages marked as from self.
 - Route into core reply pipeline via `loadCoreChannelDeps()`.
+- For attachments/stickers, use `<media:...>` placeholders when text is empty and attach media paths via `MediaUrl(s)` in the inbound context.
 
 ## Config (core)
 - `channels.bluebubbles.serverUrl` (base URL), `channels.bluebubbles.password`, `channels.bluebubbles.webhookPath`.
