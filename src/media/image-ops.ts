@@ -3,6 +3,12 @@ import os from "node:os";
 import path from "node:path";
 
 import { runExec } from "../process/exec.js";
+import {
+  prefersRust,
+  isRustBackendAvailable,
+  rustMetadataFromBuffer,
+  rustResizeToJpeg,
+} from "./image-ops-rust.js";
 
 type Sharp = typeof import("sharp");
 
@@ -18,7 +24,10 @@ function isBun(): boolean {
 function prefersSips(): boolean {
   return (
     process.env.CLAWDBOT_IMAGE_BACKEND === "sips" ||
-    (process.env.CLAWDBOT_IMAGE_BACKEND !== "sharp" && isBun() && process.platform === "darwin")
+    (process.env.CLAWDBOT_IMAGE_BACKEND !== "sharp" &&
+      process.env.CLAWDBOT_IMAGE_BACKEND !== "rust" &&
+      isBun() &&
+      process.platform === "darwin")
   );
 }
 
@@ -195,6 +204,16 @@ async function sipsConvertToJpeg(buffer: Buffer): Promise<Buffer> {
 }
 
 export async function getImageMetadata(buffer: Buffer): Promise<ImageMetadata | null> {
+  // Try Rust backend first if preferred and available
+  if (prefersRust() && (await isRustBackendAvailable())) {
+    try {
+      const meta = await rustMetadataFromBuffer(buffer);
+      return { width: meta.width, height: meta.height };
+    } catch {
+      // Fall through to other backends
+    }
+  }
+
   if (prefersSips()) {
     return await sipsMetadataFromBuffer(buffer).catch(() => null);
   }
@@ -292,6 +311,20 @@ export async function resizeToJpeg(params: {
   quality: number;
   withoutEnlargement?: boolean;
 }): Promise<Buffer> {
+  // Try Rust backend first if preferred and available
+  if (prefersRust() && (await isRustBackendAvailable())) {
+    try {
+      return await rustResizeToJpeg({
+        buffer: params.buffer,
+        maxSide: params.maxSide,
+        quality: params.quality,
+        withoutEnlargement: params.withoutEnlargement,
+      });
+    } catch {
+      // Fall through to other backends
+    }
+  }
+
   if (prefersSips()) {
     // Normalize EXIF orientation BEFORE resizing (sips resize doesn't auto-rotate)
     const normalized = await normalizeExifOrientationSips(params.buffer);
