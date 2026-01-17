@@ -85,6 +85,9 @@ export async function doctorCommand(
   await noteAuthProfileHealth({
     cfg,
     prompter,
+    // Note: TTY check prevents interactive prompts in headless environments
+    // (e.g., Telegram, cron, no terminal). This avoids infinite loops when
+    // prompts fail. Related to issue #1036.
     allowKeychainPrompt: options.nonInteractive !== true && Boolean(process.stdin.isTTY),
   });
   const gatewayDetails = buildGatewayConnectionDetails({ config: cfg });
