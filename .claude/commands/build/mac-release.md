@@ -12,7 +12,7 @@ hooks:
           errorMessage: "Build blocked: You have uncommitted changes. Commit or stash them first."
 ---
 
-# Build Release
+# Build macOS Release
 
 Build the macOS companion app (Clawdbot.app) from an upstream release with hotfixes applied.
 
@@ -75,6 +75,6 @@ Where `<version>` is either the specified version or latest tag (e.g., `v2026.1.
 ### Step 4: Report results
 
 After build completes, show:
-- Build location (`.worktrees/<version>`)
+- Build location (`.worktrees/latest`)
 - Which hotfixes were applied
 - Next steps (e.g., deployment command)

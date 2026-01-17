@@ -14,7 +14,7 @@ Expert guidance for building, deploying, and managing Clawdbot releases with hot
 Clawdbot uses a fork-based workflow with upstream synchronization:
 1. **Upstream** releases are tagged versions from the main Claude Code repository
 2. **Hotfixes** are maintained in `hotfix/*` branches in the fork
-3. **Builds** are created in `.worktrees/<version>` with hotfixes auto-applied
+3. **Builds** are created in `.worktrees/latest` with hotfixes auto-applied
 
 ### Worktree Structure
 - Main repo: Current development branch
@@ -43,19 +43,19 @@ Creates a worktree for the specified version and applies all hotfixes.
 
 ### Building Latest Release
 
-Use the `/build-release` command:
+Use the `/build:mac-release` command:
 ```
-/build-release
+/build:mac-release
 ```
 
 Or specify a version:
 ```
-/build-release v2026.1.8
+/build:mac-release v2026.1.8
 ```
 
 Unattended mode (no prompts):
 ```
-/build-release -y
+/build:mac-release -y
 ```
 
 ### Checking Release Status
@@ -89,7 +89,7 @@ Unattended mode (no prompts):
 ### Deploying a Build
 
 After building, the worktree contains the deployable version:
-- Location: `.worktrees/<version>/`
+- Location: `.worktrees/latest/`
 - All hotfixes are applied
 - Ready for testing or deployment
 
@@ -171,7 +171,7 @@ When updating versions across the codebase:
 
 ## Related Commands
 
-- `/build-release` - Build latest or specific version
+- `/build:mac-release` - Build latest or specific version
 - Standard git commands for hotfix management
 - Deployment scripts (project-specific)
 

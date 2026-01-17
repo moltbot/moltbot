@@ -53,7 +53,7 @@ Use the Read tool to read the release build scripts and understand the hotfix wo
 
 **Key Concepts:**
 - **Hotfix Convention:** Branches named `hotfix/*` auto-apply during builds
-- **Worktrees:** Isolated build directories in `.worktrees/<version>/`
+- **Worktrees:** Isolated build directories in `.worktrees/latest/`
 - **Latest Symlink:** `.local/latest` points to most recent build
 
 ---
@@ -75,7 +75,7 @@ ls .claude/commands/wiz/
 
 **Command Namespaces:**
 - `/dev:*` - Development workflow (gate, test, commit, tdd, etc.)
-- `/build:*` - Release builds (release, help)
+- `/build:*` - Release builds (mac-release, help)
 - `/wiz:*` - Wizard priming (core, workflow, help)
 
 ---
@@ -117,8 +117,8 @@ Hotfix System:
   Apply:       ./scripts/apply-release-fixes.sh [--dry-run]
 
 Release Builds:
-  Build:       /build:release [version]
-  Artifacts:   .worktrees/<version>/dist/Clawdbot.app
+  Build:       /build:mac-release [version]
+  Artifacts:   .worktrees/latest/dist/Clawdbot.app
   Latest:      .local/latest symlink
 
 Git Model:

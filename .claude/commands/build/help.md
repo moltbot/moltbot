@@ -12,7 +12,7 @@ Display this help information to the user:
 
 | Command | Description |
 |---------|-------------|
-| `/build:release [version]` | Build latest (or specific) release with hotfixes |
+| `/build:mac-release [version]` | Build latest (or specific) macOS release with hotfixes |
 | `/build:help` | Show this help |
 
 ## Hotfix Workflow
@@ -28,7 +28,7 @@ git checkout -b hotfix/my-fix
 ./scripts/release-fixes-status.sh
 
 # Build (hotfixes auto-apply)
-/build:release
+/build:mac-release
 ```
 
 ## Scripts
@@ -43,9 +43,9 @@ git checkout -b hotfix/my-fix
 
 ## Build Artifacts
 
-- **Worktrees**: `.worktrees/<version>/` - isolated build directories
+- **Worktrees**: `.worktrees/latest/` - isolated build directory
 - **Latest symlink**: `.local/latest` → most recent build
-- **Built app**: `.worktrees/<version>/dist/Clawdbot.app`
+- **Built app**: `.worktrees/latest/dist/Clawdbot.app`
 
 ## How Hotfixes Work
 

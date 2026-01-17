@@ -35,7 +35,7 @@ Available command namespaces and help resources.
 - `/dev:pr-test <number>` - Test a PR locally
 
 ### Build & Release
-- `/build:release [version]` - Build with hotfixes applied
+- `/build:mac-release [version]` - Build macOS app with hotfixes applied
 - `./scripts/release-fixes-status.sh` - Check hotfix status
 
 ### Domain Experts
