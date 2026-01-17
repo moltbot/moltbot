@@ -2,7 +2,10 @@ import { resolveAckReaction } from "../../../agents/identity.js";
 import { hasControlCommand } from "../../../auto-reply/command-detection.js";
 import { shouldHandleTextCommands } from "../../../auto-reply/commands-registry.js";
 import { formatAgentEnvelope, formatThreadStarterEnvelope } from "../../../auto-reply/envelope.js";
-import { buildHistoryContextFromMap } from "../../../auto-reply/reply/history.js";
+import {
+  buildPendingHistoryContextFromMap,
+  recordPendingHistoryEntry,
+} from "../../../auto-reply/reply/history.js";
 import { buildMentionRegexes, matchesMentionPatterns } from "../../../auto-reply/reply/mentions.js";
 import { logVerbose, shouldLogVerbose } from "../../../globals.js";
 import { enqueueSystemEvent } from "../../../infra/system-events.js";
@@ -10,6 +13,7 @@ import { buildPairingReply } from "../../../pairing/pairing-messages.js";
 import { upsertChannelPairingRequest } from "../../../pairing/pairing-store.js";
 import { resolveAgentRoute } from "../../../routing/resolve-route.js";
 import { resolveThreadSessionKeys } from "../../../routing/session-key.js";
+import { resolveMentionGating } from "../../../channels/mention-gating.js";
 
 import type { ResolvedSlackAccount } from "../../accounts.js";
 import { reactSlackMessage } from "../../actions.js";
@@ -166,12 +170,31 @@ export async function prepareSlackMessage(params: {
     },
   });
 
+  const baseSessionKey = route.sessionKey;
+  const threadTs = message.thread_ts;
+  const hasThreadTs = typeof threadTs === "string" && threadTs.length > 0;
+  const isThreadReply = hasThreadTs && (threadTs !== message.ts || Boolean(message.parent_user_id));
+  const threadKeys = resolveThreadSessionKeys({
+    baseSessionKey,
+    threadId: isThreadReply ? threadTs : undefined,
+    parentSessionKey: isThreadReply && ctx.threadInheritParent ? baseSessionKey : undefined,
+  });
+  const sessionKey = threadKeys.sessionKey;
+  const historyKey =
+    isThreadReply && ctx.threadHistoryScope === "thread" ? sessionKey : message.channel;
+
   const mentionRegexes = buildMentionRegexes(cfg, route.agentId);
   const wasMentioned =
     opts.wasMentioned ??
     (!isDirectMessage &&
       (Boolean(ctx.botUserId && message.text?.includes(`<@${ctx.botUserId}>`)) ||
         matchesMentionPatterns(message.text ?? "", mentionRegexes)));
+  const implicitMention = Boolean(
+    !isDirectMessage &&
+    ctx.botUserId &&
+    message.thread_ts &&
+    message.parent_user_id === ctx.botUserId,
+  );
 
   const sender = message.user ? await ctx.resolveUserName(message.user) : null;
   const senderName =
@@ -215,10 +238,39 @@ export async function prepareSlackMessage(params: {
     commandAuthorized &&
     hasControlCommand(message.text ?? "", cfg);
 
-  const effectiveWasMentioned = wasMentioned || shouldBypassMention;
   const canDetectMention = Boolean(ctx.botUserId) || mentionRegexes.length > 0;
-  if (isRoom && shouldRequireMention && canDetectMention && !wasMentioned && !shouldBypassMention) {
+  const mentionGate = resolveMentionGating({
+    requireMention: Boolean(shouldRequireMention),
+    canDetectMention,
+    wasMentioned,
+    implicitMention,
+    shouldBypassMention,
+  });
+  const effectiveWasMentioned = mentionGate.effectiveWasMentioned;
+  if (isRoom && shouldRequireMention && mentionGate.shouldSkip) {
     ctx.logger.info({ channel: message.channel, reason: "no-mention" }, "skipping room message");
+    if (ctx.historyLimit > 0) {
+      const pendingText = (message.text ?? "").trim();
+      const fallbackFile = message.files?.[0]?.name
+        ? `[Slack file: ${message.files[0].name}]`
+        : message.files?.length
+          ? "[Slack file]"
+          : "";
+      const pendingBody = pendingText || fallbackFile;
+      if (pendingBody) {
+        recordPendingHistoryEntry({
+          historyMap: ctx.channelHistories,
+          historyKey,
+          limit: ctx.historyLimit,
+          entry: {
+            sender: senderName,
+            body: pendingBody,
+            timestamp: message.ts ? Math.round(Number(message.ts) * 1000) : undefined,
+            messageId: message.ts,
+          },
+        });
+      }
+    }
     return null;
   }
 
@@ -242,7 +294,7 @@ export async function prepareSlackMessage(params: {
       if (!isRoom) return false;
       if (!shouldRequireMention) return false;
       if (!canDetectMention) return false;
-      return wasMentioned || shouldBypassMention;
+      return effectiveWasMentioned;
     }
     return false;
   };
@@ -263,16 +315,6 @@ export async function prepareSlackMessage(params: {
       : null;
 
   const roomLabel = channelName ? `#${channelName}` : `#${message.channel}`;
-  const historyEntry =
-    isRoomish && ctx.historyLimit > 0
-      ? {
-          sender: senderName,
-          body: rawBody,
-          timestamp: message.ts ? Math.round(Number(message.ts) * 1000) : undefined,
-          messageId: message.ts,
-        }
-      : undefined;
-
   const preview = rawBody.replace(/\s+/g, " ").slice(0, 160);
   const inboundLabel = isDirectMessage
     ? `Slack DM from ${senderName}`
@@ -283,18 +325,6 @@ export async function prepareSlackMessage(params: {
       ? `slack:channel:${message.channel}`
       : `slack:group:${message.channel}`;
 
-  const baseSessionKey = route.sessionKey;
-  const threadTs = message.thread_ts;
-  const hasThreadTs = typeof threadTs === "string" && threadTs.length > 0;
-  const isThreadReply = hasThreadTs && (threadTs !== message.ts || Boolean(message.parent_user_id));
-  const threadKeys = resolveThreadSessionKeys({
-    baseSessionKey,
-    threadId: isThreadReply ? threadTs : undefined,
-    parentSessionKey: isThreadReply && ctx.threadInheritParent ? baseSessionKey : undefined,
-  });
-  const sessionKey = threadKeys.sessionKey;
-  const historyKey =
-    isThreadReply && ctx.threadHistoryScope === "thread" ? sessionKey : message.channel;
   enqueueSystemEvent(`${inboundLabel}: ${preview}`, {
     sessionKey,
     contextKey: `slack:message:${message.channel}:${message.ts ?? "unknown"}`,
@@ -310,11 +340,10 @@ export async function prepareSlackMessage(params: {
 
   let combinedBody = body;
   if (isRoomish && ctx.historyLimit > 0) {
-    combinedBody = buildHistoryContextFromMap({
+    combinedBody = buildPendingHistoryContextFromMap({
       historyMap: ctx.channelHistories,
       historyKey,
       limit: ctx.historyLimit,
-      entry: historyEntry,
       currentMessage: combinedBody,
       formatEntry: (entry) =>
         formatAgentEnvelope({

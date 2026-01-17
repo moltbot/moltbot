@@ -19,6 +19,7 @@ import {
   isInternalMessageChannel,
   resolveGatewayMessageChannel,
 } from "../../utils/message-channel.js";
+import { normalizeAccountId } from "../../utils/account-id.js";
 import type { AgentCommandOpts } from "./types.js";
 
 type RunResult = Awaited<
@@ -48,13 +49,16 @@ export async function deliverAgentCommandResult(params: {
 
   const targetMode: ChannelOutboundTargetMode =
     opts.deliveryTargetMode ?? (opts.to ? "explicit" : "implicit");
+  const resolvedAccountId =
+    normalizeAccountId(opts.accountId) ??
+    (targetMode === "implicit" ? normalizeAccountId(sessionEntry?.lastAccountId) : undefined);
   const resolvedTarget =
     deliver && isDeliveryChannelKnown && deliveryChannel
       ? resolveOutboundTarget({
           channel: deliveryChannel,
           to: opts.to,
           cfg,
-          accountId: targetMode === "implicit" ? sessionEntry?.lastAccountId : undefined,
+          accountId: resolvedAccountId,
           mode: targetMode,
         })
       : null;
@@ -112,6 +116,7 @@ export async function deliverAgentCommandResult(params: {
         cfg,
         channel: deliveryChannel,
         to: deliveryTarget,
+        accountId: resolvedAccountId,
         payloads: deliveryPayloads,
         bestEffort: bestEffortDeliver,
         onError: (err) => logDeliveryError(err),

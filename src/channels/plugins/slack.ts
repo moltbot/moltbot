@@ -12,6 +12,8 @@ import {
 import { probeSlack } from "../../slack/probe.js";
 import { sendMessageSlack } from "../../slack/send.js";
 import { getChatChannelMeta } from "../registry.js";
+import { SlackConfigSchema } from "../../config/zod-schema.providers-core.js";
+import { buildChannelConfigSchema } from "./config-schema.js";
 import {
   deleteAccountFromConfigSection,
   setAccountEnabledInConfigSection,
@@ -80,6 +82,7 @@ export const slackPlugin: ChannelPlugin<ResolvedSlackAccount> = {
     blockStreamingCoalesceDefaults: { minChars: 1500, idleMs: 1000 },
   },
   reload: { configPrefixes: ["channels.slack"] },
+  configSchema: buildChannelConfigSchema(SlackConfigSchema),
   config: {
     listAccountIds: (cfg) => listSlackAccountIds(cfg),
     resolveAccount: (cfg, accountId) => resolveSlackAccount({ cfg, accountId }),
@@ -168,6 +171,60 @@ export const slackPlugin: ChannelPlugin<ResolvedSlackAccount> = {
   },
   messaging: {
     normalizeTarget: normalizeSlackMessagingTarget,
+  },
+  directory: {
+    self: async () => null,
+    listPeers: async ({ cfg, accountId, query, limit }) => {
+      const account = resolveSlackAccount({ cfg, accountId });
+      const q = query?.trim().toLowerCase() || "";
+      const ids = new Set<string>();
+
+      for (const entry of account.dm?.allowFrom ?? []) {
+        const raw = String(entry).trim();
+        if (!raw || raw === "*") continue;
+        ids.add(raw);
+      }
+      for (const id of Object.keys(account.config.dms ?? {})) {
+        const trimmed = id.trim();
+        if (trimmed) ids.add(trimmed);
+      }
+      for (const channel of Object.values(account.config.channels ?? {})) {
+        for (const user of channel.users ?? []) {
+          const raw = String(user).trim();
+          if (raw) ids.add(raw);
+        }
+      }
+
+      const peers = Array.from(ids)
+        .map((raw) => raw.trim())
+        .filter(Boolean)
+        .map((raw) => {
+          const mention = raw.match(/^<@([A-Z0-9]+)>$/i);
+          const normalizedUserId = (mention?.[1] ?? raw).replace(/^(slack|user):/i, "").trim();
+          if (!normalizedUserId) return null;
+          const target = `user:${normalizedUserId}`;
+          return normalizeSlackMessagingTarget(target) ?? target.toLowerCase();
+        })
+        .filter((id): id is string => Boolean(id))
+        .filter((id) => id.startsWith("user:"))
+        .filter((id) => (q ? id.toLowerCase().includes(q) : true))
+        .slice(0, limit && limit > 0 ? limit : undefined)
+        .map((id) => ({ kind: "user", id }) as const);
+      return peers;
+    },
+    listGroups: async ({ cfg, accountId, query, limit }) => {
+      const account = resolveSlackAccount({ cfg, accountId });
+      const q = query?.trim().toLowerCase() || "";
+      const groups = Object.keys(account.config.channels ?? {})
+        .map((raw) => raw.trim())
+        .filter(Boolean)
+        .map((raw) => normalizeSlackMessagingTarget(raw) ?? raw.toLowerCase())
+        .filter((id) => id.startsWith("channel:"))
+        .filter((id) => (q ? id.toLowerCase().includes(q) : true))
+        .slice(0, limit && limit > 0 ? limit : undefined)
+        .map((id) => ({ kind: "group", id }) as const);
+      return groups;
+    },
   },
   actions: {
     listActions: ({ cfg }) => {

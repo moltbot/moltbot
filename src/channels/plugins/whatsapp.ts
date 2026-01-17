@@ -21,6 +21,8 @@ import {
 import { sendMessageWhatsApp, sendPollWhatsApp } from "../../web/outbound.js";
 import { isWhatsAppGroupJid, normalizeWhatsAppTarget } from "../../whatsapp/normalize.js";
 import { getChatChannelMeta } from "../registry.js";
+import { WhatsAppConfigSchema } from "../../config/zod-schema.providers-whatsapp.js";
+import { buildChannelConfigSchema } from "./config-schema.js";
 import { createWhatsAppLoginTool } from "./agent-tools/whatsapp-login.js";
 import { resolveWhatsAppGroupRequireMention } from "./group-mentions.js";
 import { formatPairingApproveHint } from "./helpers.js";
@@ -60,6 +62,7 @@ export const whatsappPlugin: ChannelPlugin<ResolvedWhatsAppAccount> = {
   },
   reload: { configPrefixes: ["web"], noopPrefixes: ["channels.whatsapp"] },
   gatewayMethods: ["web.login.start", "web.login.wait"],
+  configSchema: buildChannelConfigSchema(WhatsAppConfigSchema),
   config: {
     listAccountIds: (cfg) => listWhatsAppAccountIds(cfg),
     resolveAccount: (cfg, accountId) => resolveWhatsAppAccount({ cfg, accountId }),
@@ -109,6 +112,7 @@ export const whatsappPlugin: ChannelPlugin<ResolvedWhatsAppAccount> = {
       name: account.name,
       enabled: account.enabled,
       configured: Boolean(account.authDir),
+      linked: Boolean(account.authDir),
       dmPolicy: account.dmPolicy,
       allowFrom: account.allowFrom,
     }),
@@ -214,6 +218,45 @@ export const whatsappPlugin: ChannelPlugin<ResolvedWhatsAppAccount> = {
   },
   messaging: {
     normalizeTarget: normalizeWhatsAppMessagingTarget,
+  },
+  directory: {
+    self: async ({ cfg, accountId }) => {
+      const account = resolveWhatsAppAccount({ cfg, accountId });
+      const { e164, jid } = readWebSelfId(account.authDir);
+      const id = e164 ?? jid;
+      if (!id) return null;
+      return {
+        kind: "user",
+        id,
+        name: account.name,
+        raw: { e164, jid },
+      };
+    },
+    listPeers: async ({ cfg, accountId, query, limit }) => {
+      const account = resolveWhatsAppAccount({ cfg, accountId });
+      const q = query?.trim().toLowerCase() || "";
+      const peers = (account.allowFrom ?? [])
+        .map((entry) => String(entry).trim())
+        .filter((entry) => Boolean(entry) && entry !== "*")
+        .map((entry) => normalizeWhatsAppTarget(entry) ?? "")
+        .filter(Boolean)
+        .filter((id) => !isWhatsAppGroupJid(id))
+        .filter((id) => (q ? id.toLowerCase().includes(q) : true))
+        .slice(0, limit && limit > 0 ? limit : undefined)
+        .map((id) => ({ kind: "user", id }) as const);
+      return peers;
+    },
+    listGroups: async ({ cfg, accountId, query, limit }) => {
+      const account = resolveWhatsAppAccount({ cfg, accountId });
+      const q = query?.trim().toLowerCase() || "";
+      const groups = Object.keys(account.groups ?? {})
+        .map((id) => id.trim())
+        .filter((id) => Boolean(id) && id !== "*")
+        .filter((id) => (q ? id.toLowerCase().includes(q) : true))
+        .slice(0, limit && limit > 0 ? limit : undefined)
+        .map((id) => ({ kind: "group", id }) as const);
+      return groups;
+    },
   },
   actions: {
     listActions: ({ cfg }) => {

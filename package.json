@@ -47,7 +47,6 @@
     "README-header.png",
     "CHANGELOG.md",
     "LICENSE",
-    "patches/**",
     "scripts/postinstall.js",
     "dist/terminal/**",
     "dist/routing/**",
@@ -66,7 +65,7 @@
     "docs:bin": "bun build scripts/docs-list.ts --compile --outfile bin/docs-list",
     "docs:dev": "cd docs && mint dev",
     "docs:build": "cd docs && pnpm dlx --reporter append-only mint broken-links",
-    "build": "tsc -p tsconfig.json && tsx scripts/canvas-a2ui-copy.ts",
+    "build": "tsc -p tsconfig.json && tsx scripts/canvas-a2ui-copy.ts && tsx scripts/copy-hook-metadata.ts",
     "plugins:sync": "tsx scripts/sync-plugin-versions.ts",
     "release:check": "tsx scripts/release-check.ts",
     "ui:install": "node scripts/ui.js install",
@@ -143,6 +142,7 @@
     "@mariozechner/pi-ai": "0.46.0",
     "@mariozechner/pi-coding-agent": "^0.46.0",
     "@mariozechner/pi-tui": "^0.46.0",
+    "@mozilla/readability": "^0.6.0",
     "@sinclair/typebox": "0.34.47",
     "@slack/bolt": "^4.6.0",
     "@slack/web-api": "^7.13.0",
@@ -163,6 +163,7 @@
     "hono": "4.11.4",
     "jiti": "^2.6.1",
     "json5": "^2.2.3",
+    "linkedom": "^0.18.12",
     "long": "5.3.2",
     "markdown-it": "^14.1.0",
     "osc-progress": "^0.2.0",
@@ -170,7 +171,7 @@
     "proper-lockfile": "^4.1.2",
     "qrcode-terminal": "^0.12.0",
     "sharp": "^0.34.5",
-    "tar": "^7.5.2",
+    "tar": "^7.5.3",
     "tslog": "^4.10.2",
     "undici": "^7.18.2",
     "ws": "^8.19.0",
@@ -212,10 +213,8 @@
     "minimumReleaseAge": 2880,
     "overrides": {
       "@sinclair/typebox": "0.34.47",
-      "hono": "4.11.4"
-    },
-    "patchedDependencies": {
-      "@mariozechner/pi-agent-core@0.46.0": "patches/@mariozechner__pi-agent-core.patch"
+      "hono": "4.11.4",
+      "tar": "7.5.3"
     }
   },
   "vitest": {

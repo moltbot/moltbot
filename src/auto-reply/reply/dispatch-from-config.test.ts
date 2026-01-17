@@ -24,6 +24,13 @@ vi.mock("./route-reply.js", () => ({
 
 vi.mock("./abort.js", () => ({
   tryFastAbortFromMessage: mocks.tryFastAbortFromMessage,
+  formatAbortReplyText: (stoppedSubagents?: number) => {
+    if (typeof stoppedSubagents !== "number" || stoppedSubagents <= 0) {
+      return "⚙️ Agent was aborted.";
+    }
+    const label = stoppedSubagents === 1 ? "sub-agent" : "sub-agents";
+    return `⚙️ Agent was aborted. Stopped ${stoppedSubagents} ${label}.`;
+  },
 }));
 
 const { dispatchReplyFromConfig } = await import("./dispatch-from-config.js");
@@ -123,6 +130,31 @@ describe("dispatchReplyFromConfig", () => {
     });
   });
 
+  it("fast-abort reply includes stopped subagent count when provided", async () => {
+    mocks.tryFastAbortFromMessage.mockResolvedValue({
+      handled: true,
+      aborted: true,
+      stoppedSubagents: 2,
+    });
+    const cfg = {} as ClawdbotConfig;
+    const dispatcher = createDispatcher();
+    const ctx: MsgContext = {
+      Provider: "telegram",
+      Body: "/stop",
+    };
+
+    await dispatchReplyFromConfig({
+      ctx,
+      cfg,
+      dispatcher,
+      replyResolver: vi.fn(async () => ({ text: "hi" }) as ReplyPayload),
+    });
+
+    expect(dispatcher.sendFinalReply).toHaveBeenCalledWith({
+      text: "⚙️ Agent was aborted. Stopped 2 sub-agents.",
+    });
+  });
+
   it("deduplicates inbound messages by MessageSid and origin", async () => {
     mocks.tryFastAbortFromMessage.mockResolvedValue({
       handled: false,
@@ -150,6 +182,79 @@ describe("dispatchReplyFromConfig", () => {
       replyResolver,
     });
 
+    expect(replyResolver).toHaveBeenCalledTimes(1);
+  });
+
+  it("appends sender meta for non-direct chats when missing", async () => {
+    mocks.tryFastAbortFromMessage.mockResolvedValue({
+      handled: false,
+      aborted: false,
+    });
+    const cfg = {} as ClawdbotConfig;
+    const dispatcher = createDispatcher();
+    const ctx: MsgContext = {
+      Provider: "imessage",
+      ChatType: "group",
+      Body: "[iMessage group:1] hello",
+      SenderName: "+15555550123",
+      SenderId: "+15555550123",
+    };
+
+    const replyResolver = vi.fn(async (resolvedCtx: MsgContext) => {
+      expect(resolvedCtx.Body).toContain("\n[from: +15555550123]");
+      return { text: "ok" } satisfies ReplyPayload;
+    });
+
+    await dispatchReplyFromConfig({ ctx, cfg, dispatcher, replyResolver });
+    expect(replyResolver).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not append sender meta when Body already includes a from line", async () => {
+    mocks.tryFastAbortFromMessage.mockResolvedValue({
+      handled: false,
+      aborted: false,
+    });
+    const cfg = {} as ClawdbotConfig;
+    const dispatcher = createDispatcher();
+    const ctx: MsgContext = {
+      Provider: "whatsapp",
+      ChatType: "group",
+      Body: "[WhatsApp group:1] hello\\n[from: Bob (+222)]",
+      SenderName: "Bob",
+      SenderId: "+222",
+    };
+
+    const replyResolver = vi.fn(async (resolvedCtx: MsgContext) => {
+      expect(resolvedCtx.Body.match(/\\n\[from:/g)?.length ?? 0).toBe(1);
+      return { text: "ok" } satisfies ReplyPayload;
+    });
+
+    await dispatchReplyFromConfig({ ctx, cfg, dispatcher, replyResolver });
+    expect(replyResolver).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not append sender meta for other providers (scope is signal/imessage only)", async () => {
+    mocks.tryFastAbortFromMessage.mockResolvedValue({
+      handled: false,
+      aborted: false,
+    });
+    const cfg = {} as ClawdbotConfig;
+    const dispatcher = createDispatcher();
+    const ctx: MsgContext = {
+      Provider: "slack",
+      OriginatingChannel: "slack",
+      ChatType: "group",
+      Body: "[Slack #room 2026-01-01T00:00Z] hi",
+      SenderName: "Bob",
+      SenderId: "U123",
+    };
+
+    const replyResolver = vi.fn(async (resolvedCtx: MsgContext) => {
+      expect(resolvedCtx.Body).not.toContain("[from:");
+      return { text: "ok" } satisfies ReplyPayload;
+    });
+
+    await dispatchReplyFromConfig({ ctx, cfg, dispatcher, replyResolver });
     expect(replyResolver).toHaveBeenCalledTimes(1);
   });
 });

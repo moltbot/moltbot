@@ -3,12 +3,14 @@ import {
   deleteAccountFromConfigSection,
   setAccountEnabledInConfigSection,
 } from "../../../src/channels/plugins/config-helpers.js";
+import { buildChannelConfigSchema } from "../../../src/channels/plugins/config-schema.js";
 import { formatPairingApproveHint } from "../../../src/channels/plugins/helpers.js";
 import { PAIRING_APPROVED_MESSAGE } from "../../../src/channels/plugins/pairing-message.js";
 import { applyAccountNameToChannelSection } from "../../../src/channels/plugins/setup-helpers.js";
 import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../../../src/routing/session-key.js";
 
 import { matrixMessageActions } from "./actions.js";
+import { MatrixConfigSchema } from "./config-schema.js";
 import { resolveMatrixGroupRequireMention } from "./group-mentions.js";
 import type { CoreConfig } from "./types.js";
 import {
@@ -95,6 +97,7 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
     media: true,
   },
   reload: { configPrefixes: ["channels.matrix"] },
+  configSchema: buildChannelConfigSchema(MatrixConfigSchema),
   config: {
     listAccountIds: (cfg) => listMatrixAccountIds(cfg as CoreConfig),
     resolveAccount: (cfg, accountId) =>
@@ -161,6 +164,67 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
   },
   messaging: {
     normalizeTarget: normalizeMatrixMessagingTarget,
+  },
+  directory: {
+    self: async () => null,
+    listPeers: async ({ cfg, accountId, query, limit }) => {
+      const account = resolveMatrixAccount({ cfg: cfg as CoreConfig, accountId });
+      const q = query?.trim().toLowerCase() || "";
+      const ids = new Set<string>();
+
+      for (const entry of account.config.dm?.allowFrom ?? []) {
+        const raw = String(entry).trim();
+        if (!raw || raw === "*") continue;
+        ids.add(raw.replace(/^matrix:/i, ""));
+      }
+
+      for (const room of Object.values(account.config.rooms ?? {})) {
+        for (const entry of room.users ?? []) {
+          const raw = String(entry).trim();
+          if (!raw || raw === "*") continue;
+          ids.add(raw.replace(/^matrix:/i, ""));
+        }
+      }
+
+      return Array.from(ids)
+        .map((raw) => raw.trim())
+        .filter(Boolean)
+        .map((raw) => {
+          const lowered = raw.toLowerCase();
+          const cleaned = lowered.startsWith("user:") ? raw.slice("user:".length).trim() : raw;
+          if (cleaned.startsWith("@")) return `user:${cleaned}`;
+          return cleaned;
+        })
+        .filter((id) => (q ? id.toLowerCase().includes(q) : true))
+        .slice(0, limit && limit > 0 ? limit : undefined)
+        .map((id) => {
+          const raw = id.startsWith("user:") ? id.slice("user:".length) : id;
+          const incomplete = !raw.startsWith("@") || !raw.includes(":");
+          return {
+            kind: "user",
+            id,
+            ...(incomplete ? { name: "incomplete id; expected @user:server" } : {}),
+          };
+        });
+    },
+    listGroups: async ({ cfg, accountId, query, limit }) => {
+      const account = resolveMatrixAccount({ cfg: cfg as CoreConfig, accountId });
+      const q = query?.trim().toLowerCase() || "";
+      const ids = Object.keys(account.config.rooms ?? {})
+        .map((raw) => raw.trim())
+        .filter((raw) => Boolean(raw) && raw !== "*")
+        .map((raw) => raw.replace(/^matrix:/i, ""))
+        .map((raw) => {
+          const lowered = raw.toLowerCase();
+          if (lowered.startsWith("room:") || lowered.startsWith("channel:")) return raw;
+          if (raw.startsWith("!")) return `room:${raw}`;
+          return raw;
+        })
+        .filter((id) => (q ? id.toLowerCase().includes(q) : true))
+        .slice(0, limit && limit > 0 ? limit : undefined)
+        .map((id) => ({ kind: "group", id }) as const);
+      return ids;
+    },
   },
   actions: matrixMessageActions,
   setup: {

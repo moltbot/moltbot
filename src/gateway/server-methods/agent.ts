@@ -12,6 +12,7 @@ import { registerAgentRunContext } from "../../infra/agent-events.js";
 import { resolveOutboundTarget } from "../../infra/outbound/targets.js";
 import { defaultRuntime } from "../../runtime.js";
 import { resolveSendPolicy } from "../../sessions/send-policy.js";
+import { normalizeAccountId } from "../../utils/account-id.js";
 import {
   INTERNAL_MESSAGE_CHANNEL,
   isDeliverableMessageChannel,
@@ -60,6 +61,7 @@ export const agentHandlers: GatewayRequestHandlers = {
         content?: unknown;
       }>;
       channel?: string;
+      accountId?: string;
       lane?: string;
       extraSystemPrompt?: string;
       idempotencyKey: string;
@@ -199,6 +201,9 @@ export const agentHandlers: GatewayRequestHandlers = {
 
     const lastChannel = sessionEntry?.lastChannel;
     const lastTo = typeof sessionEntry?.lastTo === "string" ? sessionEntry.lastTo.trim() : "";
+    const resolvedAccountId =
+      normalizeAccountId(request.accountId) ??
+      normalizeAccountId(sessionEntry?.lastAccountId);
 
     const wantsDelivery = request.deliver === true;
 
@@ -235,7 +240,7 @@ export const agentHandlers: GatewayRequestHandlers = {
       const fallback = resolveOutboundTarget({
         channel: resolvedChannel,
         cfg,
-        accountId: sessionEntry?.lastAccountId ?? undefined,
+        accountId: resolvedAccountId,
         mode: "implicit",
       });
       if (fallback.ok) {
@@ -269,6 +274,7 @@ export const agentHandlers: GatewayRequestHandlers = {
         deliver,
         deliveryTargetMode,
         channel: resolvedChannel,
+        accountId: resolvedAccountId,
         timeout: request.timeout?.toString(),
         bestEffortDeliver,
         messageChannel: resolvedChannel,

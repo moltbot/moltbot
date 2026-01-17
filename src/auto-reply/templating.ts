@@ -38,6 +38,8 @@ export type MsgContext = {
   MediaPaths?: string[];
   MediaUrls?: string[];
   MediaTypes?: string[];
+  /** Remote host for SCP when media lives on a different machine (e.g., clawdbot@192.168.64.3). */
+  MediaRemoteHost?: string;
   Transcript?: string;
   ChatType?: string;
   GroupSubject?: string;
@@ -73,6 +75,11 @@ export type MsgContext = {
    * The chat/channel/user ID where the reply should be sent.
    */
   OriginatingTo?: string;
+  /**
+   * Messages from internal hooks to be included in the response.
+   * Used for hook confirmation messages like "Session context saved to memory".
+   */
+  HookMessages?: string[];
 };
 
 export type TemplateContext = MsgContext & {

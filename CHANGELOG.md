@@ -3,6 +3,55 @@
 ## 2026.1.16 (unreleased)
 
 ### Highlights
+- Web search: add `country`/`language` parameters (schema + Brave API) and docs. (#1046) — thanks @YuriNachos.
+- Plugins: add Zalo Personal plugin (`@clawdbot/zalouser`) and unify channel directory for plugins. (#1032) — thanks @suminhthanh.
+- Models: add Vercel AI Gateway auth choice + onboarding updates. (#1016) — thanks @timolins.
+- Sessions: add `session.identityLinks` for cross-platform DM session linking. (#1033) — thanks @thewilloftheshadow.
+- Hooks: add internal hooks system with bundled hooks, CLI tooling, and docs. (#1028) — thanks @ThomsenDrake.
+
+### Breaking
+- **BREAKING:** Channel auth now prefers config over env for Discord/Telegram/Matrix (env is fallback only). (#1040) — thanks @thewilloftheshadow.
+
+### Changes
+- Tools: improve `web_fetch` extraction using Readability (with fallback).
+- Tools: add Firecrawl fallback for `web_fetch` when configured.
+- Tools: send Chrome-like headers by default for `web_fetch` to improve extraction on bot-sensitive sites.
+- Tools: Firecrawl fallback now uses bot-circumvention + cache by default; remove basic HTML fallback when extraction fails.
+- Directory: unify `clawdbot directory` across channels and plugin channels.
+- UI: allow deleting sessions from the Control UI.
+- Skills: add user-invocable skill commands and expanded skill command registration.
+- Telegram: default reaction level to minimal and enable reaction notifications by default.
+- Telegram: allow reply-chain messages to bypass mention gating in groups. (#1038) — thanks @adityashaw2.
+- Messages: mirror delivered outbound text/media into session transcripts. (#1031) — thanks @TSavo.
+- Cron: isolated cron jobs now start a fresh session id on every run to prevent context buildup.
+- Docs: add `/help` hub, Node/npm PATH guide, and expand directory CLI docs.
+- Config: support env var substitution in config values. (#1044) — thanks @sebslight.
+- Health: add per-agent session summaries and account-level health details, and allow selective probes. (#1047) — thanks @gumadeiras.
+
+### Fixes
+- Sub-agents: route announce delivery through the correct channel account IDs. (#1061, #1058) — thanks @adam91holt.
+- Messages: `/stop` now hard-aborts queued followups and sub-agent runs; suppress zero-count stop notes.
+- Sessions: reset `compactionCount` on `/new` and `/reset`, and preserve `sessions.json` file mode (0600).
+- Sessions: repair orphaned user turns before embedded prompts.
+- Channels: treat replies to the bot as implicit mentions across supported channels.
+- Browser: remote profile tab operations prefer persistent Playwright and avoid silent HTTP fallbacks. (#1057) — thanks @mukhtharcm.
+- Browser: remote profile tab ops follow-up: shared Playwright loader, Playwright-based focus, and more coverage (incl. opt-in live Browserless test). (follow-up to #1057) — thanks @mukhtharcm.
+- WhatsApp: scope self-chat response prefix; inject pending-only group history and clear after any processed message.
+- Agents: drop unsigned Gemini tool calls and avoid JSON Schema `format` keyword collisions.
+- Agents: avoid duplicate sends by replying with `NO_REPLY` after `message` tool sends.
+- Auth: inherit/merge sub-agent auth profiles from the main agent.
+- Gateway: resolve local auth for security probe and validate gateway token/password file modes. (#1011, #1022) — thanks @ivanrvpereira, @kkarimi.
+- Signal/iMessage: bound transport readiness waits to 30s with periodic logging. (#1014) — thanks @Szpadel.
+- OpenAI image-gen: remove deprecated `response_format` and use URL downloads.
+- CLI: auto-update global installs when installed via a package manager.
+- Routing: migrate legacy `accountID` bindings to `accountId` and remove legacy fallback lookups. (#1047) — thanks @gumadeiras.
+- Discord: truncate skill command descriptions to 100 chars for slash command limits. (#1018) — thanks @evalexpr.
+- Security: bump `tar` to 7.5.3.
+- Models: align ZAI thinking toggles.
+
+## 2026.1.15
+
+### Highlights
 - Plugins: add provider auth registry + `clawdbot models auth login` for plugin-driven OAuth/API key flows.
 - Browser: improve remote CDP/Browserless support (auth passthrough, `wss` upgrade, timeouts, clearer errors).
 - Heartbeat: per-agent configuration + 24h duplicate suppression. (#980) — thanks @voidserf.
@@ -11,19 +60,24 @@
 ### Breaking
 - **BREAKING:** iOS minimum version is now 18.0 to support Textual markdown rendering in native chat. (#702)
 - **BREAKING:** Microsoft Teams is now a plugin; install `@clawdbot/msteams` via `clawdbot plugins install @clawdbot/msteams`.
+- **BREAKING:** Channel auth now prefers config over env for Discord/Telegram/Matrix (env is fallback only). (#1040) — thanks @thewilloftheshadow.
 
 ### Changes
+- UI/Apps: move channel/config settings to schema-driven forms and rename Connections → Channels. (#1040) — thanks @thewilloftheshadow.
 - CLI: set process titles to `clawdbot-<command>` for clearer process listings.
 - CLI/macOS: sync remote SSH target/identity to config and let `gateway status` auto-infer SSH targets (ssh-config aware).
+- Telegram: scope inline buttons with allowlist default + callback gating in DMs/groups.
+- Telegram: default reaction notifications to own.
+- Tools: improve `web_fetch` extraction using Readability (with fallback).
 - Heartbeat: tighten prompt guidance + suppress duplicate alerts for 24h. (#980) — thanks @voidserf.
 - Repo: ignore local identity files to avoid accidental commits. (#1001) — thanks @gerardward2007.
 - Sessions/Security: add `session.dmScope` for multi-user DM isolation and audit warnings. (#948) — thanks @Alphonse-arianee.
 - Plugins: add provider auth registry + `clawdbot models auth login` for plugin-driven OAuth/API key flows.
-- Skills: add user-invocable skill commands with sanitized names and an opt-out for model invocation.
 - Onboarding: switch channels setup to a single-select loop with per-channel actions and disabled hints in the picker.
 - TUI: show provider/model labels for the active session and default model.
 - Heartbeat: add per-agent heartbeat configuration and multi-agent docs example.
 - UI: show gateway auth guidance + doc link on unauthorized Control UI connections.
+- UI: add session deletion action in Control UI sessions list. (#1017) — thanks @Szpadel.
 - Security: warn on weak model tiers (Haiku, below GPT-5, below Claude 4.5) in `clawdbot security audit`.
 - Apps: store node auth tokens encrypted (Keychain/SecurePrefs).
 - Daemon: share profile/state-dir resolution across service helpers and honor `CLAWDBOT_STATE_DIR` for Windows task scripts.
@@ -48,7 +102,16 @@
 - Discord: allow emoji/sticker uploads + channel actions in config defaults. (#870) — thanks @JDIVE.
 
 ### Fixes
+- Messages: make `/stop` clear queued followups and pending session lane work for a hard abort.
+- Messages: make `/stop` abort active sub-agent runs spawned from the requester session and report how many were stopped.
+- WhatsApp: report linked status consistently in channel status. (#1050) — thanks @YuriNachos.
+- Sessions: keep per-session overrides when `/new` resets compaction counters. (#1050) — thanks @YuriNachos.
+- Skills: allow OpenAI image-gen helper to handle URL or base64 responses. (#1050) — thanks @YuriNachos.
 - WhatsApp: default response prefix only for self-chat, using identity name when set.
+- Signal/iMessage: bound transport readiness waits to 30s with periodic logging. (#1014) — thanks @Szpadel.
+- iMessage: treat missing `imsg rpc` support as fatal to avoid restart loops.
+- Auth: merge main auth profiles into per-agent stores for sub-agents and document inheritance. (#1013) — thanks @marcmarg.
+- Agents: avoid JSON Schema `format` collisions in tool params by renaming snapshot format fields. (#1013) — thanks @marcmarg.
 - Fix: make `clawdbot update` auto-update global installs when installed via a package manager.
 - Fix: list model picker entries as provider/model pairs for explicit selection. (#970) — thanks @mcinteerj.
 - Fix: align OpenAI image-gen defaults with DALL-E 3 standard quality and document output formats. (#880) — thanks @mkbehr.
@@ -61,6 +124,7 @@
 - Fix: refactor session store updates, add chat.inject, and harden subagent cleanup flow. (#944) — thanks @tyler6204.
 - Fix: clean up suspended CLI processes across backends. (#978) — thanks @Nachx639.
 - Fix: support MiniMax coding plan usage responses with `model_remains`/`current_interval_*` payloads.
+- Fix: honor message tool channel for duplicate suppression (prefer `NO_REPLY` after `message` tool sends). (#1053) — thanks @sashcatanzarite.
 - Fix: suppress WhatsApp pairing replies for historical catch-up DMs on initial link. (#904)
 - Browser: extension mode recovers when only one tab is attached (stale targetId fallback).
 - Browser: fix `tab not found` for extension relay snapshots/actions when Playwright blocks `newCDPSession` (use the single available Page).
@@ -70,7 +134,6 @@
 - Fix: normalize pairing CLI aliases, allow extension channels, and harden Zalo webhook payload parsing. (#991) — thanks @longmaba.
 - Fix: allow local Tailscale Serve hostnames without treating tailnet clients as direct. (#885) — thanks @oswalpalash.
 - Fix: reset sessions after role-ordering conflicts to recover from consecutive user turns. (#998)
-- Fix: keep background exec aborts from killing backgrounded sessions while honoring timeouts.
 
 ## 2026.1.14-1
 

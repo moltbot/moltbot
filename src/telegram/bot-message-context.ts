@@ -3,13 +3,17 @@ import { resolveAckReaction } from "../agents/identity.js";
 import { hasControlCommand } from "../auto-reply/command-detection.js";
 import { normalizeCommandBody } from "../auto-reply/commands-registry.js";
 import { formatAgentEnvelope } from "../auto-reply/envelope.js";
-import { buildHistoryContextFromMap } from "../auto-reply/reply/history.js";
+import {
+  buildPendingHistoryContextFromMap,
+  recordPendingHistoryEntry,
+} from "../auto-reply/reply/history.js";
 import { buildMentionRegexes, matchesMentionPatterns } from "../auto-reply/reply/mentions.js";
 import { formatLocationText, toLocationContext } from "../channels/location.js";
 import { resolveStorePath, updateLastRoute } from "../config/sessions.js";
 import { logVerbose, shouldLogVerbose } from "../globals.js";
 import { recordChannelActivity } from "../infra/channel-activity.js";
 import { resolveAgentRoute } from "../routing/resolve-route.js";
+import { resolveMentionGating } from "../channels/mention-gating.js";
 import {
   buildGroupFromLabel,
   buildGroupLabel,
@@ -199,6 +203,25 @@ export const buildTelegramMessageContext = async ({
     senderId,
     senderUsername,
   });
+  const historyKey = isGroup ? buildTelegramGroupPeerId(chatId, resolvedThreadId) : undefined;
+
+  let placeholder = "";
+  if (msg.photo) placeholder = "<media:image>";
+  else if (msg.video) placeholder = "<media:video>";
+  else if (msg.audio || msg.voice) placeholder = "<media:audio>";
+  else if (msg.document) placeholder = "<media:document>";
+
+  const locationData = extractTelegramLocation(msg);
+  const locationText = locationData ? formatLocationText(locationData) : undefined;
+  const rawText = (msg.text ?? msg.caption ?? "").trim();
+  let rawBody = [rawText, locationText].filter(Boolean).join("\n").trim();
+  if (!rawBody) rawBody = placeholder;
+  if (!rawBody && allMedia.length === 0) return null;
+
+  let bodyText = rawBody;
+  if (!bodyText && allMedia.length > 0) {
+    bodyText = `<media:image>${allMedia.length > 1 ? ` (${allMedia.length} images)` : ""}`;
+  }
   const computedWasMentioned =
     (Boolean(botUsername) && hasBotMention(msg, botUsername)) ||
     matchesMentionPatterns(msg.text ?? msg.caption ?? "", mentionRegexes);
@@ -219,6 +242,10 @@ export const buildTelegramMessageContext = async ({
     groupConfig?.requireMention,
     baseRequireMention,
   );
+  // Reply-chain detection: replying to a bot message acts like an implicit mention.
+  const botId = primaryCtx.me?.id;
+  const replyFromId = msg.reply_to_message?.from?.id;
+  const implicitMention = botId != null && replyFromId === botId;
   const shouldBypassMention =
     isGroup &&
     requireMention &&
@@ -226,11 +253,31 @@ export const buildTelegramMessageContext = async ({
     !hasAnyMention &&
     commandAuthorized &&
     hasControlCommand(msg.text ?? msg.caption ?? "", cfg, { botUsername });
-  const effectiveWasMentioned = wasMentioned || shouldBypassMention;
   const canDetectMention = Boolean(botUsername) || mentionRegexes.length > 0;
+  const mentionGate = resolveMentionGating({
+    requireMention: Boolean(requireMention),
+    canDetectMention,
+    wasMentioned,
+    implicitMention: isGroup && Boolean(requireMention) && implicitMention,
+    shouldBypassMention,
+  });
+  const effectiveWasMentioned = mentionGate.effectiveWasMentioned;
   if (isGroup && requireMention && canDetectMention) {
-    if (!wasMentioned && !shouldBypassMention) {
+    if (mentionGate.shouldSkip) {
       logger.info({ chatId, reason: "no-mention" }, "skipping group message");
+      if (historyKey && historyLimit > 0) {
+        recordPendingHistoryEntry({
+          historyMap: groupHistories,
+          historyKey,
+          limit: historyLimit,
+          entry: {
+            sender: buildSenderLabel(msg, senderId || chatId),
+            body: rawBody,
+            timestamp: msg.date ? msg.date * 1000 : undefined,
+            messageId: typeof msg.message_id === "number" ? String(msg.message_id) : undefined,
+          },
+        });
+      }
       return null;
     }
   }
@@ -247,7 +294,7 @@ export const buildTelegramMessageContext = async ({
       if (!isGroup) return false;
       if (!requireMention) return false;
       if (!canDetectMention) return false;
-      return wasMentioned || shouldBypassMention;
+      return effectiveWasMentioned;
     }
     return false;
   };
@@ -271,25 +318,7 @@ export const buildTelegramMessageContext = async ({
         )
       : null;
 
-  let placeholder = "";
-  if (msg.photo) placeholder = "<media:image>";
-  else if (msg.video) placeholder = "<media:video>";
-  else if (msg.audio || msg.voice) placeholder = "<media:audio>";
-  else if (msg.document) placeholder = "<media:document>";
-
   const replyTarget = describeReplyTarget(msg);
-  const locationData = extractTelegramLocation(msg);
-  const locationText = locationData ? formatLocationText(locationData) : undefined;
-  const rawText = (msg.text ?? msg.caption ?? "").trim();
-  let rawBody = [rawText, locationText].filter(Boolean).join("\n").trim();
-  if (!rawBody) rawBody = placeholder;
-  if (!rawBody && allMedia.length === 0) return null;
-
-  let bodyText = rawBody;
-  if (!bodyText && allMedia.length > 0) {
-    bodyText = `<media:image>${allMedia.length > 1 ? ` (${allMedia.length} images)` : ""}`;
-  }
-
   const replySuffix = replyTarget
     ? `\n\n[Replying to ${replyTarget.sender}${
         replyTarget.id ? ` id:${replyTarget.id}` : ""
@@ -305,18 +334,11 @@ export const buildTelegramMessageContext = async ({
     body: `${bodyText}${replySuffix}`,
   });
   let combinedBody = body;
-  const historyKey = isGroup ? buildTelegramGroupPeerId(chatId, resolvedThreadId) : undefined;
   if (isGroup && historyKey && historyLimit > 0) {
-    combinedBody = buildHistoryContextFromMap({
+    combinedBody = buildPendingHistoryContextFromMap({
       historyMap: groupHistories,
       historyKey,
       limit: historyLimit,
-      entry: {
-        sender: buildSenderLabel(msg, senderId || chatId),
-        body: rawBody,
-        timestamp: msg.date ? msg.date * 1000 : undefined,
-        messageId: typeof msg.message_id === "number" ? String(msg.message_id) : undefined,
-      },
       currentMessage: combinedBody,
       formatEntry: (entry) =>
         formatAgentEnvelope({

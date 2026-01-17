@@ -22,6 +22,9 @@ If the file is missing, Clawdbot uses safe-ish defaults (embedded Pi agent + per
 The Gateway exposes a JSON Schema representation of the config via `config.schema` for UI editors.
 The Control UI renders a form from this schema, with a **Raw JSON** editor as an escape hatch.
 
+Channel plugins and extensions can register schema + UI hints for their config, so channel settings
+stay schema-driven across apps without hard-coded forms.
+
 Hints (labels, grouping, sensitive fields) ship alongside the schema so clients can render
 better forms without hard-coding config knowledge.
 
@@ -282,6 +285,48 @@ This effectively sources your shell profile.
 Env var equivalent:
 - `CLAWDBOT_LOAD_SHELL_ENV=1`
 - `CLAWDBOT_SHELL_ENV_TIMEOUT_MS=15000`
+
+### Env var substitution in config
+
+You can reference environment variables directly in any config string value using
+`${VAR_NAME}` syntax. Variables are substituted at config load time, before validation.
+
+```json5
+{
+  models: {
+    providers: {
+      "vercel-gateway": {
+        apiKey: "${VERCEL_GATEWAY_API_KEY}"
+      }
+    }
+  },
+  gateway: {
+    auth: {
+      token: "${CLAWDBOT_GATEWAY_TOKEN}"
+    }
+  }
+}
+```
+
+**Rules:**
+- Only uppercase env var names are matched: `[A-Z_][A-Z0-9_]*`
+- Missing or empty env vars throw an error at config load
+- Escape with `$${VAR}` to output a literal `${VAR}`
+- Works with `$include` (included files also get substitution)
+
+**Inline substitution:**
+
+```json5
+{
+  models: {
+    providers: {
+      custom: {
+        baseUrl: "${CUSTOM_API_BASE}/v1"  // → "https://api.example.com/v1"
+      }
+    }
+  }
+}
+```
 
 ### Auth storage (OAuth + API keys)
 
@@ -903,7 +948,7 @@ Set `web.enabled: false` to keep it off by default.
 
 ### `channels.telegram` (bot transport)
 
-Clawdbot starts Telegram only when a `channels.telegram` config section exists. The bot token is resolved from `TELEGRAM_BOT_TOKEN` or `channels.telegram.botToken`.
+Clawdbot starts Telegram only when a `channels.telegram` config section exists. The bot token is resolved from `channels.telegram.botToken` (or `channels.telegram.tokenFile`), with `TELEGRAM_BOT_TOKEN` as a fallback for the default account.
 Set `channels.telegram.enabled: false` to disable automatic startup.
 Multi-account support lives under `channels.telegram.accounts` (see the multi-account section above). Env tokens only apply to the default account.
 Set `channels.telegram.configWrites: false` to block Telegram-initiated config writes (including supergroup ID migrations and `/config set|unset`).
@@ -943,6 +988,7 @@ Set `channels.telegram.configWrites: false` to block Telegram-initiated config w
         breakPreference: "paragraph"       // paragraph | newline | sentence
       },
       actions: { reactions: true, sendMessage: true }, // tool action gates (false disables)
+      reactionNotifications: "own",   // off | own | all
       mediaMaxMb: 5,
       retry: {                             // outbound retry policy
         attempts: 3,
@@ -1035,7 +1081,7 @@ Multi-account support lives under `channels.discord.accounts` (see the multi-acc
 }
 ```
 
-Clawdbot starts Discord only when a `channels.discord` config section exists. The token is resolved from `DISCORD_BOT_TOKEN` or `channels.discord.token` (unless `channels.discord.enabled` is `false`). Use `user:<id>` (DM) or `channel:<id>` (guild channel) when specifying delivery targets for cron/CLI commands; bare numeric IDs are ambiguous and rejected.
+Clawdbot starts Discord only when a `channels.discord` config section exists. The token is resolved from `channels.discord.token`, with `DISCORD_BOT_TOKEN` as a fallback for the default account (unless `channels.discord.enabled` is `false`). Use `user:<id>` (DM) or `channel:<id>` (guild channel) when specifying delivery targets for cron/CLI commands; bare numeric IDs are ambiguous and rejected.
 Guild slugs are lowercase with spaces replaced by `-`; channel keys use the slugged channel name (no leading `#`). Prefer guild ids as keys to avoid rename ambiguity.
 Bot-authored messages are ignored by default. Enable with `channels.discord.allowBots` (own messages are still filtered to prevent self-reply loops).
 Reaction notification modes:
@@ -1163,6 +1209,7 @@ Clawdbot spawns `imsg rpc` (JSON-RPC over stdio). No daemon or port required.
       enabled: true,
       cliPath: "imsg",
       dbPath: "~/Library/Messages/chat.db",
+      remoteHost: "user@gateway-host", // SCP for remote attachments when using SSH wrapper
       dmPolicy: "pairing", // pairing | allowlist | open | disabled
       allowFrom: ["+15555550123", "user@example.com", "chat_id:123"],
       historyLimit: 50,    // include last N group messages as context (0 disables)
@@ -1182,11 +1229,12 @@ Notes:
 - The first send will prompt for Messages automation permission.
 - Prefer `chat_id:<id>` targets. Use `imsg chats --limit 20` to list chats.
 - `channels.imessage.cliPath` can point to a wrapper script (e.g. `ssh` to another Mac that runs `imsg rpc`); use SSH keys to avoid password prompts.
+- For remote SSH wrappers, set `channels.imessage.remoteHost` to fetch attachments via SCP when `includeAttachments` is enabled.
 
 Example wrapper:
 ```bash
 #!/usr/bin/env bash
-exec ssh -T mac-mini "imsg rpc"
+exec ssh -T gateway-host imsg "$@"
 ```
 
 ### `agents.defaults.workspace`
@@ -1708,11 +1756,18 @@ Legacy: `tools.bash` is still accepted as an alias.
 - `tools.web.search.maxResults` (1–10, default 5)
 - `tools.web.search.timeoutSeconds` (default 30)
 - `tools.web.search.cacheTtlMinutes` (default 15)
-- `tools.web.fetch.enabled` (default false; sandboxed sessions auto-enable unless set to false)
+- `tools.web.fetch.enabled` (default true)
 - `tools.web.fetch.maxChars` (default 50000)
 - `tools.web.fetch.timeoutSeconds` (default 30)
 - `tools.web.fetch.cacheTtlMinutes` (default 15)
 - `tools.web.fetch.userAgent` (optional override)
+- `tools.web.fetch.readability` (default true; disable to use basic HTML cleanup only)
+- `tools.web.fetch.firecrawl.enabled` (default true when an API key is set)
+- `tools.web.fetch.firecrawl.apiKey` (optional; defaults to `FIRECRAWL_API_KEY`)
+- `tools.web.fetch.firecrawl.baseUrl` (default https://api.firecrawl.dev)
+- `tools.web.fetch.firecrawl.onlyMainContent` (default true)
+- `tools.web.fetch.firecrawl.maxAgeMs` (optional)
+- `tools.web.fetch.firecrawl.timeoutSeconds` (optional)
 
 `agents.defaults.subagents` configures sub-agent defaults:
 - `model`: default model for spawned sub-agents (string or `{ primary, fallbacks }`). If omitted, sub-agents inherit the caller’s model unless overridden per agent or per call.
@@ -2269,6 +2324,9 @@ Controls session scoping, idle expiry, reset triggers, and where the session sto
   session: {
     scope: "per-sender",
     dmScope: "main",
+    identityLinks: {
+      alice: ["telegram:123456789", "discord:987654321012345678"]
+    },
     idleMinutes: 60,
     resetTriggers: ["/new", "/reset"],
     // Default is already per-agent under ~/.clawdbot/agents/<agentId>/sessions/sessions.json
@@ -2297,6 +2355,8 @@ Fields:
   - `main`: all DMs share the main session for continuity.
   - `per-peer`: isolate DMs by sender id across channels.
   - `per-channel-peer`: isolate DMs per channel + sender (recommended for multi-user inboxes).
+- `identityLinks`: map canonical ids to provider-prefixed peers so the same person shares a DM session across channels when using `per-peer` or `per-channel-peer`.
+  - Example: `alice: ["telegram:123456789", "discord:987654321012345678"]`.
 - `agentToAgent.maxPingPongTurns`: max reply-back turns between requester/target (0–5, default 5).
 - `sendPolicy.default`: `allow` or `deny` fallback when no rule matches.
 - `sendPolicy.rules[]`: match by `channel`, `chatType` (`direct|group|room`), or `keyPrefix` (e.g. `cron:`). First deny wins; otherwise allow.

@@ -1,7 +1,9 @@
 import type { ClawdbotConfig } from "../../../src/config/config.js";
-import { DEFAULT_ACCOUNT_ID } from "../../../src/routing/session-key.js";
+import { MSTeamsConfigSchema } from "../../../src/config/zod-schema.providers-core.js";
+import { buildChannelConfigSchema } from "../../../src/channels/plugins/config-schema.js";
 import { PAIRING_APPROVED_MESSAGE } from "../../../src/channels/plugins/pairing-message.js";
 import type { ChannelMessageActionName, ChannelPlugin } from "../../../src/channels/plugins/types.js";
+import { DEFAULT_ACCOUNT_ID } from "../../../src/routing/session-key.js";
 
 import { msteamsOnboardingAdapter } from "./onboarding.js";
 import { msteamsOutbound } from "./outbound.js";
@@ -24,6 +26,21 @@ const meta = {
   aliases: ["teams"],
   order: 60,
 } as const;
+
+function normalizeMSTeamsMessagingTarget(raw: string): string | undefined {
+  let trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  if (/^(msteams|teams):/i.test(trimmed)) {
+    trimmed = trimmed.replace(/^(msteams|teams):/i, "");
+  }
+  if (/^conversation:/i.test(trimmed)) {
+    return `conversation:${trimmed.slice("conversation:".length).trim()}`;
+  }
+  if (/^user:/i.test(trimmed)) {
+    return `user:${trimmed.slice("user:".length).trim()}`;
+  }
+  return trimmed;
+}
 
 export const msteamsPlugin: ChannelPlugin<ResolvedMSTeamsAccount> = {
   id: "msteams",
@@ -49,6 +66,7 @@ export const msteamsPlugin: ChannelPlugin<ResolvedMSTeamsAccount> = {
     media: true,
   },
   reload: { configPrefixes: ["channels.msteams"] },
+  configSchema: buildChannelConfigSchema(MSTeamsConfigSchema),
   config: {
     listAccountIds: () => [DEFAULT_ACCOUNT_ID],
     resolveAccount: (cfg) => ({
@@ -112,6 +130,55 @@ export const msteamsPlugin: ChannelPlugin<ResolvedMSTeamsAccount> = {
         },
       },
     }),
+  },
+  messaging: {
+    normalizeTarget: normalizeMSTeamsMessagingTarget,
+  },
+  directory: {
+    self: async () => null,
+    listPeers: async ({ cfg, query, limit }) => {
+      const q = query?.trim().toLowerCase() || "";
+      const ids = new Set<string>();
+      for (const entry of cfg.channels?.msteams?.allowFrom ?? []) {
+        const trimmed = String(entry).trim();
+        if (trimmed && trimmed !== "*") ids.add(trimmed);
+      }
+      for (const userId of Object.keys(cfg.channels?.msteams?.dms ?? {})) {
+        const trimmed = userId.trim();
+        if (trimmed) ids.add(trimmed);
+      }
+      return Array.from(ids)
+        .map((raw) => raw.trim())
+        .filter(Boolean)
+        .map((raw) => normalizeMSTeamsMessagingTarget(raw) ?? raw)
+        .map((raw) => {
+          const lowered = raw.toLowerCase();
+          if (lowered.startsWith("user:")) return raw;
+          if (lowered.startsWith("conversation:")) return raw;
+          return `user:${raw}`;
+        })
+        .filter((id) => (q ? id.toLowerCase().includes(q) : true))
+        .slice(0, limit && limit > 0 ? limit : undefined)
+        .map((id) => ({ kind: "user", id }) as const);
+    },
+    listGroups: async ({ cfg, query, limit }) => {
+      const q = query?.trim().toLowerCase() || "";
+      const ids = new Set<string>();
+      for (const team of Object.values(cfg.channels?.msteams?.teams ?? {})) {
+        for (const channelId of Object.keys(team.channels ?? {})) {
+          const trimmed = channelId.trim();
+          if (trimmed && trimmed !== "*") ids.add(trimmed);
+        }
+      }
+      return Array.from(ids)
+        .map((raw) => raw.trim())
+        .filter(Boolean)
+        .map((raw) => raw.replace(/^conversation:/i, "").trim())
+        .map((id) => `conversation:${id}`)
+        .filter((id) => (q ? id.toLowerCase().includes(q) : true))
+        .slice(0, limit && limit > 0 ? limit : undefined)
+        .map((id) => ({ kind: "group", id }) as const);
+    },
   },
   actions: {
     listActions: ({ cfg }) => {

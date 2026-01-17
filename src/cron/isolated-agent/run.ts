@@ -41,6 +41,7 @@ import type { CronJob } from "../types.js";
 import { resolveDeliveryTarget } from "./delivery-target.js";
 import {
   isHeartbeatOnlyResponse,
+  pickLastNonEmptyTextFromPayloads,
   pickSummaryFromOutput,
   pickSummaryFromPayloads,
   resolveHeartbeatAckMaxChars,
@@ -50,6 +51,8 @@ import { resolveCronSession } from "./session.js";
 export type RunCronAgentTurnResult = {
   status: "ok" | "error" | "skipped";
   summary?: string;
+  /** Last non-empty agent text output (not truncated). */
+  outputText?: string;
   error?: string;
 };
 
@@ -206,8 +209,10 @@ export async function runCronIsolatedAgentTurn(params: {
   const base = `[cron:${params.job.id} ${params.job.name}] ${params.message}`.trim();
   const commandBody = base;
 
-  const needsSkillsSnapshot = cronSession.isNewSession || !cronSession.sessionEntry.skillsSnapshot;
+  const existingSnapshot = cronSession.sessionEntry.skillsSnapshot;
   const skillsSnapshotVersion = getSkillsSnapshotVersion(workspaceDir);
+  const needsSkillsSnapshot =
+    !existingSnapshot || existingSnapshot.version !== skillsSnapshotVersion;
   const skillsSnapshot = needsSkillsSnapshot
     ? buildWorkspaceSkillSnapshot(workspaceDir, {
         config: cfgWithAgentDefaults,
@@ -331,6 +336,7 @@ export async function runCronIsolatedAgentTurn(params: {
   }
   const firstText = payloads[0]?.text ?? "";
   const summary = pickSummaryFromPayloads(payloads) ?? pickSummaryFromOutput(firstText);
+  const outputText = pickLastNonEmptyTextFromPayloads(payloads);
 
   // Skip delivery for heartbeat-only responses (HEARTBEAT_OK with no real content).
   const ackMaxChars = resolveHeartbeatAckMaxChars(agentCfg);
@@ -344,12 +350,14 @@ export async function runCronIsolatedAgentTurn(params: {
         return {
           status: "error",
           summary,
+          outputText,
           error: reason,
         };
       }
       return {
         status: "skipped",
         summary: `Delivery skipped (${reason}).`,
+        outputText,
       };
     }
     try {
@@ -364,11 +372,11 @@ export async function runCronIsolatedAgentTurn(params: {
       });
     } catch (err) {
       if (!bestEffortDeliver) {
-        return { status: "error", summary, error: String(err) };
+        return { status: "error", summary, outputText, error: String(err) };
       }
-      return { status: "ok", summary };
+      return { status: "ok", summary, outputText };
     }
   }
 
-  return { status: "ok", summary };
+  return { status: "ok", summary, outputText };
 }

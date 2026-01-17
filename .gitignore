@@ -56,3 +56,4 @@ apps/ios/*.mobileprovision
 .vscode/
 IDENTITY.md
 USER.md
+.tgz

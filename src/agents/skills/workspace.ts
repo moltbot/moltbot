@@ -8,6 +8,7 @@ import {
 } from "@mariozechner/pi-coding-agent";
 
 import type { ClawdbotConfig } from "../../config/config.js";
+import { createSubsystemLogger } from "../../logging.js";
 import { CONFIG_DIR, resolveUserPath } from "../../utils.js";
 import { resolveBundledSkillsDir } from "./bundled-dir.js";
 import { shouldIncludeSkill } from "./config.js";
@@ -26,6 +27,18 @@ import type {
 } from "./types.js";
 
 const fsp = fs.promises;
+const skillsLogger = createSubsystemLogger("skills");
+const skillCommandDebugOnce = new Set<string>();
+
+function debugSkillCommandOnce(
+  messageKey: string,
+  message: string,
+  meta?: Record<string, unknown>,
+) {
+  if (skillCommandDebugOnce.has(messageKey)) return;
+  skillCommandDebugOnce.add(messageKey);
+  skillsLogger.debug(message, meta);
+}
 
 function filterSkillEntries(
   entries: SkillEntry[],
@@ -50,6 +63,8 @@ function filterSkillEntries(
 
 const SKILL_COMMAND_MAX_LENGTH = 32;
 const SKILL_COMMAND_FALLBACK = "skill";
+// Discord command descriptions must be ≤100 characters
+const SKILL_COMMAND_DESCRIPTION_MAX_LENGTH = 100;
 
 function sanitizeSkillCommandName(raw: string): string {
   const normalized = raw
@@ -311,9 +326,7 @@ export function buildWorkspaceSkillCommandSpecs(
     opts?.skillFilter,
     opts?.eligibility,
   );
-  const userInvocable = eligible.filter(
-    (entry) => entry.invocation?.userInvocable !== false,
-  );
+  const userInvocable = eligible.filter((entry) => entry.invocation?.userInvocable !== false);
   const used = new Set<string>();
   for (const reserved of opts?.reservedNames ?? []) {
     used.add(reserved.toLowerCase());
@@ -321,13 +334,33 @@ export function buildWorkspaceSkillCommandSpecs(
 
   const specs: SkillCommandSpec[] = [];
   for (const entry of userInvocable) {
-    const base = sanitizeSkillCommandName(entry.skill.name);
+    const rawName = entry.skill.name;
+    const base = sanitizeSkillCommandName(rawName);
+    if (base !== rawName) {
+      debugSkillCommandOnce(
+        `sanitize:${rawName}:${base}`,
+        `Sanitized skill command name "${rawName}" to "/${base}".`,
+        { rawName, sanitized: `/${base}` },
+      );
+    }
     const unique = resolveUniqueSkillCommandName(base, used);
+    if (unique !== base) {
+      debugSkillCommandOnce(
+        `dedupe:${rawName}:${unique}`,
+        `De-duplicated skill command name for "${rawName}" to "/${unique}".`,
+        { rawName, deduped: `/${unique}` },
+      );
+    }
     used.add(unique.toLowerCase());
+    const rawDescription = entry.skill.description?.trim() || rawName;
+    const description =
+      rawDescription.length > SKILL_COMMAND_DESCRIPTION_MAX_LENGTH
+        ? rawDescription.slice(0, SKILL_COMMAND_DESCRIPTION_MAX_LENGTH - 1) + "…"
+        : rawDescription;
     specs.push({
       name: unique,
-      skillName: entry.skill.name,
-      description: entry.skill.description?.trim() || entry.skill.name,
+      skillName: rawName,
+      description,
     });
   }
   return specs;
