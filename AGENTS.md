@@ -72,6 +72,7 @@
 - Web provider stores creds at `~/.clawdbot/credentials/`; rerun `clawdbot login` if logged out.
 - Pi sessions live under `~/.clawdbot/agents/<agentId>/sessions/` (e.g., `~/.clawdbot/agents/main/sessions/` for the default agent); the base directory is not configurable.
 - Never commit or publish real phone numbers, videos, or live configuration values. Use obviously fake placeholders in docs, tests, and examples.
+ - Release flow: always read `docs/reference/RELEASING.md` and `docs/platforms/mac/release.md` before any release work; do not ask routine questions once those docs answer them.
 
 ## Troubleshooting
 - Rebrand/migration issues or legacy config/service warnings: run `clawdbot doctor` (see `docs/gateway/doctor.md`).
