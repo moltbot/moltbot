@@ -126,9 +126,11 @@ describe("detect-secrets vectors (adapted)", () => {
     const fake = 'password = "somefakekey"';
     const template = "password: ${link}";
     const symbols = 'password = ",.:-"';
+    const passport = "passport_number = 000000000";
     expect(detect(empty).blocked).toBe(false);
     expect(detect(fake).blocked).toBe(false);
     expect(detect(template).blocked).toBe(false);
     expect(detect(symbols).blocked).toBe(false);
+    expect(detect(passport).blocked).toBe(false);
   });
 });
