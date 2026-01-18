@@ -85,24 +85,44 @@ function buildAgentPrompt(messagesUnknown: unknown): {
   const messages = asMessages(messagesUnknown);
 
   const systemParts: string[] = [];
-  let lastUser = "";
+  const conversationParts: string[] = [];
+  let lastUserMessage = "";
 
   for (const msg of messages) {
     if (!msg || typeof msg !== "object") continue;
     const role = typeof msg.role === "string" ? msg.role.trim() : "";
     const content = extractTextContent(msg.content).trim();
     if (!role || !content) continue;
-    if (role === "system") {
+
+    if (role === "system" || role === "developer") {
       systemParts.push(content);
       continue;
     }
+
+    // Track all conversation messages (user and assistant)
     if (role === "user") {
-      lastUser = content;
+      conversationParts.push(`User: ${content}`);
+      lastUserMessage = content;
+    } else if (role === "assistant") {
+      conversationParts.push(`Assistant: ${content}`);
     }
   }
 
+  // If there's conversation history beyond just the last message, include it
+  // Format: provide context of prior turns, then the current message
+  let message: string;
+  if (conversationParts.length > 1) {
+    // Multiple turns: format as conversation context
+    // The last entry is the current user message, prior entries are history
+    const historyParts = conversationParts.slice(0, -1);
+    message = `[Conversation history]\n${historyParts.join("\n")}\n\n[Current message]\n${lastUserMessage}`;
+  } else {
+    // Single message, no history needed
+    message = lastUserMessage;
+  }
+
   return {
-    message: lastUser,
+    message,
     extraSystemPrompt: systemParts.length > 0 ? systemParts.join("\n\n") : undefined,
   };
 }

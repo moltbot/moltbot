@@ -262,6 +262,90 @@ describe("OpenAI-compatible HTTP API (e2e)", () => {
     }
   });
 
+  it("includes conversation history when multiple messages are provided", async () => {
+    agentCommand.mockResolvedValueOnce({
+      payloads: [{ text: "I am Claude" }],
+    } as never);
+
+    const port = await getFreePort();
+    const server = await startServer(port);
+    try {
+      const res = await postChatCompletions(port, {
+        model: "clawdbot",
+        messages: [
+          { role: "system", content: "You are a helpful assistant." },
+          { role: "user", content: "Hello, who are you?" },
+          { role: "assistant", content: "I am Claude." },
+          { role: "user", content: "What did I just ask you?" },
+        ],
+      });
+      expect(res.status).toBe(200);
+
+      const [opts] = agentCommand.mock.calls[0] ?? [];
+      const message = (opts as { message?: string } | undefined)?.message ?? "";
+      // Should include conversation history
+      expect(message).toContain("[Conversation history]");
+      expect(message).toContain("User: Hello, who are you?");
+      expect(message).toContain("Assistant: I am Claude.");
+      expect(message).toContain("[Current message]");
+      expect(message).toContain("What did I just ask you?");
+    } finally {
+      await server.close({ reason: "test done" });
+    }
+  });
+
+  it("does not include history header for single message", async () => {
+    agentCommand.mockResolvedValueOnce({
+      payloads: [{ text: "hello" }],
+    } as never);
+
+    const port = await getFreePort();
+    const server = await startServer(port);
+    try {
+      const res = await postChatCompletions(port, {
+        model: "clawdbot",
+        messages: [
+          { role: "system", content: "You are a helpful assistant." },
+          { role: "user", content: "Hello" },
+        ],
+      });
+      expect(res.status).toBe(200);
+
+      const [opts] = agentCommand.mock.calls[0] ?? [];
+      const message = (opts as { message?: string } | undefined)?.message ?? "";
+      // Should NOT include conversation history header for single message
+      expect(message).not.toContain("[Conversation history]");
+      expect(message).toBe("Hello");
+    } finally {
+      await server.close({ reason: "test done" });
+    }
+  });
+
+  it("treats developer role same as system role", async () => {
+    agentCommand.mockResolvedValueOnce({
+      payloads: [{ text: "hello" }],
+    } as never);
+
+    const port = await getFreePort();
+    const server = await startServer(port);
+    try {
+      const res = await postChatCompletions(port, {
+        model: "clawdbot",
+        messages: [
+          { role: "developer", content: "You are a helpful assistant." },
+          { role: "user", content: "Hello" },
+        ],
+      });
+      expect(res.status).toBe(200);
+
+      const [opts] = agentCommand.mock.calls[0] ?? [];
+      const extraSystemPrompt = (opts as { extraSystemPrompt?: string } | undefined)?.extraSystemPrompt ?? "";
+      expect(extraSystemPrompt).toBe("You are a helpful assistant.");
+    } finally {
+      await server.close({ reason: "test done" });
+    }
+  });
+
   it("returns a non-streaming OpenAI chat.completion response", async () => {
     agentCommand.mockResolvedValueOnce({
       payloads: [{ text: "hello" }],

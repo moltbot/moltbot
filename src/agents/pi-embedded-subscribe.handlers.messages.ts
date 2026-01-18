@@ -108,13 +108,23 @@ export function handleMessageUpdate(
     })
     .trim();
   if (next && next !== ctx.state.lastStreamedAssistant) {
+    const previousText = ctx.state.lastStreamedAssistant ?? "";
     ctx.state.lastStreamedAssistant = next;
     const { text: cleanedText, mediaUrls } = parseReplyDirectives(next);
+
+    // Compute delta: the new content since last emission
+    // This is needed for OpenAI-compatible streaming which expects deltas, not full text
+    const { text: previousCleanedText } = parseReplyDirectives(previousText);
+    const deltaText = cleanedText.startsWith(previousCleanedText)
+      ? cleanedText.slice(previousCleanedText.length)
+      : cleanedText;
+
     emitAgentEvent({
       runId: ctx.params.runId,
       stream: "assistant",
       data: {
         text: cleanedText,
+        delta: deltaText,
         mediaUrls: mediaUrls?.length ? mediaUrls : undefined,
       },
     });
@@ -122,6 +132,7 @@ export function handleMessageUpdate(
       stream: "assistant",
       data: {
         text: cleanedText,
+        delta: deltaText,
         mediaUrls: mediaUrls?.length ? mediaUrls : undefined,
       },
     });
