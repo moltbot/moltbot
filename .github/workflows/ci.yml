@@ -2,9 +2,39 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
+  # Detect which paths changed to conditionally run jobs
+  changes:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    outputs:
+      typescript: ${{ steps.filter.outputs.typescript }}
+      android: ${{ steps.filter.outputs.android }}
+      macos: ${{ steps.filter.outputs.macos }}
+      swift: ${{ steps.filter.outputs.swift }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            typescript:
+              - 'src/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'tsconfig*.json'
+              - 'vitest.config.*'
+            android:
+              - 'apps/android/**'
+            macos:
+              - 'apps/macos/**'
+            swift:
+              - '**/*.swift'
+              - '.swiftlint.yml'
+              - '.swiftformat'
+
   install-check:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
@@ -56,6 +86,7 @@ jobs:
           pnpm -v
           pnpm install --frozen-lockfile --ignore-scripts=false --config.engine-strict=false --config.enable-pre-post-scripts=true
 
+  # Core Node checks - run on every push to main and all PRs
   checks:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     strategy:
@@ -77,12 +108,6 @@ jobs:
           - runtime: node
             task: format
             command: pnpm format
-          - runtime: bun
-            task: test
-            command: bunx vitest run
-          - runtime: bun
-            task: build
-            command: bunx tsc -p tsconfig.json
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -141,6 +166,77 @@ jobs:
       - name: Run ${{ matrix.task }} (${{ matrix.runtime }})
         run: ${{ matrix.command }}
 
+  # Bun runtime checks - PR only (validates runtime parity before merge)
+  checks-bun:
+    if: github.event_name == 'pull_request'
+    needs: changes
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - task: test
+            command: bunx vitest run
+          - task: build
+            command: bunx tsc -p tsconfig.json
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Checkout submodules (retry)
+        run: |
+          set -euo pipefail
+          git submodule sync --recursive
+          for attempt in 1 2 3 4 5; do
+            if git -c protocol.version=2 submodule update --init --force --depth=1 --recursive; then
+              exit 0
+            fi
+            echo "Submodule update failed (attempt $attempt/5). Retrying…"
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          check-latest: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Runtime versions
+        run: |
+          node -v
+          npm -v
+          bun -v
+
+      - name: Capture node path
+        run: echo "NODE_BIN=$(dirname \"$(node -p \"process.execPath\")\")" >> "$GITHUB_ENV"
+
+      - name: Enable corepack and pin pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.23.0 --activate
+          pnpm -v
+
+      - name: Install dependencies
+        env:
+          CI: true
+        run: |
+          export PATH="$NODE_BIN:$PATH"
+          which node
+          node -v
+          pnpm -v
+          pnpm install --frozen-lockfile --ignore-scripts=false --config.engine-strict=false --config.enable-pre-post-scripts=true || pnpm install --frozen-lockfile --ignore-scripts=false --config.engine-strict=false --config.enable-pre-post-scripts=true
+
+      - name: Run ${{ matrix.task }} (bun)
+        run: ${{ matrix.command }}
+
   secrets:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
@@ -166,7 +262,10 @@ jobs:
             exit 1
           fi
 
+  # Windows checks - PR only (validates cross-platform before merge)
   checks-windows:
+    if: github.event_name == 'pull_request'
+    needs: changes
     runs-on: blacksmith-4vcpu-windows-2025
     defaults:
       run:
@@ -245,8 +344,10 @@ jobs:
       - name: Run ${{ matrix.task }} (${{ matrix.runtime }})
         run: ${{ matrix.command }}
 
+  # macOS checks - PR only, only when TS code changes
   checks-macos:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && needs.changes.outputs.typescript == 'true'
+    needs: changes
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -306,8 +407,10 @@ jobs:
       - name: Run ${{ matrix.task }}
         run: ${{ matrix.command }}
 
+  # macOS Swift app - PR only, only when Swift/macOS code changes
   macos-app:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && (needs.changes.outputs.macos == 'true' || needs.changes.outputs.swift == 'true')
+    needs: changes
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -375,6 +478,8 @@ jobs:
 
       - name: Run ${{ matrix.task }}
         run: ${{ matrix.command }}
+
+  # iOS - currently disabled
   ios:
     if: false # ignore iOS in CI for now
     runs-on: macos-latest
@@ -548,7 +653,10 @@ jobs:
             sys.exit(1)
           PY
 
+  # Android - PR only OR when android code changes on push
   android:
+    if: github.event_name == 'pull_request' || needs.changes.outputs.android == 'true'
+    needs: changes
     runs-on: blacksmith-4vcpu-ubuntu-2404
     strategy:
       fail-fast: false
