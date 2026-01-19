@@ -2,7 +2,7 @@
 summary: "Runtime secret scanning plan (off/redact/block + overflow handling)"
 owner: "clawdbot"
 status: "in_progress"
-last_updated: "2026-01-18"
+last_updated: "2026-01-19"
 ---
 
 # Runtime Secret Scanning Plan (Off / Redact / Block)
@@ -19,6 +19,8 @@ last_updated: "2026-01-18"
 - Core module + detectors are implemented.
 - Tests are in place (scan orchestration + entropy + regex families).
 - Runtime wiring + user-facing errors are still pending.
+- Local build caveat: developers with `pnpm` `only-built-dependencies` must allow `re2`
+  or the native module won’t build (add `re2` or remove the restriction).
 
 ## Decisions (confirmed)
 - Default scan cap: **32,768 chars**.
