@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --version:*)",
+      "Bash(npm:*)",
+      "Bash(/usr/local/bin/node:*)",
+      "Bash(/opt/homebrew/bin/node --version)",
+      "Bash(/Users/abhaybhat/.nvm/versions/node/v22.21.1/bin/node --version)",
+      "Bash(brew list:*)",
+      "Bash(echo:*)",
+      "Bash(ls:*)",
+      "Bash(nvm which:*)",
+      "Bash(nvm current:*)",
+      "Bash(nvm ls:*)",
+      "Bash(for i in 1 2 3)",
+      "Bash(do echo \"=== Shell restart $i ===\")",
+      "Bash(zsh -c 'source ~/.zshrc && node --version && nvm current')",
+      "Bash(done)"
+    ]
+  }
+}
