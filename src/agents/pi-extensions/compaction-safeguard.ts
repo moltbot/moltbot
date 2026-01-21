@@ -1,15 +1,8 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import type { ExtensionAPI, ExtensionContext, FileOperations } from "@mariozechner/pi-coding-agent";
-import { estimateTokens, generateSummary } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, FileOperations } from "@mariozechner/pi-coding-agent";
 
-import { DEFAULT_CONTEXT_TOKENS } from "../defaults.js";
-
-const MAX_CHUNK_RATIO = 0.4;
 const FALLBACK_SUMMARY =
   "Summary unavailable due to context limits. Older messages were truncated.";
-const TURN_PREFIX_INSTRUCTIONS =
-  "This summary covers the prefix of a split turn. Focus on the original request," +
-  " early progress, and any details needed to understand the retained suffix.";
 const MAX_TOOL_FAILURES = 8;
 const MAX_TOOL_FAILURE_CHARS = 240;
 
@@ -127,73 +120,8 @@ function formatFileOperations(readFiles: string[], modifiedFiles: string[]): str
   return `\n\n${sections.join("\n\n")}`;
 }
 
-function chunkMessages(messages: AgentMessage[], maxTokens: number): AgentMessage[][] {
-  if (messages.length === 0) return [];
-
-  const chunks: AgentMessage[][] = [];
-  let currentChunk: AgentMessage[] = [];
-  let currentTokens = 0;
-
-  for (const message of messages) {
-    const messageTokens = estimateTokens(message);
-    if (currentChunk.length > 0 && currentTokens + messageTokens > maxTokens) {
-      chunks.push(currentChunk);
-      currentChunk = [];
-      currentTokens = 0;
-    }
-
-    currentChunk.push(message);
-    currentTokens += messageTokens;
-
-    if (messageTokens > maxTokens) {
-      // Split oversized messages to avoid unbounded chunk growth.
-      chunks.push(currentChunk);
-      currentChunk = [];
-      currentTokens = 0;
-    }
-  }
-
-  if (currentChunk.length > 0) {
-    chunks.push(currentChunk);
-  }
-
-  return chunks;
-}
-
-async function summarizeChunks(params: {
-  messages: AgentMessage[];
-  model: NonNullable<ExtensionContext["model"]>;
-  apiKey: string;
-  signal: AbortSignal;
-  reserveTokens: number;
-  maxChunkTokens: number;
-  customInstructions?: string;
-  previousSummary?: string;
-}): Promise<string> {
-  if (params.messages.length === 0) {
-    return params.previousSummary ?? "No prior history.";
-  }
-
-  const chunks = chunkMessages(params.messages, params.maxChunkTokens);
-  let summary = params.previousSummary;
-
-  for (const chunk of chunks) {
-    summary = await generateSummary(
-      chunk,
-      params.model,
-      params.reserveTokens,
-      params.apiKey,
-      params.signal,
-      params.customInstructions,
-      summary,
-    );
-  }
-
-  return summary ?? "No prior history.";
-}
-
 export default function compactionSafeguardExtension(api: ExtensionAPI): void {
-  api.on("session_before_compact", async (event, ctx) => {
+  api.on("session_before_compact", async (event, _ctx) => {
     const { preparation } = event;
     const { readFiles, modifiedFiles } = computeFileLists(preparation.fileOps);
     const fileOpsSummary = formatFileOperations(readFiles, modifiedFiles);
