@@ -1,0 +1,51 @@
+FROM node:22-bookworm
+
+# Install Bun (required for build scripts)
+RUN curl -fsSL https://bun.sh/install | bash
+ENV PATH="/root/.bun/bin:${PATH}"
+
+RUN corepack enable
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY ui/package.json ./ui/
+COPY patches ./patches
+COPY scripts ./scripts
+
+RUN pnpm install --frozen-lockfile
+
+COPY . .
+RUN pnpm build
+ENV CLAWDBOT_PREFER_PNPM=1
+RUN pnpm ui:install
+RUN pnpm ui:build
+
+# Create minimal config for Railway
+RUN mkdir -p /root/.clawdbot/agents/main/agent
+RUN echo '{"channels":{"telegram":{"enabled":true,"dmPolicy":"allowlist","allowFrom":["6632715854"],"groupPolicy":"allowlist","streamMode":"partial"}},"gateway":{"mode":"local","bind":"lan","auth":{"mode":"token"}},"plugins":{"entries":{"telegram":{"enabled":true}}}}' > /root/.clawdbot/clawdbot.json
+RUN echo '{"version":1,"profiles":{"anthropic:default":{"type":"oauth","provider":"anthropic","access":"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","refresh":"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","expires":1769063791886}}}' > /root/.clawdbot/agents/main/agent/auth-profiles.json
+
+ENV NODE_ENV=production
+ENV HOME=/root
+
+# Create direct gateway startup script that bypasses buggy entry.js
+RUN echo 'import { loadConfig, resolveGatewayPort } from "./dist/config/config.js"; \
+import { resolveGatewayAuth } from "./dist/gateway/auth.js"; \
+import { startGatewayServer } from "./dist/gateway/server.js"; \
+import { setConsoleTimestampPrefix } from "./dist/logging/console.js"; \
+import { loadDotEnv } from "./dist/infra/dotenv.js"; \
+import { normalizeEnv } from "./dist/infra/env.js"; \
+loadDotEnv({ quiet: true }); \
+normalizeEnv(); \
+setConsoleTimestampPrefix(true); \
+const cfg = loadConfig(); \
+const port = process.env.PORT ? parseInt(process.env.PORT, 10) : resolveGatewayPort(cfg); \
+const auth = resolveGatewayAuth({ authConfig: cfg.gateway?.auth }); \
+console.log(`Starting gateway on port ${port}...`); \
+const server = await startGatewayServer({ port, auth, runtimeConfig: { reloadKey: null, httpPort: null, openAiProxyPort: null, remoteDebugPort: null } }); \
+console.log(`Gateway running on ws://0.0.0.0:${port}`);' > /app/railway-gateway.mjs
+
+# Use PORT from Railway
+CMD ["node", "/app/railway-gateway.mjs"]
