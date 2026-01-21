@@ -290,7 +290,15 @@ export function pruneContextMessages(params: {
     return outputAfterSoftTrim;
   }
 
-  for (const i of prunableToolIndexes) {
+  // Keep last N tool results soft-trimmed (head + tail preserved) while hard-clearing older tools.
+  // This preserves continuity on current work while still freeing space.
+  const keepLastTools = settings.hardClear.keepLastTools ?? 3;
+  const hardClearIndexes =
+    keepLastTools > 0 && prunableToolIndexes.length > keepLastTools
+      ? prunableToolIndexes.slice(0, -keepLastTools)
+      : prunableToolIndexes;
+
+  for (const i of hardClearIndexes) {
     if (ratio < settings.hardClearRatio) break;
     const msg = (next ?? messages)[i];
     if (!msg || msg.role !== "toolResult") continue;

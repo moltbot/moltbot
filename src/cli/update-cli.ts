@@ -46,7 +46,6 @@ export type UpdateCommandOptions = {
   channel?: string;
   tag?: string;
   timeout?: string;
-  yes?: boolean;
 };
 export type UpdateStatusOptions = {
   json?: boolean;
@@ -377,8 +376,6 @@ function printResult(result: UpdateRunResult, opts: PrintResultOptions) {
 }
 
 export async function updateCommand(opts: UpdateCommandOptions): Promise<void> {
-  process.noDeprecation = true;
-  process.env.NODE_NO_WARNINGS = "1";
   const timeoutMs = opts.timeout ? Number.parseInt(opts.timeout, 10) * 1000 : undefined;
 
   if (timeoutMs !== undefined && (Number.isNaN(timeoutMs) || timeoutMs <= 0)) {
@@ -431,7 +428,7 @@ export async function updateCommand(opts: UpdateCommandOptions): Promise<void> {
     const needsConfirm =
       currentVersion != null && (targetVersion == null || (cmp != null && cmp > 0));
 
-    if (needsConfirm && !opts.yes) {
+    if (needsConfirm) {
       if (!process.stdin.isTTY || opts.json) {
         defaultRuntime.error(
           [
@@ -719,7 +716,6 @@ ${theme.muted("Docs:")} ${formatDocsLink("/cli/update", "docs.clawd.bot/cli/upda
           channel: opts.channel as string | undefined,
           tag: opts.tag as string | undefined,
           timeout: opts.timeout as string | undefined,
-          yes: Boolean(opts.yes),
         });
       } catch (err) {
         defaultRuntime.error(String(err));

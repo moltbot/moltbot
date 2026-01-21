@@ -4,6 +4,7 @@ import { agentsListCommand } from "../../commands/agents.js";
 import { healthCommand } from "../../commands/health.js";
 import { sessionsCommand } from "../../commands/sessions.js";
 import { statusCommand } from "../../commands/status.js";
+import { setVerbose } from "../../globals.js";
 import { defaultRuntime } from "../../runtime.js";
 import { getFlagValue, getPositiveIntFlagValue, getVerboseFlag, hasFlag } from "../argv.js";
 import { registerBrowserCli } from "../browser-cli.js";
@@ -45,6 +46,7 @@ const routeHealth: RouteSpec = {
     const verbose = getVerboseFlag(argv, { includeDebug: true });
     const timeoutMs = getPositiveIntFlagValue(argv, "--timeout");
     if (timeoutMs === null) return false;
+    setVerbose(verbose);
     await healthCommand({ json, timeoutMs, verbose }, defaultRuntime);
     return true;
   },
@@ -61,6 +63,7 @@ const routeStatus: RouteSpec = {
     const verbose = getVerboseFlag(argv, { includeDebug: true });
     const timeoutMs = getPositiveIntFlagValue(argv, "--timeout");
     if (timeoutMs === null) return false;
+    setVerbose(verbose);
     await statusCommand({ json, deep, all, usage, timeoutMs, verbose }, defaultRuntime);
     return true;
   },
@@ -74,6 +77,7 @@ const routeSessions: RouteSpec = {
     if (store === null) return false;
     const active = getFlagValue(argv, "--active");
     if (active === null) return false;
+    setVerbose(verbose);
     await sessionsCommand({ json, store, active }, defaultRuntime);
     return true;
   },

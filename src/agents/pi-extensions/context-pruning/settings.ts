@@ -20,6 +20,7 @@ export type ContextPruningConfig = {
   hardClear?: {
     enabled?: boolean;
     placeholder?: string;
+    keepLastTools?: number;
   };
 };
 
@@ -38,6 +39,7 @@ export type EffectiveContextPruningSettings = {
   hardClear: {
     enabled: boolean;
     placeholder: string;
+    keepLastTools: number;
   };
 };
 
@@ -56,6 +58,7 @@ export const DEFAULT_CONTEXT_PRUNING_SETTINGS: EffectiveContextPruningSettings =
   hardClear: {
     enabled: true,
     placeholder: "[Old tool result content cleared]",
+    keepLastTools: 3,
   },
 };
 
@@ -99,6 +102,12 @@ export function computeEffectiveSettings(raw: unknown): EffectiveContextPruningS
     }
     if (typeof cfg.hardClear.placeholder === "string" && cfg.hardClear.placeholder.trim()) {
       s.hardClear.placeholder = cfg.hardClear.placeholder.trim();
+    }
+    if (
+      typeof cfg.hardClear.keepLastTools === "number" &&
+      Number.isFinite(cfg.hardClear.keepLastTools)
+    ) {
+      s.hardClear.keepLastTools = Math.max(0, Math.floor(cfg.hardClear.keepLastTools));
     }
   }
 
