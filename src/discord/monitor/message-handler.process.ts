@@ -73,6 +73,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     shouldRequireMention,
     canDetectMention,
     effectiveWasMentioned,
+    isAutoThreadOwnedByBot,
     threadChannel,
     threadParentId,
     threadParentName,
@@ -103,6 +104,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     if (ackReactionScope === "group-all") return isGroupChat;
     if (ackReactionScope === "group-mentions") {
       if (!isGuildMessage) return false;
+      if (isAutoThreadOwnedByBot) return true;
       if (!shouldRequireMention) return false;
       if (!canDetectMention) return false;
       return effectiveWasMentioned;

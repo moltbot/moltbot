@@ -72,6 +72,7 @@ export type DiscordMessagePreflightContext = {
   shouldBypassMention: boolean;
   effectiveWasMentioned: boolean;
   canDetectMention: boolean;
+  isAutoThreadOwnedByBot: boolean;
 
   historyEntry?: HistoryEntry;
 };

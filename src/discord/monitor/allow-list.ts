@@ -289,14 +289,21 @@ export function resolveDiscordShouldRequireMention(params: {
 }): boolean {
   if (!params.isGuildMessage) return false;
   // Only skip mention requirement in threads created by the bot (when autoThread is enabled).
-  if (params.isThread && params.channelConfig?.autoThread) {
-    const botId = params.botId?.trim();
-    const threadOwnerId = params.threadOwnerId?.trim();
-    if (botId && threadOwnerId && botId === threadOwnerId) {
-      return false;
-    }
-  }
+  if (isDiscordAutoThreadOwnedByBot(params)) return false;
   return params.channelConfig?.requireMention ?? params.guildInfo?.requireMention ?? true;
+}
+
+export function isDiscordAutoThreadOwnedByBot(params: {
+  isThread: boolean;
+  channelConfig?: DiscordChannelConfigResolved | null;
+  botId?: string | null;
+  threadOwnerId?: string | null;
+}): boolean {
+  if (!params.isThread) return false;
+  if (!params.channelConfig?.autoThread) return false;
+  const botId = params.botId?.trim();
+  const threadOwnerId = params.threadOwnerId?.trim();
+  return Boolean(botId && threadOwnerId && botId === threadOwnerId);
 }
 
 export function isDiscordGroupAllowedByPolicy(params: {
