@@ -186,9 +186,26 @@ export async function readSlackMessages(
     limit?: number;
     before?: string;
     after?: string;
+    threadId?: string;
   } = {},
 ): Promise<{ messages: SlackMessageSummary[]; hasMore: boolean }> {
   const client = await getClient(opts);
+
+  // Use conversations.replies for thread messages, conversations.history for channel messages
+  if (opts.threadId) {
+    const result = await client.conversations.replies({
+      channel: channelId,
+      ts: opts.threadId,
+      limit: opts.limit,
+      latest: opts.before,
+      oldest: opts.after,
+    });
+    return {
+      messages: (result.messages ?? []) as SlackMessageSummary[],
+      hasMore: Boolean(result.has_more),
+    };
+  }
+
   const result = await client.conversations.history({
     channel: channelId,
     limit: opts.limit,
