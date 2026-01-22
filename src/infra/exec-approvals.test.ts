@@ -121,15 +121,153 @@ describe("exec approvals shell parsing", () => {
     expect(res.segments.map((seg) => seg.argv[0])).toEqual(["echo", "jq"]);
   });
 
-  it("rejects chained commands", () => {
+  it("parses chained commands in analyzeShellCommand", () => {
     const res = analyzeShellCommand({ command: "ls && rm -rf /" });
-    expect(res.ok).toBe(false);
+    expect(res.ok).toBe(true);
+    expect(res.chains).toHaveLength(2);
+    expect(res.segments.map((seg) => seg.argv[0])).toEqual(["ls", "rm"]);
   });
 
   it("parses argv commands", () => {
     const res = analyzeArgvCommand({ argv: ["/bin/echo", "ok"] });
     expect(res.ok).toBe(true);
     expect(res.segments[0]?.argv).toEqual(["/bin/echo", "ok"]);
+  });
+});
+
+describe("exec approvals chained commands", () => {
+  // Tests for chained commands (&&, ||, ;) handled natively by analyzeShellCommand
+
+  it("analyzes chained commands successfully", () => {
+    const analysis = analyzeShellCommand({
+      command: "/usr/bin/cmd1 && /usr/bin/cmd2 || /usr/bin/cmd3",
+    });
+    expect(analysis.ok).toBe(true);
+    expect(analysis.chains).toHaveLength(3);
+    expect(analysis.segments).toHaveLength(3);
+  });
+
+  it("allows chained commands when all parts are in allowlist", () => {
+    const allowlist: ExecAllowlistEntry[] = [
+      { pattern: "/usr/bin/obsidian-cli" },
+      { pattern: "/usr/bin/head" },
+    ];
+    const analysis = analyzeShellCommand({
+      command:
+        "/usr/bin/obsidian-cli print-default && /usr/bin/obsidian-cli search foo | /usr/bin/head",
+    });
+    expect(analysis.ok).toBe(true);
+    expect(analysis.chains).toHaveLength(2); // Two chain parts
+    const result = evaluateExecAllowlist({
+      analysis,
+      allowlist,
+      safeBins: new Set(),
+      cwd: "/tmp",
+    });
+    expect(result.allowlistSatisfied).toBe(true);
+  });
+
+  it("rejects chained commands when any part is not in allowlist", () => {
+    const allowlist: ExecAllowlistEntry[] = [{ pattern: "/usr/bin/obsidian-cli" }];
+    const analysis = analyzeShellCommand({
+      command: "/usr/bin/obsidian-cli print-default && /usr/bin/rm -rf /",
+    });
+    expect(analysis.ok).toBe(true);
+    const result = evaluateExecAllowlist({
+      analysis,
+      allowlist,
+      safeBins: new Set(),
+      cwd: "/tmp",
+    });
+    expect(result.allowlistSatisfied).toBe(false);
+  });
+
+  it("handles || operator", () => {
+    const allowlist: ExecAllowlistEntry[] = [
+      { pattern: "/usr/bin/cmd1" },
+      { pattern: "/usr/bin/cmd2" },
+    ];
+    const analysis = analyzeShellCommand({
+      command: "/usr/bin/cmd1 --flag || /usr/bin/cmd2 --other",
+    });
+    expect(analysis.ok).toBe(true);
+    expect(analysis.chains).toHaveLength(2);
+    const result = evaluateExecAllowlist({
+      analysis,
+      allowlist,
+      safeBins: new Set(),
+      cwd: "/tmp",
+    });
+    expect(result.allowlistSatisfied).toBe(true);
+  });
+
+  it("handles ; operator", () => {
+    const allowlist: ExecAllowlistEntry[] = [
+      { pattern: "/usr/bin/cmd1" },
+      { pattern: "/usr/bin/cmd2" },
+    ];
+    const analysis = analyzeShellCommand({
+      command: "/usr/bin/cmd1; /usr/bin/cmd2",
+    });
+    expect(analysis.ok).toBe(true);
+    expect(analysis.chains).toHaveLength(2);
+    const result = evaluateExecAllowlist({
+      analysis,
+      allowlist,
+      safeBins: new Set(),
+      cwd: "/tmp",
+    });
+    expect(result.allowlistSatisfied).toBe(true);
+  });
+
+  it("does not create chains for non-chained commands", () => {
+    const analysis = analyzeShellCommand({
+      command: "/usr/bin/echo hello",
+    });
+    expect(analysis.ok).toBe(true);
+    expect(analysis.chains).toBeUndefined();
+  });
+
+  it("respects quotes when splitting chains", () => {
+    // The && inside quotes should not be treated as a chain operator
+    const analysis = analyzeShellCommand({
+      command: '/usr/bin/echo "foo && bar"',
+    });
+    expect(analysis.ok).toBe(true);
+    expect(analysis.chains).toBeUndefined();
+    expect(analysis.segments).toHaveLength(1);
+    expect(analysis.segments[0].argv).toEqual(["/usr/bin/echo", "foo && bar"]);
+  });
+
+  it("handles mixed chain operators", () => {
+    const allowlist: ExecAllowlistEntry[] = [
+      { pattern: "/usr/bin/cmd1" },
+      { pattern: "/usr/bin/cmd2" },
+      { pattern: "/usr/bin/cmd3" },
+    ];
+    const analysis = analyzeShellCommand({
+      command: "/usr/bin/cmd1 && /usr/bin/cmd2 || /usr/bin/cmd3",
+    });
+    expect(analysis.ok).toBe(true);
+    expect(analysis.chains).toHaveLength(3);
+    const result = evaluateExecAllowlist({
+      analysis,
+      allowlist,
+      safeBins: new Set(),
+      cwd: "/tmp",
+    });
+    expect(result.allowlistSatisfied).toBe(true);
+  });
+
+  it("handles chained pipelines", () => {
+    const analysis = analyzeShellCommand({
+      command: "cmd1 | cmd2 && cmd3 | cmd4",
+    });
+    expect(analysis.ok).toBe(true);
+    expect(analysis.chains).toHaveLength(2);
+    expect(analysis.chains?.[0]).toHaveLength(2); // cmd1 | cmd2
+    expect(analysis.chains?.[1]).toHaveLength(2); // cmd3 | cmd4
+    expect(analysis.segments).toHaveLength(4);
   });
 });
 

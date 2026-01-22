@@ -16,11 +16,15 @@ vi.mock("./tools/nodes-utils.js", () => ({
 
 describe("exec approvals", () => {
   let previousHome: string | undefined;
+  let previousUserProfile: string | undefined;
 
   beforeEach(async () => {
     previousHome = process.env.HOME;
+    previousUserProfile = process.env.USERPROFILE;
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawdbot-test-"));
     process.env.HOME = tempDir;
+    // Windows uses USERPROFILE for os.homedir()
+    process.env.USERPROFILE = tempDir;
   });
 
   afterEach(() => {
@@ -29,6 +33,11 @@ describe("exec approvals", () => {
       delete process.env.HOME;
     } else {
       process.env.HOME = previousHome;
+    }
+    if (previousUserProfile === undefined) {
+      delete process.env.USERPROFILE;
+    } else {
+      process.env.USERPROFILE = previousUserProfile;
     }
   });
 
@@ -71,6 +80,8 @@ describe("exec approvals", () => {
 
   it("skips approval when node allowlist is satisfied", async () => {
     const { callGatewayTool } = await import("./tools/gateway.js");
+    const { analyzeShellCommand, evaluateExecAllowlist } =
+      await import("../infra/exec-approvals.js");
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawdbot-test-bin-"));
     const binDir = path.join(tempDir, "bin");
     await fs.mkdir(binDir, { recursive: true });
@@ -80,6 +91,14 @@ describe("exec approvals", () => {
     if (process.platform !== "win32") {
       await fs.chmod(exePath, 0o755);
     }
+
+    // Debug: verify the command parses correctly
+    const command = `"${exePath}" --help`;
+    const analysis = analyzeShellCommand({ command, cwd: tempDir });
+    expect(analysis.ok).toBe(true);
+    expect(analysis.segments).toHaveLength(1);
+    expect(analysis.segments[0]?.argv[0]).toBe(exePath);
+
     const approvalsFile = {
       version: 1,
       defaults: { security: "allowlist", ask: "on-miss", askFallback: "deny" },
@@ -89,6 +108,15 @@ describe("exec approvals", () => {
         },
       },
     };
+
+    // Debug: verify allowlist evaluation works
+    const evalResult = evaluateExecAllowlist({
+      analysis,
+      allowlist: approvalsFile.agents.main.allowlist,
+      safeBins: new Set(),
+      cwd: tempDir,
+    });
+    expect(evalResult.allowlistSatisfied).toBe(true);
 
     const calls: string[] = [];
     vi.mocked(callGatewayTool).mockImplementation(async (method) => {
@@ -112,9 +140,7 @@ describe("exec approvals", () => {
       approvalRunningNoticeMs: 0,
     });
 
-    const result = await tool.execute("call2", {
-      command: `"${exePath}" --help`,
-    });
+    const result = await tool.execute("call2", { command });
     expect(result.details.status).toBe("completed");
     expect(calls).toContain("exec.approvals.node.get");
     expect(calls).toContain("node.invoke");

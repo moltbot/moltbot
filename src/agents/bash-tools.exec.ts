@@ -873,7 +873,7 @@ export function createExecTool(
         }
         const analysis = analyzeShellCommand({ command: params.command, cwd: workdir, env });
         let allowlistSatisfied = false;
-        if (hostAsk === "on-miss" && hostSecurity === "allowlist") {
+        if (hostAsk === "on-miss" && hostSecurity === "allowlist" && analysis.ok) {
           try {
             const approvalsSnapshot = (await callGatewayTool(
               "exec.approvals.node.get",
