@@ -231,4 +231,52 @@ describe("subagent registry persistence", () => {
     };
     expect(afterSecond.runs["run-3"].cleanupCompletedAt).toBeDefined();
   });
+
+  it("reconciles orphaned subagent sessions from the session store", async () => {
+    tempStateDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawdbot-subagent-"));
+    process.env.CLAWDBOT_STATE_DIR = tempStateDir;
+
+    const now = Date.now();
+    const orphanedSessionStore = {
+      "agent:main:subagent:orphan": {
+        sessionId: "orphan-session-id",
+        updatedAt: now - 120 * 60 * 1000, // 2 hours ago
+        spawnedBy: "agent:main:main",
+        label: "orphaned-task",
+      },
+      "agent:main:main": {
+        sessionId: "main-session-id",
+        updatedAt: now,
+      },
+    };
+
+    // Mock the session store loader to return our orphaned sessions
+    vi.doMock("../gateway/session-utils.js", () => ({
+      loadCombinedSessionStoreForGateway: () => ({
+        storePath: path.join(tempStateDir!, "agents", "main", "sessions.json"),
+        store: orphanedSessionStore,
+      }),
+    }));
+
+    // Initialize the subagent registry - it should pick up the orphaned session
+    vi.resetModules();
+    const mod = await import("./subagent-registry.js");
+    mod.initSubagentRegistry();
+
+    // Check that the orphaned session was added to the registry
+    const registryPath = path.join(tempStateDir, "subagents", "runs.json");
+    const raw = await fs.readFile(registryPath, "utf8");
+    const parsed = JSON.parse(raw) as {
+      runs?: Record<string, { childSessionKey?: string; archiveAtMs?: number }>;
+    };
+
+    // Find the orphan entry (its runId starts with "orphan-")
+    const orphanEntry = Object.values(parsed.runs ?? {}).find(
+      (entry) => entry.childSessionKey === "agent:main:subagent:orphan",
+    );
+    expect(orphanEntry).toBeDefined();
+    expect(orphanEntry?.archiveAtMs).toBeDefined();
+    // archiveAtMs should be in the past since the session was 2 hours old
+    expect(orphanEntry?.archiveAtMs).toBeLessThan(now);
+  });
 });

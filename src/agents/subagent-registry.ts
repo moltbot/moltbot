@@ -1,5 +1,8 @@
+import crypto from "node:crypto";
+
 import { loadConfig } from "../config/config.js";
 import { callGateway } from "../gateway/call.js";
+import { loadCombinedSessionStoreForGateway } from "../gateway/session-utils.js";
 import { onAgentEvent } from "../infra/agent-events.js";
 import { type DeliveryContext, normalizeDeliveryContext } from "../utils/delivery-context.js";
 import { runSubagentAnnounceFlow, type SubagentRunOutcome } from "./subagent-announce.js";
@@ -104,6 +107,62 @@ function restoreSubagentRunsOnce() {
     }
   } catch {
     // ignore restore failures
+  }
+}
+
+/**
+ * Reconcile orphaned subagent sessions from the session store.
+ * Sessions with `spawnedBy` set that aren't tracked in the subagent registry
+ * are added with an appropriate archiveAtMs based on their updatedAt time.
+ */
+function reconcileOrphanedSubagentSessions() {
+  try {
+    const cfg = loadConfig();
+    const archiveAfterMs = resolveArchiveAfterMs(cfg);
+    if (!archiveAfterMs) return;
+
+    const { store } = loadCombinedSessionStoreForGateway(cfg);
+    const trackedChildKeys = new Set(
+      [...subagentRuns.values()].map((entry) => entry.childSessionKey),
+    );
+
+    let added = 0;
+    for (const [sessionKey, entry] of Object.entries(store)) {
+      if (!entry?.spawnedBy) continue;
+      if (trackedChildKeys.has(sessionKey)) continue;
+
+      // This is an orphaned subagent session - add it to the registry
+      const runId = `orphan-${crypto.randomUUID()}`;
+      const now = Date.now();
+      const updatedAt = entry.updatedAt ?? now;
+      // Archive based on when the session was last updated, not now
+      const archiveAtMs = updatedAt + archiveAfterMs;
+
+      subagentRuns.set(runId, {
+        runId,
+        childSessionKey: sessionKey,
+        requesterSessionKey: entry.spawnedBy,
+        requesterDisplayKey: entry.spawnedBy,
+        task: entry.label ?? "(restored session)",
+        cleanup: "delete",
+        label: entry.label,
+        createdAt: updatedAt,
+        startedAt: updatedAt,
+        endedAt: updatedAt,
+        outcome: { status: "ok" },
+        archiveAtMs,
+        cleanupCompletedAt: updatedAt,
+        cleanupHandled: true,
+      });
+      added++;
+    }
+
+    if (added > 0) {
+      persistSubagentRuns();
+      startSweeper();
+    }
+  } catch {
+    // ignore reconciliation failures
   }
 }
 
@@ -367,4 +426,5 @@ export function listSubagentRunsForRequester(requesterSessionKey: string): Subag
 
 export function initSubagentRegistry() {
   restoreSubagentRunsOnce();
+  reconcileOrphanedSubagentSessions();
 }
