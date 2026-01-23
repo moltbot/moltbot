@@ -1,4 +1,5 @@
 import { visibleWidth } from "./ansi.js";
+import { displayString } from "../utils.js";
 
 type Align = "left" | "right" | "center";
 
@@ -92,15 +93,9 @@ function wrapLine(text: string, width: number): string[] {
 
   const lines: string[] = [];
   const isBreakChar = (ch: string) =>
-    ch === " " ||
-    ch === "\t" ||
-    ch === "\n" ||
-    ch === "\r" ||
-    ch === "/" ||
-    ch === "-" ||
-    ch === "_" ||
-    ch === ".";
+    ch === " " || ch === "\t" || ch === "/" || ch === "-" || ch === "_" || ch === ".";
   const isSpaceChar = (ch: string) => ch === " " || ch === "\t";
+  let skipNextLf = false;
 
   const buf: Token[] = [];
   let bufVisible = 0;
@@ -148,6 +143,15 @@ function wrapLine(text: string, width: number): string[] {
     }
 
     const ch = token.value;
+    if (skipNextLf) {
+      skipNextLf = false;
+      if (ch === "\n") continue;
+    }
+    if (ch === "\n" || ch === "\r") {
+      flushAt(buf.length);
+      if (ch === "\r") skipNextLf = true;
+      continue;
+    }
     if (bufVisible + 1 > width && bufVisible > 0) {
       flushAt(lastBreakIndex);
     }
@@ -168,11 +172,18 @@ function normalizeWidth(n: number | undefined): number | undefined {
 }
 
 export function renderTable(opts: RenderTableOptions): string {
+  const rows = opts.rows.map((row) => {
+    const next: Record<string, string> = {};
+    for (const [key, value] of Object.entries(row)) {
+      next[key] = displayString(value);
+    }
+    return next;
+  });
   const border = opts.border ?? "unicode";
   if (border === "none") {
     const columns = opts.columns;
     const header = columns.map((c) => c.header).join(" | ");
-    const lines = [header, ...opts.rows.map((r) => columns.map((c) => r[c.key] ?? "").join(" | "))];
+    const lines = [header, ...rows.map((r) => columns.map((c) => r[c.key] ?? "").join(" | "))];
     return `${lines.join("\n")}\n`;
   }
 
@@ -181,7 +192,7 @@ export function renderTable(opts: RenderTableOptions): string {
 
   const metrics = columns.map((c) => {
     const headerW = visibleWidth(c.header);
-    const cellW = Math.max(0, ...opts.rows.map((r) => visibleWidth(r[c.key] ?? "")));
+    const cellW = Math.max(0, ...rows.map((r) => visibleWidth(r[c.key] ?? "")));
     return { headerW, cellW };
   });
 
@@ -328,7 +339,7 @@ export function renderTable(opts: RenderTableOptions): string {
   lines.push(hLine(box.tl, box.t, box.tr));
   lines.push(...renderRow({}, true));
   lines.push(hLine(box.ml, box.m, box.mr));
-  for (const row of opts.rows) {
+  for (const row of rows) {
     lines.push(...renderRow(row, false));
   }
   lines.push(hLine(box.bl, box.b, box.br));
