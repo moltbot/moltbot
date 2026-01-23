@@ -20,7 +20,6 @@ import { sendMessageDiscord } from "../send.js";
 import { resolveControlCommandGate } from "../../channels/command-gating.js";
 import {
   allowListMatches,
-  isDiscordAutoThreadOwnedByBot,
   isDiscordGroupAllowedByPolicy,
   normalizeDiscordAllowList,
   normalizeDiscordSlug,
@@ -330,12 +329,6 @@ export async function preflightDiscordMessage(
       : undefined;
 
   const threadOwnerId = threadChannel ? (threadChannel.ownerId ?? channelInfo?.ownerId) : undefined;
-  const isAutoThreadOwnedByBot = isDiscordAutoThreadOwnedByBot({
-    isThread: Boolean(threadChannel),
-    botId,
-    threadOwnerId,
-    channelConfig,
-  });
   const shouldRequireMention = resolveDiscordShouldRequireMention({
     isGuildMessage,
     isThread: Boolean(threadChannel),
@@ -343,7 +336,6 @@ export async function preflightDiscordMessage(
     threadOwnerId,
     channelConfig,
     guildInfo,
-    isAutoThreadOwnedByBot,
   });
   const hasAnyMention = Boolean(
     !isDirectMessage &&
@@ -515,7 +507,6 @@ export async function preflightDiscordMessage(
     shouldBypassMention: mentionGate.shouldBypassMention,
     effectiveWasMentioned,
     canDetectMention,
-    isAutoThreadOwnedByBot,
     historyEntry,
   };
 }
