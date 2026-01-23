@@ -17,10 +17,10 @@ Config
 - Optional: `GOOGLE_PLACES_BASE_URL` for testing/proxying.
 
 Common commands
-- Search: `goplaces search "coffee" --open-now --min-rating 4 --limit 5`
-- Bias: `goplaces search "pizza" --lat 40.8 --lng -73.9 --radius-m 3000`
-- Pagination: `goplaces search "pizza" --page-token "NEXT_PAGE_TOKEN"`
-- Resolve: `goplaces resolve "Soho, London" --limit 5`
+- Search: `goplaces search "coffee" --open-now --min-rating=4 --limit=5`
+- Bias: `goplaces search "pizza" --lat=40.8 --lng=-73.9 --radius-m=3000`
+- Pagination: `goplaces search "pizza" --page-token="NEXT_PAGE_TOKEN"`
+- Resolve: `goplaces resolve "Soho, London" --limit=5`
 - Details: `goplaces details <place_id> --reviews`
 - JSON: `goplaces search "sushi" --json`
 
