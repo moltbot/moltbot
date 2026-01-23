@@ -122,7 +122,18 @@ export async function sanitizeSessionMessagesImages(
         if (finalContent.length === 0) {
           continue;
         }
-        out.push({ ...assistantMsg, content: finalContent });
+        // Ensure tool calls have arguments field (Cloud Code Assist requires tool_use.input)
+        const normalizedContent = finalContent.map((block) => {
+          if (!block || typeof block !== "object") return block;
+          const rec = block as { type?: unknown; arguments?: unknown; input?: unknown };
+          if (rec.type === "toolCall" || rec.type === "toolUse" || rec.type === "functionCall") {
+            if (rec.arguments === undefined && rec.input === undefined) {
+              return { ...block, arguments: {} };
+            }
+          }
+          return block;
+        }) as typeof assistantMsg.content;
+        out.push({ ...assistantMsg, content: normalizedContent });
         continue;
       }
     }
