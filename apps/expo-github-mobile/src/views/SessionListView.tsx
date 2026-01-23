@@ -4,14 +4,12 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  Pressable,
   StyleSheet,
   SafeAreaView,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { useAppState, Session } from '../contexts/AppContext'
 import { Colors, Spacing, Radius } from '../theme/colors'
-import { getFullName } from '../models/types'
 import SessionRow from '../components/SessionRow'
 import NewSessionSheet from '../components/NewSessionSheet'
 

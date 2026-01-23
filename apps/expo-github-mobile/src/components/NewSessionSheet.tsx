@@ -22,7 +22,6 @@ import {
   allModels,
 } from '../models/types'
 import MessageInputView from './MessageInputView'
-import Chip from './Chip'
 import { useGitHubRepos, type GitHubRepo, type GitHubBranch } from '../hooks/useGitHub'
 import { useSettings } from '../hooks/useSettings'
 import { GitHubAPI } from '../services/github'

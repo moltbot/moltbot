@@ -82,6 +82,11 @@ export const agentHandlers: GatewayRequestHandlers = {
       timeout?: number;
       label?: string;
       spawnedBy?: string;
+      repoContext?: {
+        owner: string;
+        name: string;
+        branch: string;
+      };
     };
     const cfg = loadConfig();
     const idem = request.idempotencyKey;
@@ -334,6 +339,7 @@ export const agentHandlers: GatewayRequestHandlers = {
         runId,
         lane: request.lane,
         extraSystemPrompt: request.extraSystemPrompt,
+        repoContext: request.repoContext,
       },
       defaultRuntime,
       context.deps,

@@ -8,9 +8,12 @@ interface Props {
   placeholder: string
   onChangeText: (text: string) => void
   onSend: () => void
+  disabled?: boolean
 }
 
-const MessageInputView: React.FC<Props> = ({ text, placeholder, onChangeText, onSend }) => {
+const MessageInputView: React.FC<Props> = ({ text, placeholder, onChangeText, onSend, disabled = false }) => {
+  const isSendDisabled = disabled || !text.trim()
+
   return (
     <View style={styles.container}>
       <View style={styles.inputWrapper}>
@@ -22,11 +25,12 @@ const MessageInputView: React.FC<Props> = ({ text, placeholder, onChangeText, on
           placeholderTextColor={Colors.secondaryText}
           multiline
           maxLength={2000}
+          editable={!disabled}
         />
         <TouchableOpacity
-          style={[styles.sendButton, { opacity: text.trim() ? 1 : 0.5 }]}
+          style={[styles.sendButton, { opacity: isSendDisabled ? 0.5 : 1 }]}
           onPress={onSend}
-          disabled={!text.trim()}
+          disabled={isSendDisabled}
         >
           <Ionicons name="arrow-up" size={20} color={Colors.buttonPrimaryText} />
         </TouchableOpacity>

@@ -64,6 +64,13 @@ export const AgentParamsSchema = Type.Object(
     idempotencyKey: NonEmptyString,
     label: Type.Optional(SessionLabelString),
     spawnedBy: Type.Optional(Type.String()),
+    repoContext: Type.Optional(
+      Type.Object({
+        owner: NonEmptyString,
+        name: NonEmptyString,
+        branch: NonEmptyString,
+      }),
+    ),
   },
   { additionalProperties: false },
 );

@@ -63,4 +63,10 @@ export type AgentCommandOpts = {
   extraSystemPrompt?: string;
   /** Per-call stream param overrides (best-effort). */
   streamParams?: AgentStreamParams;
+  /** Repository context for GitHub workspace management. */
+  repoContext?: {
+    owner: string;
+    name: string;
+    branch: string;
+  };
 };

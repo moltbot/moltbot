@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
-import { View, Text, ScrollView, StyleSheet } from 'react-native'
-import { Colors, Spacing, Radius } from '../theme/colors'
+import { View, Text, StyleSheet } from 'react-native'
+import { Colors, Spacing } from '../theme/colors'
 import { Message } from '../models/types'
 import ToolCallView from './ToolCallView'
 
