@@ -30,6 +30,7 @@ RUN mkdir -p /root/.clawdbot/agents/main/agent /root/.config/gogcli/keyring
 
 ENV NODE_ENV=production
 ENV HOME=/root
+ENV CLAWDBOT_DISABLE_BONJOUR=1
 
 # Create startup script that generates config from environment variables
 RUN echo '#!/bin/bash\n\
@@ -129,14 +130,14 @@ if [ -n "$GMAIL_REFRESH_TOKEN" ] && [ -n "$GMAIL_ACCOUNT" ]; then\n\
 }\n\
 EOFTOKEN\n\
   # Use plaintext keyring backend for automation\n\
-  export GOG_KEYRING_BACKEND=plaintext\n\
+  export GOG_KEYRING_BACKEND=file\n\
   gog auth tokens import /tmp/gmail_token.json --no-input || echo "Gmail token import failed (may already exist)"\n\
   rm -f /tmp/gmail_token.json\n\
   echo "Gmail token configured for ${GMAIL_ACCOUNT}"\n\
 fi\n\
 \n\
 # Set gog environment for runtime\n\
-export GOG_KEYRING_BACKEND=plaintext\n\
+export GOG_KEYRING_BACKEND=file\n\
 export GOG_ACCOUNT="${GMAIL_ACCOUNT}"\n\
 \n\
 echo "Config generated, starting gateway..."\n\
@@ -157,7 +158,7 @@ const cfg = loadConfig(); \
 const port = process.env.PORT ? parseInt(process.env.PORT, 10) : resolveGatewayPort(cfg); \
 const auth = resolveGatewayAuth({ authConfig: cfg.gateway?.auth }); \
 console.log(`Starting gateway on port ${port}...`); \
-const server = await startGatewayServer({ port, auth, runtimeConfig: { reloadKey: null, httpPort: null, openAiProxyPort: null, remoteDebugPort: null } }); \
+const server = await startGatewayServer(port, { auth }); \
 console.log(`Gateway running on ws://0.0.0.0:${port}`);' > /app/railway-gateway.mjs
 
 CMD ["/app/start.sh"]
