@@ -1,0 +1,85 @@
+{
+  "$schema": "../app-info-schema.json",
+  "name": "Clawdbot",
+  "port": 18789,
+  "available": true,
+  "exposable": true,
+  "id": "clawdbot",
+  "tipi_version": 1,
+  "version": "2026.1.24",
+  "categories": ["ai", "automation"],
+  "description": "Clawdbot is a self-hosted AI gateway that connects messaging platforms (WhatsApp, Telegram, Discord, Slack, Signal) to AI models (Claude, GPT, Gemini). It provides a unified interface for AI-powered conversations across all your messaging channels.",
+  "short_desc": "AI gateway for messaging platforms - connect WhatsApp, Telegram, Discord to Claude, GPT, and more.",
+  "author": "clawdbot",
+  "source": "https://github.com/clawdbot/clawdbot",
+  "website": "https://clawd.bot",
+  "form_fields": [
+    {
+      "type": "text",
+      "label": "Anthropic API Key",
+      "env_variable": "ANTHROPIC_API_KEY",
+      "hint": "Your Anthropic API key for Claude models (starts with sk-ant-)",
+      "required": false
+    },
+    {
+      "type": "text",
+      "label": "OpenAI API Key",
+      "env_variable": "OPENAI_API_KEY",
+      "hint": "Your OpenAI API key for GPT models (starts with sk-)",
+      "required": false
+    },
+    {
+      "type": "text",
+      "label": "Google Gemini API Key",
+      "env_variable": "GEMINI_API_KEY",
+      "hint": "Your Google AI API key for Gemini models",
+      "required": false
+    },
+    {
+      "type": "text",
+      "label": "OpenRouter API Key",
+      "env_variable": "OPENROUTER_API_KEY",
+      "hint": "Your OpenRouter API key for accessing multiple model providers",
+      "required": false
+    },
+    {
+      "type": "text",
+      "label": "Telegram Bot Token",
+      "env_variable": "TELEGRAM_BOT_TOKEN",
+      "hint": "Your Telegram bot token from @BotFather",
+      "required": false
+    },
+    {
+      "type": "text",
+      "label": "Discord Bot Token",
+      "env_variable": "DISCORD_BOT_TOKEN",
+      "hint": "Your Discord bot token from the Developer Portal",
+      "required": false
+    },
+    {
+      "type": "text",
+      "label": "Slack Bot Token",
+      "env_variable": "SLACK_BOT_TOKEN",
+      "hint": "Your Slack bot token (starts with xoxb-)",
+      "required": false
+    },
+    {
+      "type": "text",
+      "label": "Slack App Token",
+      "env_variable": "SLACK_APP_TOKEN",
+      "hint": "Your Slack app-level token for Socket Mode (starts with xapp-)",
+      "required": false
+    },
+    {
+      "type": "password",
+      "label": "Gateway Token",
+      "env_variable": "CLAWDBOT_GATEWAY_TOKEN",
+      "hint": "Authentication token for the gateway API. Generate with: openssl rand -hex 32",
+      "required": true,
+      "min": 32
+    }
+  ],
+  "supported_architectures": ["arm64", "amd64"],
+  "dynamic_config": true,
+  "min_tipi_version": "4.5.0"
+}

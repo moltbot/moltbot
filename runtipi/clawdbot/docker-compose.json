@@ -1,0 +1,79 @@
+{
+  "$schema": "https://schemas.runtipi.io/v2/dynamic-compose.json",
+  "schemaVersion": 2,
+  "services": [
+    {
+      "name": "clawdbot",
+      "image": "ghcr.io/clawdbot/clawdbot:${APP_VERSION}",
+      "environment": [
+        {
+          "key": "HOME",
+          "value": "/home/node"
+        },
+        {
+          "key": "TERM",
+          "value": "xterm-256color"
+        },
+        {
+          "key": "NODE_ENV",
+          "value": "production"
+        },
+        {
+          "key": "ANTHROPIC_API_KEY",
+          "value": "${ANTHROPIC_API_KEY}"
+        },
+        {
+          "key": "OPENAI_API_KEY",
+          "value": "${OPENAI_API_KEY}"
+        },
+        {
+          "key": "GEMINI_API_KEY",
+          "value": "${GEMINI_API_KEY}"
+        },
+        {
+          "key": "OPENROUTER_API_KEY",
+          "value": "${OPENROUTER_API_KEY}"
+        },
+        {
+          "key": "TELEGRAM_BOT_TOKEN",
+          "value": "${TELEGRAM_BOT_TOKEN}"
+        },
+        {
+          "key": "DISCORD_BOT_TOKEN",
+          "value": "${DISCORD_BOT_TOKEN}"
+        },
+        {
+          "key": "SLACK_BOT_TOKEN",
+          "value": "${SLACK_BOT_TOKEN}"
+        },
+        {
+          "key": "SLACK_APP_TOKEN",
+          "value": "${SLACK_APP_TOKEN}"
+        },
+        {
+          "key": "CLAWDBOT_GATEWAY_TOKEN",
+          "value": "${CLAWDBOT_GATEWAY_TOKEN}"
+        }
+      ],
+      "volumes": [
+        {
+          "hostPath": "${APP_DATA_DIR}/data/config",
+          "containerPath": "/home/node/.clawdbot"
+        },
+        {
+          "hostPath": "${APP_DATA_DIR}/data/workspace",
+          "containerPath": "/home/node/clawd"
+        }
+      ],
+      "command": ["node", "dist/index.js", "gateway", "--bind", "lan", "--port", "18789"],
+      "internalPort": 18789,
+      "isMain": true,
+      "healthCheck": {
+        "test": "node dist/index.js health --token \"$CLAWDBOT_GATEWAY_TOKEN\" || exit 1",
+        "interval": "30s",
+        "timeout": "10s",
+        "retries": 3
+      }
+    }
+  ]
+}
