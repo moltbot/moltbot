@@ -1,0 +1,77 @@
+{
+  "id": "google-chat",
+  "name": "Google Chat",
+  "description": "Google Chat channel via Pub/Sub webhooks",
+  "configSchema": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "subscriptionName": {
+          "type": "string"
+        },
+        "credentialsPath": {
+          "type": "string"
+        },
+        "allowFrom": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "dmPolicy": {
+          "enum": ["open", "pairing", "closed"],
+          "default": "pairing"
+        },
+        "spacePolicy": {
+          "enum": ["open", "pairing", "closed"],
+          "default": "closed"
+        },
+        "historyLimit": {
+          "type": "number",
+          "default": 20
+        },
+        "accounts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "uiHints": {
+      "projectId": {
+        "label": "Google Cloud Project ID",
+        "help": "Your GCP project ID (e.g., my-project-123)"
+      },
+      "subscriptionName": {
+        "label": "Pub/Sub Subscription",
+        "help": "Full subscription path: projects/PROJECT_ID/subscriptions/SUBSCRIPTION_NAME"
+      },
+      "credentialsPath": {
+        "label": "Service Account Credentials",
+        "help": "Path to service account JSON file",
+        "sensitive": true
+      },
+      "allowFrom": {
+        "label": "Allowed Email Addresses",
+        "help": "Email addresses allowed to message the bot"
+      },
+      "dmPolicy": {
+        "label": "Direct Message Policy",
+        "help": "How to handle DMs: open (anyone), pairing (allowlist), closed (disabled)"
+      },
+      "spacePolicy": {
+        "label": "Space/Group Policy",
+        "help": "How to handle spaces: open (any space), pairing (allowlist), closed (disabled)"
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@clawdbot/google-chat",
+  "version": "1.0.0",
+  "description": "Google Chat channel plugin for Clawdbot",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "dependencies": {
+    "googleapis": "^170.0.0",
+    "@google-cloud/pubsub": "^5.2.1"
+  },
+  "devDependencies": {
+    "clawdbot": "workspace:*"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
