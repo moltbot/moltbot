@@ -345,6 +345,48 @@ The session will run in background. You'll receive questions via conversation.`,
             await updateSessionBubble({ sessionId, state });
           },
 
+          // Blocker handler: notify DyDo when session hits a blocker
+          onBlocker: async (blocker) => {
+            if (!sessionId) return false;
+
+            log.warn(
+              `[${sessionId}] Blocker detected: ${blocker.reason} (category: ${blocker.matchedPatterns[0] || "unknown"})`,
+            );
+
+            // Store blocker info in planning context for later retrieval
+            const context = sessionContexts.get(sessionId);
+            if (context) {
+              (context as SessionPlanningContext & { blockerInfo?: unknown }).blockerInfo = blocker;
+            }
+
+            // Send notification to chat if available
+            if (chatId) {
+              try {
+                const { sendMessageTelegram } = await import("../../telegram/send.js");
+                const blockerMsg =
+                  `⚠️ **Claude Code Session Blocked**\n\n` +
+                  `**Project:** ${projectName}\n` +
+                  `**Reason:** ${blocker.reason}\n\n` +
+                  `Session has completed but may need attention.\n\n` +
+                  `\`claude --resume ${currentResumeToken}\``;
+
+                await sendMessageTelegram(String(chatId), blockerMsg, {
+                  accountId,
+                  messageThreadId: threadId,
+                  disableLinkPreview: true,
+                });
+
+                log.info(`[${sessionId}] Blocker notification sent to chat ${chatId}`);
+              } catch (err) {
+                log.error(`[${sessionId}] Failed to send blocker notification: ${err}`);
+              }
+            }
+
+            // Return false to let session complete (but blocker is recorded)
+            // Return true would keep session in "blocked" state, waiting for intervention
+            return false;
+          },
+
           // Question handler: route CC questions to DyDo
           onQuestion: async (question: string): Promise<string | null> => {
             if (!sessionId) return null;
