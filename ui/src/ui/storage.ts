@@ -13,6 +13,7 @@ export type UiSettings = {
   splitRatio: number; // Sidebar split ratio (0.4 to 0.7, default 0.6)
   navCollapsed: boolean; // Collapsible sidebar state
   navGroupsCollapsed: Record<string, boolean>; // Which nav groups are collapsed
+  useReactChat: boolean; // Use the new React-based chat interface (assistant-ui)
 };
 
 export function loadSettings(): UiSettings {
@@ -32,6 +33,7 @@ export function loadSettings(): UiSettings {
     splitRatio: 0.6,
     navCollapsed: false,
     navGroupsCollapsed: {},
+    useReactChat: false,
   };
 
   try {
@@ -84,6 +86,10 @@ export function loadSettings(): UiSettings {
         parsed.navGroupsCollapsed !== null
           ? parsed.navGroupsCollapsed
           : defaults.navGroupsCollapsed,
+      useReactChat:
+        typeof parsed.useReactChat === "boolean"
+          ? parsed.useReactChat
+          : defaults.useReactChat,
     };
   } catch {
     return defaults;

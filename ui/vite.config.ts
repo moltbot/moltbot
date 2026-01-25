@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -17,9 +18,10 @@ export default defineConfig(({ command }) => {
   const base = envBase ? normalizeBase(envBase) : "./";
   return {
     base,
+    plugins: [react()],
     publicDir: path.resolve(here, "public"),
     optimizeDeps: {
-      include: ["lit/directives/repeat.js"],
+      include: ["lit/directives/repeat.js", "react", "react-dom"],
     },
     build: {
       outDir: path.resolve(here, "../dist/control-ui"),
