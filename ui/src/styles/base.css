@@ -1,60 +1,64 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Unbounded:wght@400;500;600&family=Work+Sans:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Unbounded:wght@400;500;600&display=swap");
 
 :root {
-  --bg: #0a0f14;
-  --bg-accent: #111826;
-  --bg-grad-1: #162031;
-  --bg-grad-2: #1f2a22;
-  --bg-overlay: rgba(255, 255, 255, 0.05);
-  --bg-glow: rgba(245, 159, 74, 0.12);
-  --panel: rgba(14, 20, 30, 0.88);
-  --panel-strong: rgba(18, 26, 38, 0.96);
-  --chrome: rgba(9, 14, 20, 0.72);
-  --chrome-strong: rgba(9, 14, 20, 0.86);
-  --text: rgba(244, 246, 251, 0.96);
-  --chat-text: rgba(231, 237, 244, 0.92);
-  --muted: rgba(156, 169, 189, 0.72);
-  --border: rgba(255, 255, 255, 0.09);
-  --border-strong: rgba(255, 255, 255, 0.16);
-  --accent: #f59f4a;
-  --accent-2: #34c7b7;
-  --ok: #2bd97f;
-  --warn: #f2c94c;
-  --danger: #ff6b6b;
-  --focus: rgba(245, 159, 74, 0.35);
-  --grid-line: rgba(255, 255, 255, 0.04);
+  --bg: #000000;
+  --bg-accent: #0a0a0a;
+  --bg-grad-1: #0d0d0d;
+  --bg-grad-2: #111111;
+  --bg-overlay: rgba(255, 255, 255, 0.02);
+  --bg-glow: rgba(255, 255, 255, 0.03);
+  --panel: rgba(10, 10, 10, 0.92);
+  --panel-strong: rgba(15, 15, 15, 0.97);
+  --chrome: rgba(0, 0, 0, 0.85);
+  --chrome-strong: rgba(0, 0, 0, 0.92);
+  --text: rgba(255, 255, 255, 0.95);
+  --chat-text: rgba(250, 250, 250, 0.92);
+  --muted: rgba(161, 161, 161, 0.85);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --accent: #10a37f;
+  --accent-2: #10a37f;
+  --ok: #10a37f;
+  --warn: #f5a623;
+  --danger: #ef4444;
+  --focus: rgba(16, 163, 127, 0.3);
+  --grid-line: rgba(255, 255, 255, 0.03);
   --theme-switch-x: 50%;
   --theme-switch-y: 50%;
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
-  --font-body: "Work Sans", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, sans-serif;
   --font-display: "Unbounded", "Times New Roman", serif;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
   color-scheme: dark;
 }
 
 :root[data-theme="light"] {
-  --bg: #f5f1ea;
-  --bg-accent: #ffffff;
-  --bg-grad-1: #f1e6d6;
-  --bg-grad-2: #e5eef4;
-  --bg-overlay: rgba(28, 32, 46, 0.05);
-  --bg-glow: rgba(52, 199, 183, 0.14);
-  --panel: rgba(255, 255, 255, 0.9);
-  --panel-strong: rgba(255, 255, 255, 0.97);
-  --chrome: rgba(255, 255, 255, 0.75);
-  --chrome-strong: rgba(255, 255, 255, 0.88);
-  --text: rgba(27, 36, 50, 0.98);
-  --chat-text: rgba(36, 48, 66, 0.9);
-  --muted: rgba(80, 94, 114, 0.7);
-  --border: rgba(18, 24, 40, 0.12);
-  --border-strong: rgba(18, 24, 40, 0.2);
-  --accent: #e28a3f;
-  --accent-2: #1ba99d;
-  --ok: #1aa86c;
-  --warn: #b3771c;
-  --danger: #d44848;
-  --focus: rgba(226, 138, 63, 0.35);
-  --grid-line: rgba(18, 24, 40, 0.06);
+  --bg: #ffffff;
+  --bg-accent: #fafafa;
+  --bg-grad-1: #f5f5f5;
+  --bg-grad-2: #f0f0f0;
+  --bg-overlay: rgba(0, 0, 0, 0.02);
+  --bg-glow: rgba(16, 163, 127, 0.06);
+  --panel: rgba(255, 255, 255, 0.95);
+  --panel-strong: rgba(255, 255, 255, 0.98);
+  --chrome: rgba(255, 255, 255, 0.9);
+  --chrome-strong: rgba(255, 255, 255, 0.95);
+  --text: rgba(0, 0, 0, 0.9);
+  --chat-text: rgba(0, 0, 0, 0.85);
+  --muted: rgba(100, 100, 100, 0.8);
+  --border: rgba(0, 0, 0, 0.1);
+  --border-strong: rgba(0, 0, 0, 0.18);
+  --accent: #0d8a6f;
+  --accent-2: #0d8a6f;
+  --ok: #0d8a6f;
+  --warn: #d97706;
+  --danger: #dc2626;
+  --focus: rgba(13, 138, 111, 0.25);
+  --grid-line: rgba(0, 0, 0, 0.04);
   color-scheme: light;
 }
 
@@ -69,27 +73,58 @@ body {
 
 body {
   margin: 0;
-  font: 15px/1.5 var(--font-body);
+  font: 15px/1.6 var(--font-body);
   background:
-    radial-gradient(1200px 900px at 15% -10%, var(--bg-grad-1) 0%, transparent 55%)
-      fixed,
-    radial-gradient(900px 700px at 80% 10%, var(--bg-grad-2) 0%, transparent 60%)
-      fixed,
-    linear-gradient(160deg, var(--bg) 0%, var(--bg-accent) 100%) fixed;
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(16, 163, 127, 0.1), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(16, 163, 127, 0.04), transparent),
+    var(--bg);
   color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Noise texture overlay */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.02;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 163, 127, 0.4);
+  box-shadow: 0 0 8px rgba(16, 163, 127, 0.3);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
 }
 
 body::before {
   content: "";
   position: fixed;
   inset: 0;
-  background:
-    linear-gradient(
-      140deg,
-      var(--bg-overlay) 0%,
-      rgba(255, 255, 255, 0) 40%
-    ),
-    radial-gradient(620px 420px at 75% 75%, var(--bg-glow), transparent 60%);
+  background: transparent;
   pointer-events: none;
   z-index: 0;
 }
@@ -155,7 +190,20 @@ select {
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(10px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes dashboard-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
   }
   to {
     opacity: 1;
@@ -163,13 +211,10 @@ select {
   }
 }
 
-@keyframes dashboard-enter {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+/* Staggered animations */
+.card:nth-child(1) { animation-delay: 0ms; }
+.card:nth-child(2) { animation-delay: 50ms; }
+.card:nth-child(3) { animation-delay: 100ms; }
+.card:nth-child(4) { animation-delay: 150ms; }
+.card:nth-child(5) { animation-delay: 200ms; }
+.card:nth-child(6) { animation-delay: 250ms; }

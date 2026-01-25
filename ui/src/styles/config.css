@@ -155,7 +155,7 @@
 }
 
 .config-nav__item.active {
-  background: rgba(245, 159, 74, 0.12);
+  background: rgba(16, 163, 127, 0.1);
   color: var(--accent);
 }
 
@@ -258,8 +258,8 @@
 .config-changes-badge {
   padding: 5px 12px;
   border-radius: 999px;
-  background: rgba(245, 159, 74, 0.15);
-  border: 1px solid rgba(245, 159, 74, 0.3);
+  background: rgba(16, 163, 127, 0.12);
+  border: 1px solid rgba(16, 163, 127, 0.3);
   color: var(--accent);
   font-size: 12px;
   font-weight: 600;
@@ -273,9 +273,9 @@
 /* Diff Panel */
 .config-diff {
   margin: 16px 20px 0;
-  border: 1px solid rgba(245, 159, 74, 0.3);
+  border: 1px solid rgba(16, 163, 127, 0.3);
   border-radius: 10px;
-  background: rgba(245, 159, 74, 0.05);
+  background: rgba(16, 163, 127, 0.05);
   overflow: hidden;
 }
 
@@ -446,8 +446,8 @@
 
 .config-subnav__item.active {
   color: var(--accent);
-  border-color: rgba(245, 159, 74, 0.4);
-  background: rgba(245, 159, 74, 0.12);
+  border-color: rgba(16, 163, 127, 0.4);
+  background: rgba(16, 163, 127, 0.1);
 }
 
 /* Content Area */
@@ -927,8 +927,8 @@
 }
 
 .cfg-toggle input:checked + .cfg-toggle__track {
-  background: rgba(43, 217, 127, 0.25);
-  border-color: rgba(43, 217, 127, 0.5);
+  background: rgba(16, 163, 127, 0.2);
+  border-color: rgba(16, 163, 127, 0.5);
 }
 
 .cfg-toggle input:checked + .cfg-toggle__track::after {
@@ -1275,7 +1275,7 @@
 }
 
 .pill--ok {
-  border-color: rgba(43, 217, 127, 0.4);
+  border-color: rgba(16, 163, 127, 0.4);
   color: var(--ok);
 }
 

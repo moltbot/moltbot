@@ -5,11 +5,11 @@
 /* Chat Group Layout - default (assistant/other on left) */
 .chat-group {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   align-items: flex-start;
-  margin-bottom: 16px;
-  margin-left: 16px;
-  margin-right: 16px;
+  margin-bottom: 20px;
+  margin-left: 20px;
+  margin-right: 20px;
 }
 
 /* User messages on right */
@@ -58,25 +58,30 @@
 .chat-avatar {
   width: 40px;
   height: 40px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--panel-strong);
   display: grid;
   place-items: center;
   font-weight: 600;
   font-size: 14px;
   flex-shrink: 0;
-  align-self: flex-end; /* Align with last message in group */
-  margin-bottom: 4px; /* Optical alignment */
+  align-self: flex-end;
+  margin-bottom: 4px;
+  transition: transform var(--transition);
+}
+
+.chat-avatar:hover {
+  transform: scale(1.05);
 }
 
 .chat-avatar.user {
-  background: rgba(245, 159, 74, 0.2);
-  color: rgba(245, 159, 74, 1);
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .chat-avatar.assistant {
-  background: rgba(52, 199, 183, 0.2);
-  color: rgba(52, 199, 183, 1);
+  background: rgba(16, 163, 127, 0.15);
+  color: rgba(16, 163, 127, 1);
 }
 
 .chat-avatar.other {
@@ -101,17 +106,22 @@ img.chat-avatar {
   position: relative;
   display: inline-block;
   border: 1px solid var(--border);
-  background: rgba(0, 0, 0, 0.12);
-  border-radius: 12px;
-  padding: 10px 14px;
-  box-shadow: none;
-  transition: background 150ms ease-out, border-color 150ms ease-out;
+  background: linear-gradient(180deg, rgba(30,30,30,0.9) 0%, rgba(20,20,20,0.9) 100%);
+  backdrop-filter: blur(12px);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255,255,255,0.04);
+  transition: all var(--transition);
   max-width: 100%;
   word-wrap: break-word;
 }
 
 .chat-bubble.has-copy {
   padding-right: 36px;
+}
+
+.chat-group.assistant .chat-bubble {
+  border-left: 2px solid rgba(16, 163, 127, 0.4);
 }
 
 .chat-copy-btn {
@@ -162,9 +172,9 @@ img.chat-avatar {
 .chat-copy-btn[data-copied="1"] {
   opacity: 1;
   pointer-events: auto;
-  border-color: rgba(52, 199, 183, 0.8);
-  background: rgba(52, 199, 183, 0.18);
-  color: rgba(52, 199, 183, 1);
+  border-color: rgba(16, 163, 127, 0.8);
+  background: rgba(16, 163, 127, 0.15);
+  color: rgba(16, 163, 127, 1);
 }
 
 .chat-copy-btn:focus-visible {
@@ -182,17 +192,18 @@ img.chat-avatar {
 }
 
 .chat-bubble:hover {
-  background: rgba(0, 0, 0, 0.18);
+  background: rgba(30, 30, 30, 0.9);
+  border-color: var(--border-strong);
 }
 
 /* User bubbles have different styling */
 .chat-group.user .chat-bubble {
-  background: rgba(245, 159, 74, 0.15);
-  border-color: rgba(245, 159, 74, 0.3);
+  background: rgba(45, 45, 45, 0.9);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .chat-group.user .chat-bubble:hover {
-  background: rgba(245, 159, 74, 0.22);
+  background: rgba(55, 55, 55, 0.9);
 }
 
 /* Streaming animation */
