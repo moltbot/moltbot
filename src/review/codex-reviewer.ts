@@ -30,6 +30,24 @@ const DEFAULT_TIMEOUT = 5 * 60 * 1000;
 const DEFAULT_TMUX_TARGET = "%2"; // カエデ (CodeGen) のペイン
 
 /**
+ * シェルコマンド用に文字列をエスケープ
+ * tmux send-keys に安全に渡すためのエスケープ処理
+ *
+ * @param str - エスケープする文字列
+ * @returns エスケープされた文字列
+ */
+function escapeShellString(str: string): string {
+  // シェル特殊文字をエスケープ
+  return str
+    .replace(/\\/g, "\\\\") // バックスラッシュ
+    .replace(/"/g, '\\"') // ダブルクォート
+    .replace(/\$/g, "\\$") // ドル記号
+    .replace(/`/g, "\\`") // バッククォート
+    .replace(/\n/g, "\\n") // 改行
+    .replace(/\r/g, "\\r"); // キャリッジリターン
+}
+
+/**
  * tmuxコマンドを実行
  *
  * @param command - 実行するコマンド
@@ -44,8 +62,9 @@ async function execTmux(
 ): Promise<TmuxResult> {
   const { timeout = DEFAULT_TIMEOUT, env = {} } = options;
 
-  // tmux send-keys でコマンドを送信
-  const sendCommand = `tmux send-keys -t ${target} "${command}" Enter`;
+  // tmux send-keys でコマンドを送信 (コマンドインジェクション対策)
+  const escapedCommand = escapeShellString(command);
+  const sendCommand = `tmux send-keys -t ${target} "${escapedCommand}" Enter`;
 
   try {
     // タイムアウト付きで実行
@@ -138,8 +157,9 @@ function buildCodexCommand(content: string, options: ReviewOptions): string {
 
   if (useFile) {
     // TODO: 一時ファイルを使用する場合
-    // 今回は簡易的に引数渡し
-    return `codex review "${content.replace(/"/g, '\\"')}"`;
+    // 今回は簡易的に引数渡し (コマンドインジェクション対策)
+    const escapedContent = escapeShellString(content);
+    return `codex review "${escapedContent}"`;
   }
 
   // オプションを付与
@@ -157,7 +177,9 @@ function buildCodexCommand(content: string, options: ReviewOptions): string {
     opts.push("--verbose");
   }
 
-  const cmd = `codex review ${opts.join(" ")} ${content}`;
+  // コマンドインジェクション対策: contentをエスケープしてクォート
+  const escapedContent = escapeShellString(content);
+  const cmd = `codex review ${opts.join(" ")} "${escapedContent}"`;
   return cmd;
 }
 

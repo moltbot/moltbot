@@ -31,10 +31,12 @@ interface AgentDefinition {
 
 /** 利用可能なエージェント一覧 */
 const AVAILABLE_AGENTS: AgentDefinition[] = [
-  { id: "conductor", intents: ["*"], capacity: 10 },
+  // 具体的な意図を持つエージェントを先に配置
   { id: "codegen", intents: ["create", "update"], capacity: 5 },
   { id: "review", intents: ["verify", "check"], capacity: 3 },
   { id: "deploy", intents: ["deploy", "release"], capacity: 2 },
+  // ワイルドカードエージェントは最後に配置 (fallbackとして機能)
+  { id: "conductor", intents: ["*"], capacity: 10 },
 ];
 
 /**
@@ -179,10 +181,21 @@ function selectStrategy(intent: string): string {
 
 /**
  * 意図に基づいてエージェントを選択する
+ *
+ * 具体的な意図へのマッチを優先し、ワイルドカードはfallbackとして使用
  */
 function selectAgent(intent: string): string | undefined {
-  const agent = AVAILABLE_AGENTS.find((a) => a.intents.includes(intent) || a.intents.includes("*"));
-  return agent?.id;
+  // まず具体的な意図を探す
+  const specificAgent = AVAILABLE_AGENTS.find(
+    (a) => a.intents.includes(intent) && !a.intents.includes("*"),
+  );
+  if (specificAgent) {
+    return specificAgent.id;
+  }
+
+  // 具体的なマッチがなければワイルドカードを探す
+  const wildcardAgent = AVAILABLE_AGENTS.find((a) => a.intents.includes("*"));
+  return wildcardAgent?.id;
 }
 
 /**
