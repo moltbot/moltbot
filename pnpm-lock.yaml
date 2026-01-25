@@ -265,7 +265,7 @@ importers:
   extensions/action-receipts:
     dependencies:
       clawdbot:
-        specifier: '>=2026.1.25'
+        specifier: '>=2026.1.24'
         version: link:../..
 
   extensions/bluebubbles: {}
