@@ -1,4 +1,9 @@
 #!/bin/sh
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 [ -z "$ROOT" ] && exit 0
-node "$ROOT/scripts/format-staged.js"
+
+# Format staged files
+node "$ROOT/scripts/format-staged.js" || exit 1
+
+# Lint staged files
+node "$ROOT/scripts/lint-staged.js" || exit 1

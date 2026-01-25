@@ -41,7 +41,7 @@ function filterOxfmtTargets(paths) {
   return paths
     .map(normalizeGitPath)
     .filter((filePath) =>
-      (filePath.startsWith("src/") || filePath.startsWith("test/")) &&
+      (filePath.startsWith("src/") || filePath.startsWith("test/") || filePath.startsWith("ui/src/")) &&
       OXFMT_EXTENSIONS.has(path.posix.extname(filePath)),
     );
 }
