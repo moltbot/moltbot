@@ -8,7 +8,9 @@
     "experimentalDecorators": true,
     "skipLibCheck": true,
     "types": ["vite/client"],
-    "useDefineForClassFields": false
+    "useDefineForClassFields": false,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
   },
   "include": ["src"]
 }
