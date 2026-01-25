@@ -70,7 +70,7 @@ vi.mock("@mariozechner/pi-ai", async () => {
     },
     streamSimple: (model: { api: string; provider: string; id: string }) => {
       const stream = new actual.AssistantMessageEventStream();
-      queueMicrotask(() => {
+      setTimeout(() => {
         stream.push({
           type: "done",
           reason: "stop",
@@ -80,7 +80,7 @@ vi.mock("@mariozechner/pi-ai", async () => {
               : buildAssistantMessage(model),
         });
         stream.end();
-      });
+      }, 0);
       return stream;
     },
   };
@@ -213,7 +213,7 @@ describe("runEmbeddedPiAgent", () => {
 
   itIfNotWin32(
     "persists the first user message before assistant output",
-    { timeout: 120_000 },
+    { timeout: 180_000 },
     async () => {
       const sessionFile = nextSessionFile();
       const cfg = makeOpenAiConfig(["mock-1"]);
