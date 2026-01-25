@@ -132,6 +132,9 @@ export function buildAgentPeerSessionKey(params: {
     if (linkedPeerId) peerId = linkedPeerId;
     peerId = peerId.toLowerCase();
     if (dmScope === "per-channel-peer" && peerId) {
+      if (linkedPeerId) {
+        return `agent:${normalizeAgentId(params.agentId)}:dm:${peerId}`;
+      }
       const channel = (params.channel ?? "").trim().toLowerCase() || "unknown";
       return `agent:${normalizeAgentId(params.agentId)}:${channel}:dm:${peerId}`;
     }
