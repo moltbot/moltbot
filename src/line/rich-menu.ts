@@ -291,6 +291,7 @@ export async function getRichMenuList(opts: RichMenuOpts = {}): Promise<RichMenu
 export async function getRichMenu(
   richMenuId: string,
   opts: RichMenuOpts = {},
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- SDK types
 ): Promise<RichMenuResponse | null> {
   const client = getClient(opts);
 

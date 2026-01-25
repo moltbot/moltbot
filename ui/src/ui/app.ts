@@ -160,7 +160,7 @@ export class ClawdbotApp extends LitElement {
   @state() updateRunning = false;
   @state() applySessionKey = this.settings.lastActiveSessionKey;
   @state() configSnapshot: ConfigSnapshot | null = null;
-  @state() configSchema: unknown | null = null;
+  @state() configSchema: unknown = null;
   @state() configSchemaVersion: string | null = null;
   @state() configSchemaLoading = false;
   @state() configUiHints: ConfigUiHints = {};
@@ -221,7 +221,7 @@ export class ClawdbotApp extends LitElement {
   @state() debugStatus: StatusSummary | null = null;
   @state() debugHealth: HealthSnapshot | null = null;
   @state() debugModels: unknown[] = [];
-  @state() debugHeartbeat: unknown | null = null;
+  @state() debugHeartbeat: unknown = null;
   @state() debugCallMethod = "";
   @state() debugCallParams = "{}";
   @state() debugCallResult: string | null = null;

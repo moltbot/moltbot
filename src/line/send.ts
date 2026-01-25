@@ -531,6 +531,7 @@ export function createQuickReplyItems(labels: string[]): QuickReply {
 export function createTextMessageWithQuickReplies(
   text: string,
   quickReplyLabels: string[],
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- SDK types
 ): TextMessage & { quickReply: QuickReply } {
   return {
     type: "text",

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ClawdbotApp } from "./app";
 import "../styles.css";
 
+// eslint-disable-next-line @typescript-eslint/unbound-method
 const originalConnect = ClawdbotApp.prototype.connect;
 
 function mountApp(pathname: string) {

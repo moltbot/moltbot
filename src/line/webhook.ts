@@ -23,6 +23,7 @@ function readRawBody(req: Request): string | null {
   return Buffer.isBuffer(rawBody) ? rawBody.toString("utf-8") : rawBody;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- SDK types
 function parseWebhookBody(req: Request, rawBody: string): WebhookRequestBody | null {
   if (req.body && typeof req.body === "object" && !Buffer.isBuffer(req.body)) {
     return req.body as WebhookRequestBody;

@@ -13,7 +13,8 @@ export function extractToolCards(message: unknown): ToolCard[] {
   const cards: ToolCard[] = [];
 
   for (const item of content) {
-    const kind = String(item.type ?? "").toLowerCase();
+    const rawType = item.type;
+    const kind = (typeof rawType === "string" ? rawType : "").toLowerCase();
     const isToolCall =
       ["toolcall", "tool_call", "tooluse", "tool_use"].includes(kind) ||
       (typeof item.name === "string" && item.arguments != null);
@@ -27,7 +28,8 @@ export function extractToolCards(message: unknown): ToolCard[] {
   }
 
   for (const item of content) {
-    const kind = String(item.type ?? "").toLowerCase();
+    const rawKind = item.type;
+    const kind = (typeof rawKind === "string" ? rawKind : "").toLowerCase();
     if (kind !== "toolresult" && kind !== "tool_result") continue;
     const text = extractToolText(item);
     const name = typeof item.name === "string" ? item.name : "tool";

@@ -21,7 +21,8 @@ export function normalizeMessage(message: unknown): NormalizedMessage {
     Array.isArray(contentItems) &&
     contentItems.some((item) => {
       const x = item as Record<string, unknown>;
-      const t = String(x.type ?? "").toLowerCase();
+      const rawType = x.type;
+      const t = (typeof rawType === "string" ? rawType : "").toLowerCase();
       return t === "toolresult" || t === "tool_result";
     });
 

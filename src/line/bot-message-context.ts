@@ -86,12 +86,14 @@ const STICKER_PACKAGES: Record<string, string> = {
 
 function describeStickerKeywords(sticker: StickerEventMessage): string {
   // Use sticker keywords if available (LINE provides these for some stickers)
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- SDK types
   const keywords = (sticker as StickerEventMessage & { keywords?: string[] }).keywords;
   if (keywords && keywords.length > 0) {
     return keywords.slice(0, 3).join(", ");
   }
 
   // Use sticker text if available
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- SDK types
   const stickerText = (sticker as StickerEventMessage & { text?: string }).text;
   if (stickerText) {
     return stickerText;

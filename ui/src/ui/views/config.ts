@@ -13,7 +13,7 @@ export type ConfigProps = {
   applying: boolean;
   updating: boolean;
   connected: boolean;
-  schema: unknown | null;
+  schema: unknown;
   schemaLoading: boolean;
   uiHints: ConfigUiHints;
   formMode: "form" | "raw";

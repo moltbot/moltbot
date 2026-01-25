@@ -31,7 +31,8 @@ export function formatEventPayload(payload: unknown): string {
   try {
     return JSON.stringify(payload, null, 2);
   } catch {
-    return String(payload);
+    if (typeof payload === "object" && payload !== null) return "[object]";
+    return String(payload as string | number | boolean | symbol | bigint);
   }
 }
 

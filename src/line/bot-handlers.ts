@@ -123,6 +123,7 @@ async function sendLinePairingReply(params: {
 }
 
 async function shouldProcessLineEvent(
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- SDK types
   event: MessageEvent | PostbackEvent,
   context: LineHandlerContext,
 ): Promise<boolean> {

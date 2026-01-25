@@ -324,6 +324,7 @@ import type { LineTemplateMessagePayload } from "./types.js";
  */
 export function buildTemplateMessageFromPayload(
   payload: LineTemplateMessagePayload,
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- SDK types
 ): TemplateMessage | null {
   switch (payload.type) {
     case "confirm": {

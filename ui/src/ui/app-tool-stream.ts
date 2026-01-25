@@ -67,7 +67,11 @@ function formatToolOutput(value: unknown): string | null {
     try {
       text = JSON.stringify(value, null, 2);
     } catch {
-      text = String(value);
+      if (typeof value === "object" && value !== null) {
+        text = "[object]";
+      } else {
+        text = String(value as string | number | boolean | symbol | bigint);
+      }
     }
   }
   const truncated = truncateText(text, TOOL_OUTPUT_CHAR_LIMIT);

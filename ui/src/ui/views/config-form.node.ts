@@ -130,7 +130,7 @@ export function renderNode(params: {
     }
 
     // Check if it's a set of literal values (enum-like)
-    const extractLiteral = (v: JsonSchema): unknown | undefined => {
+    const extractLiteral = (v: JsonSchema): unknown => {
       if (v.const !== undefined) return v.const;
       if (v.enum && v.enum.length === 1) return v.enum[0];
       return undefined;
@@ -141,6 +141,8 @@ export function renderNode(params: {
     if (allLiterals && literals.length > 0 && literals.length <= 5) {
       // Use segmented control for small sets
       const resolvedValue = value ?? schema.default;
+      const stringify = (v: unknown) =>
+        typeof v === "string" || typeof v === "number" || typeof v === "boolean" ? String(v) : "";
       return html`
         <div class="cfg-field">
           ${showLabel ? html`<label class="cfg-field__label">${label}</label>` : nothing}
@@ -150,11 +152,11 @@ export function renderNode(params: {
               (lit) => html`
               <button
                 type="button"
-                class="cfg-segmented__btn ${lit === resolvedValue || String(lit) === String(resolvedValue) ? "active" : ""}"
+                class="cfg-segmented__btn ${lit === resolvedValue || stringify(lit) === stringify(resolvedValue) ? "active" : ""}"
                 ?disabled=${disabled}
                 @click=${() => onPatch(path, lit)}
               >
-                ${String(lit)}
+                ${stringify(lit)}
               </button>
             `,
             )}
@@ -296,9 +298,15 @@ function renderTextInput(params: {
   const label = hint?.label ?? schema.title ?? humanize(String(path.at(-1)));
   const help = hint?.help ?? schema.description;
   const isSensitive = hint?.sensitive ?? isSensitivePath(path);
+  const defaultStr =
+    schema.default !== undefined &&
+    (typeof schema.default === "string" ||
+      typeof schema.default === "number" ||
+      typeof schema.default === "boolean")
+      ? String(schema.default)
+      : undefined;
   const placeholder =
-    hint?.placeholder ??
-    (isSensitive ? "••••" : schema.default !== undefined ? `Default: ${schema.default}` : "");
+    hint?.placeholder ?? (isSensitive ? "••••" : defaultStr ? `Default: ${defaultStr}` : "");
   const displayValue = value ?? "";
 
   return html`
@@ -310,7 +318,7 @@ function renderTextInput(params: {
           type=${isSensitive ? "password" : inputType}
           class="cfg-input"
           placeholder=${placeholder}
-          .value=${displayValue == null ? "" : String(displayValue)}
+          .value=${displayValue == null ? "" : typeof displayValue === "string" || typeof displayValue === "number" ? String(displayValue) : ""}
           ?disabled=${disabled}
           @input=${(e: Event) => {
             const raw = (e.target as HTMLInputElement).value;
@@ -375,7 +383,7 @@ function renderNumberInput(params: {
         <input
           type="number"
           class="cfg-number__input"
-          .value=${displayValue == null ? "" : String(displayValue)}
+          .value=${displayValue == null ? "" : typeof displayValue === "string" || typeof displayValue === "number" ? String(displayValue) : ""}
           ?disabled=${disabled}
           @input=${(e: Event) => {
             const raw = (e.target as HTMLInputElement).value;

@@ -8,6 +8,7 @@ import type { LineReplyMessage, SendLineReplyChunksParams } from "./reply-chunks
 export type LineAutoReplyDeps = {
   buildTemplateMessageFromPayload: (
     payload: LineTemplateMessagePayload,
+    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- SDK types
   ) => messagingApi.TemplateMessage | null;
   processLineMessage: (text: string) => ProcessedLineMessage;
   chunkMarkdownText: (text: string, limit: number) => string[];
@@ -168,6 +169,7 @@ export async function deliverLineAutoReply(params: {
       const quickReply = deps.createQuickReplyItems(lineData.quickReplies!);
       const targetIndex =
         replyToken && !replyTokenUsed ? Math.min(4, combined.length - 1) : combined.length - 1;
+      // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- SDK types
       const target = combined[targetIndex] as messagingApi.Message & {
         quickReply?: messagingApi.QuickReply;
       };

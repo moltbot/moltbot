@@ -61,6 +61,7 @@ export interface ResolvedLineAccount {
   config: LineConfig & LineAccountConfig;
 }
 
+/* eslint-disable @typescript-eslint/no-redundant-type-constituents -- SDK types */
 export type LineMessageType =
   | TextMessage
   | ImageMessage
@@ -68,6 +69,7 @@ export type LineMessageType =
   | AudioMessage
   | StickerMessage
   | LocationMessage;
+/* eslint-enable @typescript-eslint/no-redundant-type-constituents */
 
 export interface LineWebhookContext {
   event: WebhookEvent;
