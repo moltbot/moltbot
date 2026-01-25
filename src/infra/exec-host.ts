@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import net from "node:net";
+import { generateSecureToken, generateUUID } from "./random-codes.js";
 
 export type ExecHostRequest = {
   command: string[];
@@ -57,7 +58,7 @@ export async function requestExecHostViaSocket(params: {
     };
 
     const requestJson = JSON.stringify(request);
-    const nonce = crypto.randomBytes(16).toString("hex");
+    const nonce = generateSecureToken(16);
     const ts = Date.now();
     const hmac = crypto
       .createHmac("sha256", token)
@@ -65,7 +66,7 @@ export async function requestExecHostViaSocket(params: {
       .digest("hex");
     const payload = JSON.stringify({
       type: "exec",
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       nonce,
       ts,
       hmac,

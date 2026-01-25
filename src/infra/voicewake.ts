@@ -1,7 +1,7 @@
-import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { resolveStateDir } from "../config/paths.js";
+import { generateUUID } from "./random-codes.js";
 
 export type VoiceWakeConfig = {
   triggers: string[];
@@ -34,7 +34,7 @@ async function readJSON<T>(filePath: string): Promise<T | null> {
 async function writeJSONAtomic(filePath: string, value: unknown) {
   const dir = path.dirname(filePath);
   await fs.mkdir(dir, { recursive: true });
-  const tmp = `${filePath}.${randomUUID()}.tmp`;
+  const tmp = `${filePath}.${generateUUID()}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(value, null, 2), "utf8");
   await fs.rename(tmp, filePath);
 }

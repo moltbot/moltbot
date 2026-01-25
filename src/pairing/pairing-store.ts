@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -7,6 +6,7 @@ import lockfile from "proper-lockfile";
 import { getPairingAdapter } from "../channels/plugins/pairing.js";
 import type { ChannelId, ChannelPairingAdapter } from "../channels/plugins/types.js";
 import { resolveOAuthDir, resolveStateDir } from "../config/paths.js";
+import { generateHumanCode, generateUUID } from "../infra/random-codes.js";
 
 const PAIRING_CODE_LENGTH = 8;
 const PAIRING_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -95,7 +95,7 @@ async function readJsonFile<T>(
 async function writeJsonFile(filePath: string, value: unknown): Promise<void> {
   const dir = path.dirname(filePath);
   await fs.promises.mkdir(dir, { recursive: true, mode: 0o700 });
-  const tmp = path.join(dir, `${path.basename(filePath)}.${crypto.randomUUID()}.tmp`);
+  const tmp = path.join(dir, `${path.basename(filePath)}.${generateUUID()}.tmp`);
   await fs.promises.writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, {
     encoding: "utf-8",
   });
@@ -170,19 +170,9 @@ function pruneExcessRequests(reqs: PairingRequest[], maxPending: number) {
   return { requests: sorted.slice(-maxPending), removed: true };
 }
 
-function randomCode(): string {
-  // Human-friendly: 8 chars, upper, no ambiguous chars (0O1I).
-  let out = "";
-  for (let i = 0; i < PAIRING_CODE_LENGTH; i++) {
-    const idx = crypto.randomInt(0, PAIRING_CODE_ALPHABET.length);
-    out += PAIRING_CODE_ALPHABET[idx];
-  }
-  return out;
-}
-
 function generateUniqueCode(existing: Set<string>): string {
   for (let attempt = 0; attempt < 500; attempt += 1) {
-    const code = randomCode();
+    const code = generateHumanCode(PAIRING_CODE_LENGTH);
     if (!existing.has(code)) return code;
   }
   throw new Error("failed to generate unique pairing code");

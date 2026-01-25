@@ -1,7 +1,7 @@
-import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { resolveStateDir } from "../config/paths.js";
+import { generateUUID } from "./random-codes.js";
 
 export type DevicePairingPendingRequest = {
   requestId: string;
@@ -89,7 +89,7 @@ async function readJSON<T>(filePath: string): Promise<T | null> {
 async function writeJSONAtomic(filePath: string, value: unknown) {
   const dir = path.dirname(filePath);
   await fs.mkdir(dir, { recursive: true });
-  const tmp = `${filePath}.${randomUUID()}.tmp`;
+  const tmp = `${filePath}.${generateUUID()}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(value, null, 2), "utf8");
   try {
     await fs.chmod(tmp, 0o600);
@@ -210,7 +210,7 @@ function scopesAllow(requested: string[], allowed: string[]): boolean {
 }
 
 function newToken() {
-  return randomUUID().replaceAll("-", "");
+  return generateUUID().replaceAll("-", "");
 }
 
 export async function listDevicePairing(baseDir?: string): Promise<DevicePairingList> {
@@ -250,7 +250,7 @@ export async function requestDevicePairing(
     }
     const isRepair = Boolean(state.pairedByDeviceId[deviceId]);
     const request: DevicePairingPendingRequest = {
-      requestId: randomUUID(),
+      requestId: generateUUID(),
       deviceId,
       publicKey: req.publicKey,
       displayName: req.displayName,

@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { DEFAULT_AGENT_ID } from "../routing/session-key.js";
+import { generateSecureToken, generateUUID } from "./random-codes.js";
 
 export type ExecHost = "sandbox" | "gateway" | "node";
 export type ExecSecurity = "deny" | "allowlist" | "full";
@@ -129,7 +130,7 @@ function ensureAllowlistIds(
   const next = allowlist.map((entry) => {
     if (entry.id) return entry;
     changed = true;
-    return { ...entry, id: crypto.randomUUID() };
+    return { ...entry, id: generateUUID() };
   });
   return changed ? next : allowlist;
 }
@@ -168,7 +169,7 @@ export function normalizeExecApprovals(file: ExecApprovalsFile): ExecApprovalsFi
 }
 
 function generateToken(): string {
-  return crypto.randomBytes(24).toString("base64url");
+  return generateSecureToken();
 }
 
 export function readExecApprovalsSnapshot(): ExecApprovalsSnapshot {
@@ -1165,7 +1166,7 @@ export function recordAllowlistUse(
     item.pattern === entry.pattern
       ? {
           ...item,
-          id: item.id ?? crypto.randomUUID(),
+          id: item.id ?? generateUUID(),
           lastUsedAt: Date.now(),
           lastUsedCommand: command,
           lastResolvedPath: resolvedPath,
@@ -1189,7 +1190,7 @@ export function addAllowlistEntry(
   const trimmed = pattern.trim();
   if (!trimmed) return;
   if (allowlist.some((entry) => entry.pattern === trimmed)) return;
-  allowlist.push({ id: crypto.randomUUID(), pattern: trimmed, lastUsedAt: Date.now() });
+  allowlist.push({ id: generateUUID(), pattern: trimmed, lastUsedAt: Date.now() });
   agents[target] = { ...existing, allowlist };
   approvals.agents = agents;
   saveExecApprovals(approvals);
@@ -1235,7 +1236,7 @@ export async function requestExecApprovalViaSocket(params: {
     const payload = JSON.stringify({
       type: "request",
       token,
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       request,
     });
 

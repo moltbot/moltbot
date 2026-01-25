@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -6,7 +5,18 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import { resolveOAuthDir } from "../config/paths.js";
+import { generateHumanCode } from "../infra/random-codes.js";
 import { listChannelPairingRequests, upsertChannelPairingRequest } from "./pairing-store.js";
+
+vi.mock("../infra/random-codes.js", async () => {
+  const actual = await vi.importActual<typeof import("../infra/random-codes.js")>(
+    "../infra/random-codes.js",
+  );
+  return {
+    ...actual,
+    generateHumanCode: vi.fn(actual.generateHumanCode),
+  };
+});
 
 async function withTempStateDir<T>(fn: (stateDir: string) => Promise<T>) {
   const previous = process.env.CLAWDBOT_STATE_DIR;
@@ -81,26 +91,22 @@ describe("pairing store", () => {
 
   it("regenerates when a generated code collides", async () => {
     await withTempStateDir(async () => {
-      const spy = vi.spyOn(crypto, "randomInt");
-      try {
-        spy.mockReturnValue(0);
-        const first = await upsertChannelPairingRequest({
-          channel: "telegram",
-          id: "123",
-        });
-        expect(first.code).toBe("AAAAAAAA");
+      const generateHumanCodeMock = vi.mocked(generateHumanCode);
+      generateHumanCodeMock.mockReturnValueOnce("AAAAAAAA");
+      generateHumanCodeMock.mockReturnValueOnce("AAAAAAAA");
+      generateHumanCodeMock.mockReturnValueOnce("BBBBBBBB");
 
-        const sequence = Array(8).fill(0).concat(Array(8).fill(1));
-        let idx = 0;
-        spy.mockImplementation(() => sequence[idx++] ?? 1);
-        const second = await upsertChannelPairingRequest({
-          channel: "telegram",
-          id: "456",
-        });
-        expect(second.code).toBe("BBBBBBBB");
-      } finally {
-        spy.mockRestore();
-      }
+      const first = await upsertChannelPairingRequest({
+        channel: "telegram",
+        id: "123",
+      });
+      expect(first.code).toBe("AAAAAAAA");
+
+      const second = await upsertChannelPairingRequest({
+        channel: "telegram",
+        id: "456",
+      });
+      expect(second.code).toBe("BBBBBBBB");
     });
   });
 
