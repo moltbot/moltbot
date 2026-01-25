@@ -6,6 +6,7 @@ import { createAgentsListTool } from "./tools/agents-list-tool.js";
 import { createBrowserTool } from "./tools/browser-tool.js";
 import { createCanvasTool } from "./tools/canvas-tool.js";
 import type { AnyAgentTool } from "./tools/common.js";
+import { createComputerTool } from "./tools/computer-tool.js";
 import { createCronTool } from "./tools/cron-tool.js";
 import { createGatewayTool } from "./tools/gateway-tool.js";
 import { createImageTool } from "./tools/image-tool.js";
@@ -25,6 +26,8 @@ export function createClawdbotTools(options?: {
   allowedControlUrls?: string[];
   allowedControlHosts?: string[];
   allowedControlPorts?: number[];
+  /** URL of the computer-server for GUI automation (default: http://localhost:8000) */
+  computerServerUrl?: string;
   agentSessionKey?: string;
   agentChannel?: GatewayMessageChannel;
   agentAccountId?: string;
@@ -78,6 +81,10 @@ export function createClawdbotTools(options?: {
       allowedControlUrls: options?.allowedControlUrls,
       allowedControlHosts: options?.allowedControlHosts,
       allowedControlPorts: options?.allowedControlPorts,
+    }),
+    createComputerTool({
+      defaultServerUrl: options?.computerServerUrl,
+      config: options?.config,
     }),
     createCanvasTool(),
     createNodesTool({
