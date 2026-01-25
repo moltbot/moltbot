@@ -439,8 +439,7 @@ describe("tts", () => {
       agents: { defaults: { model: { primary: "openai/gpt-4o-mini" } } },
       messages: {
         tts: {
-          enabled: true,
-          onlyWhenInboundAudio: true,
+          auto: "inbound",
           provider: "openai",
           openai: { apiKey: "test-key", model: "gpt-4o-mini-tts", voice: "alloy" },
         },
@@ -487,6 +486,69 @@ describe("tts", () => {
         cfg: baseCfg,
         kind: "final",
         inboundAudio: true,
+      });
+
+      expect(result.mediaUrl).toBeDefined();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      globalThis.fetch = originalFetch;
+      process.env.CLAWDBOT_TTS_PREFS = prevPrefs;
+    });
+
+    it("skips auto-TTS in tagged mode unless a tts tag is present", async () => {
+      const prevPrefs = process.env.CLAWDBOT_TTS_PREFS;
+      process.env.CLAWDBOT_TTS_PREFS = `/tmp/tts-test-${Date.now()}.json`;
+      const originalFetch = globalThis.fetch;
+      const fetchMock = vi.fn(async () => ({
+        ok: true,
+        arrayBuffer: async () => new ArrayBuffer(1),
+      }));
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const cfg = {
+        ...baseCfg,
+        messages: {
+          ...baseCfg.messages,
+          tts: { ...baseCfg.messages.tts, auto: "tagged" },
+        },
+      };
+
+      const payload = { text: "Hello world" };
+      const result = await maybeApplyTtsToPayload({
+        payload,
+        cfg,
+        kind: "final",
+      });
+
+      expect(result).toBe(payload);
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      globalThis.fetch = originalFetch;
+      process.env.CLAWDBOT_TTS_PREFS = prevPrefs;
+    });
+
+    it("runs auto-TTS in tagged mode when tags are present", async () => {
+      const prevPrefs = process.env.CLAWDBOT_TTS_PREFS;
+      process.env.CLAWDBOT_TTS_PREFS = `/tmp/tts-test-${Date.now()}.json`;
+      const originalFetch = globalThis.fetch;
+      const fetchMock = vi.fn(async () => ({
+        ok: true,
+        arrayBuffer: async () => new ArrayBuffer(1),
+      }));
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const cfg = {
+        ...baseCfg,
+        messages: {
+          ...baseCfg.messages,
+          tts: { ...baseCfg.messages.tts, auto: "tagged" },
+        },
+      };
+
+      const result = await maybeApplyTtsToPayload({
+        payload: { text: "[[tts:text]]Hello world[[/tts:text]]" },
+        cfg,
+        kind: "final",
       });
 
       expect(result.mediaUrl).toBeDefined();

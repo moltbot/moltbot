@@ -6,19 +6,20 @@ import {
   getTtsMaxLength,
   getTtsProvider,
   isSummarizationEnabled,
-  isTtsEnabled,
   isTtsProviderConfigured,
+  normalizeTtsAutoMode,
+  resolveTtsAutoMode,
   resolveTtsApiKey,
   resolveTtsConfig,
   resolveTtsPrefsPath,
   resolveTtsProviderOrder,
   setLastTtsAttempt,
   setSummarizationEnabled,
-  setTtsEnabled,
   setTtsMaxLength,
   setTtsProvider,
   textToSpeech,
 } from "../../tts/tts.js";
+import { updateSessionStore } from "../../config/sessions.js";
 
 type ParsedTtsCommand = {
   action: string;
@@ -39,9 +40,9 @@ function ttsUsage(): ReplyPayload {
   // Keep usage in one place so help/validation stays consistent.
   return {
     text:
-      "⚙️ Usage: /tts <on|off|status|provider|limit|summary|audio> [value]" +
+      "⚙️ Usage: /tts <off|always|inbound|tagged|status|provider|limit|summary|audio> [value]" +
       "\nExamples:\n" +
-      "/tts on\n" +
+      "/tts always\n" +
       "/tts provider openai\n" +
       "/tts provider edge\n" +
       "/tts limit 2000\n" +
@@ -71,14 +72,27 @@ export const handleTtsCommands: CommandHandler = async (params, allowTextCommand
     return { shouldContinue: false, reply: ttsUsage() };
   }
 
-  if (action === "on") {
-    setTtsEnabled(prefsPath, true);
-    return { shouldContinue: false, reply: { text: "🔊 TTS enabled." } };
-  }
-
-  if (action === "off") {
-    setTtsEnabled(prefsPath, false);
-    return { shouldContinue: false, reply: { text: "🔇 TTS disabled." } };
+  const requestedAuto = normalizeTtsAutoMode(
+    action === "on" ? "always" : action === "off" ? "off" : action,
+  );
+  if (requestedAuto) {
+    if (params.sessionEntry && params.sessionStore && params.sessionKey) {
+      params.sessionEntry.ttsAuto = requestedAuto;
+      params.sessionEntry.updatedAt = Date.now();
+      params.sessionStore[params.sessionKey] = params.sessionEntry;
+      if (params.storePath) {
+        await updateSessionStore(params.storePath, (store) => {
+          store[params.sessionKey] = params.sessionEntry;
+        });
+      }
+    }
+    const label = requestedAuto === "always" ? "enabled (always)" : requestedAuto;
+    return {
+      shouldContinue: false,
+      reply: {
+        text: requestedAuto === "off" ? "🔇 TTS disabled." : `🔊 TTS ${label}.`,
+      },
+    };
   }
 
   if (action === "audio") {
@@ -212,7 +226,9 @@ export const handleTtsCommands: CommandHandler = async (params, allowTextCommand
   }
 
   if (action === "status") {
-    const enabled = isTtsEnabled(config, prefsPath);
+    const sessionAuto = params.sessionEntry?.ttsAuto;
+    const autoMode = resolveTtsAutoMode({ config, prefsPath, sessionAuto });
+    const enabled = autoMode !== "off";
     const provider = getTtsProvider(config, prefsPath);
     const hasKey = isTtsProviderConfigured(config, provider);
     const providerStatus =
@@ -226,9 +242,10 @@ export const handleTtsCommands: CommandHandler = async (params, allowTextCommand
     const maxLength = getTtsMaxLength(prefsPath);
     const summarize = isSummarizationEnabled(prefsPath);
     const last = getLastTtsAttempt();
+    const autoLabel = sessionAuto ? `${autoMode} (session)` : autoMode;
     const lines = [
       "📊 TTS status",
-      `State: ${enabled ? "✅ enabled" : "❌ disabled"}`,
+      `Auto: ${enabled ? autoLabel : "off"}`,
       `Provider: ${provider} (${providerStatus})`,
       `Text limit: ${maxLength} chars`,
       `Auto-summary: ${summarize ? "on" : "off"}`,
