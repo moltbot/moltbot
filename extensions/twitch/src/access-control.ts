@@ -59,18 +59,13 @@ export function checkTwitchAccessControl(params: {
       };
     }
 
-    if (!allowFrom.includes(senderId)) {
+    if (allowFrom.includes(senderId)) {
       return {
-        allowed: false,
-        reason: "sender not in allowlist",
+        allowed: true,
+        matchKey: senderId,
+        matchSource: "allowlist",
       };
     }
-
-    return {
-      allowed: true,
-      matchKey: senderId,
-      matchSource: "allowlist",
-    };
   }
 
   if (account.allowedRoles && account.allowedRoles.length > 0) {

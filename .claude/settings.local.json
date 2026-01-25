@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(pnpm vitest:*)",
-      "Bash(git diff:*)"
-    ]
-  }
-}

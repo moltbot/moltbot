@@ -96,7 +96,7 @@ describe("checkTwitchAccessControl", () => {
       expect(result.matchSource).toBe("allowlist");
     });
 
-    it("blocks users not in the allowlist", () => {
+    it("allows users not in allowlist via fallback (open access)", () => {
       const account: TwitchAccountConfig = {
         ...mockAccount,
         allowFrom: ["789012"],
@@ -107,8 +107,8 @@ describe("checkTwitchAccessControl", () => {
         account,
         botUsername: "testbot",
       });
-      expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("not in allowlist");
+      // Falls through to final fallback since allowedRoles is not set
+      expect(result.allowed).toBe(true);
     });
 
     it("blocks messages without userId", () => {
@@ -144,6 +144,48 @@ describe("checkTwitchAccessControl", () => {
         botUsername: "testbot",
       });
       expect(result.allowed).toBe(true);
+    });
+
+    it("allows user with role even if not in allowlist", () => {
+      const account: TwitchAccountConfig = {
+        ...mockAccount,
+        allowFrom: ["789012"],
+        allowedRoles: ["moderator"],
+      };
+      const message: TwitchChatMessage = {
+        ...mockMessage,
+        userId: "123456",
+        isMod: true,
+      };
+
+      const result = checkTwitchAccessControl({
+        message,
+        account,
+        botUsername: "testbot",
+      });
+      expect(result.allowed).toBe(true);
+      expect(result.matchSource).toBe("role");
+    });
+
+    it("blocks user with neither allowlist nor role", () => {
+      const account: TwitchAccountConfig = {
+        ...mockAccount,
+        allowFrom: ["789012"],
+        allowedRoles: ["moderator"],
+      };
+      const message: TwitchChatMessage = {
+        ...mockMessage,
+        userId: "123456",
+        isMod: false,
+      };
+
+      const result = checkTwitchAccessControl({
+        message,
+        account,
+        botUsername: "testbot",
+      });
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain("does not have any of the required roles");
     });
   });
 
