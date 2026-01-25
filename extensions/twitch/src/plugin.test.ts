@@ -3,8 +3,9 @@ import type { ClawdbotConfig } from "clawdbot/plugin-sdk";
 import { twitchPlugin } from "./plugin.js";
 
 describe("twitchPlugin.status.buildAccountSnapshot", () => {
-  it("uses the resolved account ID for multi-account configs", () => {
+  it("uses the resolved account ID for multi-account configs", async () => {
     const secondary = {
+      channel: "secondary-channel",
       username: "secondary",
       accessToken: "oauth:secondary-token",
       clientId: "secondary-client",
@@ -16,6 +17,7 @@ describe("twitchPlugin.status.buildAccountSnapshot", () => {
         twitch: {
           accounts: {
             default: {
+              channel: "default-channel",
               username: "default",
               accessToken: "oauth:default-token",
               clientId: "default-client",
@@ -27,11 +29,11 @@ describe("twitchPlugin.status.buildAccountSnapshot", () => {
       },
     } as ClawdbotConfig;
 
-    const snapshot = twitchPlugin.status.buildAccountSnapshot({
+    const snapshot = await twitchPlugin.status?.buildAccountSnapshot?.({
       account: secondary,
       cfg,
     });
 
-    expect(snapshot.accountId).toBe("secondary");
+    expect(snapshot?.accountId).toBe("secondary");
   });
 });
