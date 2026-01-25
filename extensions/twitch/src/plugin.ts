@@ -213,7 +213,8 @@ export const twitchPlugin: ChannelPlugin<TwitchAccountConfig> = {
     }): ChannelAccountSnapshot => {
       const accountMap = cfg.channels?.twitch?.accounts ?? {};
       const resolvedAccountId =
-        Object.entries(accountMap).find(([, value]) => value === account)?.[0] ?? DEFAULT_ACCOUNT_ID;
+        Object.entries(accountMap).find(([, value]) => value === account)?.[0] ??
+        DEFAULT_ACCOUNT_ID;
       return {
         accountId: DEFAULT_ACCOUNT_ID,
         enabled: account?.enabled !== false,

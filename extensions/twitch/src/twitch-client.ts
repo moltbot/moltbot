@@ -230,7 +230,10 @@ export class TwitchClientManager {
    * Set a message handler for an account
    * @returns A function that removes the handler when called
    */
-  onMessage(account: TwitchAccountConfig, handler: (message: TwitchChatMessage) => void): () => void {
+  onMessage(
+    account: TwitchAccountConfig,
+    handler: (message: TwitchChatMessage) => void,
+  ): () => void {
     const key = this.getAccountKey(account);
     this.messageHandlers.set(key, handler);
     return () => {
