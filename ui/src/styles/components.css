@@ -15,6 +15,7 @@
     box-shadow var(--duration-normal) var(--ease-out),
     transform var(--duration-normal) var(--ease-out);
   box-shadow: var(--shadow-sm), inset 0 1px 0 var(--card-highlight);
+  min-width: 0;
 }
 
 .card:hover {
@@ -594,6 +595,9 @@
   max-height: 360px;
   overflow: auto;
   max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  min-width: 0;
 }
 
 :root[data-theme="light"] .code-block,
