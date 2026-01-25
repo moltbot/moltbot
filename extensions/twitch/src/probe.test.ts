@@ -30,8 +30,7 @@ const mockOnAuthenticationFailure = vi.fn((handler: () => void) => {
 const defaultConnectImpl = async () => {
   // Simulate successful connection by calling the handler after a delay
   if (connectHandler) {
-    // Use setTimeout to simulate async connection
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 1));
     connectHandler();
   }
 };
@@ -135,7 +134,7 @@ describe("probeTwitch", () => {
       // Simulate connection failure by calling disconnect handler
       // onDisconnect signature: (manually: boolean, reason?: Error) => void
       if (disconnectHandler) {
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 1));
         disconnectHandler(false, new Error("Connection failed"));
       }
     });
@@ -162,7 +161,7 @@ describe("probeTwitch", () => {
       // Simulate connection failure by calling disconnect handler
       // onDisconnect signature: (manually: boolean, reason?: Error) => void
       if (disconnectHandler) {
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 1));
         disconnectHandler(false, new Error("Network error"));
       }
     });
@@ -192,7 +191,7 @@ describe("probeTwitch", () => {
       // Simulate connection failure by calling disconnect handler
       // onDisconnect signature: (manually: boolean, reason?: Error) => void
       if (disconnectHandler) {
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 1));
         disconnectHandler(false, "String error" as unknown as Error);
       }
     });
