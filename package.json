@@ -205,6 +205,10 @@
     "node-llama-cpp": "3.15.0"
   },
   "devDependencies": {
+    "@aws-sdk/client-dynamodb": "^3.975.0",
+    "@aws-sdk/client-s3": "^3.975.0",
+    "@aws-sdk/lib-dynamodb": "^3.975.0",
+    "@aws-sdk/s3-request-presigner": "^3.975.0",
     "@grammyjs/types": "^3.23.0",
     "@lit-labs/signals": "^0.2.0",
     "@lit/context": "^1.1.6",

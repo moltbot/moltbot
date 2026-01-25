@@ -7,16 +7,18 @@
 /**
  * レスポンス形式
  */
-export enum ResponseFormat {
+export const ResponseFormat = {
   /** テキストのみ */
-  TEXT = "text",
+  TEXT: "text",
   /** 埋め込み (Discord) */
-  EMBED = "embed",
+  EMBED: "embed",
   /** ファイル添付 */
-  FILE = "file",
+  FILE: "file",
   /** Flex Message (LINE) */
-  FLEX = "flex",
-}
+  FLEX: "flex",
+} as const;
+
+export type ResponseFormat = (typeof ResponseFormat)[keyof typeof ResponseFormat];
 
 /**
  * リプライオプション

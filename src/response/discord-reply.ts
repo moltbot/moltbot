@@ -5,38 +5,37 @@
  */
 
 import type { Message } from "@buape/carbon";
-import type {
-  API,
-  Snowflake,
-  ChannelType,
-  REST,
-  MessageFlags,
-  AllowedMentionsTypes,
-} from "@buape/carbon";
 
-import type {
-  ReplyOptions,
-  ReplyData,
-  ResponseFormat,
-  ReplyEmbed,
-  QuoteMetadata,
-  ReplyAuthor,
-} from "./types.js";
+import type { ReplyOptions, ReplyData, ReplyEmbed, QuoteMetadata, ReplyAuthor } from "./types.js";
+import { ResponseFormat } from "./types.js";
 
 /**
  * Discordリプライオプション拡張
  */
 export interface DiscordReplyOptions extends ReplyOptions {
   /** APIクライアント */
-  api: API;
+  api: { rest: { post: (path: string, body: unknown) => Promise<unknown> } };
   /** RESTクライアント */
-  rest?: REST;
+  rest?: unknown;
   /** 返信先チャンネルID */
   channelId: string;
   /** 返信先メッセージID */
   messageId: string;
   /** スレッドID (ある場合) */
-  threadId?: Snowflake;
+  threadId?: string;
+}
+
+/**
+ * AllowedMentions型
+ */
+interface AllowedMentionsTypes {
+  parse: {
+    users: boolean;
+    roles: boolean;
+    everyone: boolean;
+  };
+  users?: string[];
+  roles?: string[];
 }
 
 /**
@@ -130,7 +129,7 @@ function buildEmbeds(embeds: ReplyEmbed[]): Record<string, unknown>[] {
  * @param options - オプション
  */
 export async function sendReply(replyData: ReplyData, options: DiscordReplyOptions): Promise<void> {
-  const { api, rest, channelId, messageId, threadId } = options;
+  const { api, channelId, messageId } = options;
 
   // 引用メタデータ構築
   const quote: QuoteMetadata = {
@@ -229,18 +228,17 @@ export function createDiscordReply(
   originalMessage: Message,
   responseText: string,
   options: Partial<ReplyOptions> = {},
-): { data: ReplyData; options: DiscordReplyOptions } {
+): { data: ReplyData; options: Omit<DiscordReplyOptions, "api"> } {
   const author: ReplyAuthor = {
-    name: originalMessage.author?.username ?? "Unknown",
-    userId: originalMessage.author?.id,
-    avatarUrl: originalMessage.author?.avatarUrl,
-    bot: originalMessage.author?.bot ?? false,
+    name: (originalMessage.author as { username?: string })?.username ?? "Unknown",
+    userId: originalMessage.author?.id ?? undefined,
+    avatarUrl: originalMessage.author?.avatarUrl ?? undefined,
+    bot: (originalMessage.author as { bot?: boolean })?.bot ?? false,
   };
 
   const replyData: ReplyData = {
     text: responseText,
     options: {
-      format: ResponseFormat.TEXT,
       allowedMentions: {
         users: false,
         roles: false,
@@ -255,9 +253,13 @@ export function createDiscordReply(
     options: {
       ...options,
       author,
-      timestamp: originalMessage.timestamp ?? Date.now(),
+      timestamp: originalMessage.timestamp
+        ? typeof originalMessage.timestamp === "string"
+          ? new Date(originalMessage.timestamp).getTime()
+          : originalMessage.timestamp
+        : Date.now(),
       channelId: originalMessage.channelId,
       messageId: originalMessage.id,
-    } as DiscordReplyOptions,
+    },
   };
 }

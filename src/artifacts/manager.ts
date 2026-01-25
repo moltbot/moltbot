@@ -10,7 +10,7 @@ import {
   GetObjectCommand,
   DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
-import { DynamoDBClient, DescribeTableCommand } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, DescribeTableCommand, CreateTableCommand } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
   GetCommand,
@@ -94,10 +94,7 @@ export async function initializeTable(): Promise<void> {
           },
         ],
         BillingMode: "PAY_PER_REQUEST",
-        TimeToLiveSpecification: {
-          AttributeName: "expiresAt",
-          Enabled: true,
-        },
+        // Note: TTL is configured separately via UpdateTimeToLiveCommand
       }),
     );
     console.log(`[ArtifactManager] Table ${ARTIFACTS_TABLE} created`);

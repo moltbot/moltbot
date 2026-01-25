@@ -8,4 +8,5 @@
 
 export * from "./types.js";
 export * from "./discord-reply.js";
-export * from "./line-reply.js";
+// LINE support coming soon
+// export * from "./line-reply.js";

@@ -84,10 +84,7 @@ export async function initializeTable(): Promise<void> {
           },
         ],
         BillingMode: "PAY_PER_REQUEST",
-        TimeToLiveSpecification: {
-          AttributeName: "expiresAt",
-          Enabled: true,
-        },
+        // Note: TTL is configured separately via UpdateTimeToLiveCommand
       }),
     );
     console.log(`[SessionManager] Table ${SESSIONS_TABLE} created`);

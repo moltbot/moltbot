@@ -115,6 +115,8 @@ export interface ReviewOptions {
   timeout?: number;
   /** 詳細モード */
   verbose?: boolean;
+  /** tmuxターゲット (ペインID) */
+  tmuxTarget?: string;
 }
 
 /**
