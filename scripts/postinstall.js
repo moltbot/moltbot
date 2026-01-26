@@ -248,9 +248,35 @@ function applyPatchFile({ patchPath, targetDir }) {
   applyPatchSet({ patchText, targetDir });
 }
 
-function main() {
+
+async function checkArchitecture() {
+  if (process.platform !== "darwin") return;
+  
+  // Check for Rosetta translation
+  try {
+    const { execSync } = await import("node:child_process");
+    const isTranslated = execSync("sysctl -in sysctl.proc_translated").toString().trim() === "1";
+    
+    if (isTranslated) {
+      console.warn("\n\x1b[33m" + "=".repeat(60));
+      console.warn(" [WARNING] ROSETTA DETECTED");
+      console.warn("=".repeat(60));
+      console.warn(" You are running this installation under Rosetta (x86_64 emulation).");
+      console.warn(" This may cause native dependencies to build incorrectly for Apple Silicon.");
+      console.warn(" Recommended: Use a native Terminal (uncheck 'Open using Rosetta').");
+      console.warn("=".repeat(60) + "\x1b[0m\n");
+    }
+  } catch (e) {
+    // Ignore errors on non-Apple systems or if sysctl fails
+  }
+}
+
+async function main() {
+  await checkArchitecture();
+
   const repoRoot = getRepoRoot();
   process.chdir(repoRoot);
+
 
   ensureExecutable(path.join(repoRoot, "dist", "entry.js"));
   setupGitHooks({ repoRoot });

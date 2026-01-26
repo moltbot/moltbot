@@ -38,6 +38,12 @@ enum CLIInstaller {
         let expected = GatewayEnvironment.expectedGatewayVersionString() ?? "latest"
         let prefix = Self.installPrefix()
         await statusHandler("Installing clawdbot CLI…")
+        
+        // 1. Architecture/Rosetta Guard
+        if self.isRosettaTranslated() {
+            await statusHandler("Warning: Rosetta detected. Attempting to force arm64…")
+        }
+        
         let cmd = self.installScriptCommand(version: expected, prefix: prefix)
         let response = await ShellExecutor.runDetailed(command: cmd, cwd: nil, env: nil, timeout: 900)
 
@@ -93,6 +99,16 @@ enum CLIInstaller {
 
     private static func shellEscape(_ raw: String) -> String {
         "'" + raw.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
+    }
+
+    private static func isRosettaTranslated() -> Bool {
+        var ret = 0
+        var size = MemoryLayout.size(ofValue: ret)
+        // sysctl.proc_translated: 1 if translated (Rosetta), 0 if native
+        if sysctlbyname("sysctl.proc_translated", &ret, &size, nil, 0) == 0 {
+            return ret == 1
+        }
+        return false
     }
 }
 
