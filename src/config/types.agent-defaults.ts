@@ -196,7 +196,7 @@ export type AgentDefaultsConfig = {
     /**
      * When true, require an explicit target for heartbeat delivery (no implicit routing).
      * If no explicit target is provided, heartbeat delivery fails with an error.
-     * Default: true (strict mode; prevents accidental sends to stale/implicit targets).
+     * Default: false (backwards compatible; falls back to session-derived or "last" routing).
      */
     requireExplicitTarget?: boolean;
   };

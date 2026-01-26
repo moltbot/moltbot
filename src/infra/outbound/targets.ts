@@ -183,7 +183,7 @@ export function resolveHeartbeatDeliveryTarget(params: {
   const heartbeat = params.heartbeat ?? cfg.agents?.defaults?.heartbeat;
   const rawTarget = heartbeat?.target;
   // FIX-1.4: Default to strict mode - require explicit target for heartbeat delivery
-  const requireExplicitTarget = heartbeat?.requireExplicitTarget ?? true;
+  const requireExplicitTarget = heartbeat?.requireExplicitTarget ?? false;
   const explicitTo = heartbeat?.to?.trim();
   let target: HeartbeatTarget = "last";
   if (rawTarget === "none" || rawTarget === "last") {

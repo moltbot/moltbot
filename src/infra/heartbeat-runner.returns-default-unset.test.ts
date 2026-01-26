@@ -145,14 +145,8 @@ describe("resolveHeartbeatDeliveryTarget", () => {
     });
   });
 
-  it("uses last route when requireExplicitTarget is false", () => {
-    const cfg: ClawdbotConfig = {
-      agents: {
-        defaults: {
-          heartbeat: { requireExplicitTarget: false },
-        },
-      },
-    };
+  it("uses last route by default", () => {
+    const cfg: ClawdbotConfig = {};
     const entry = {
       ...baseEntry,
       lastChannel: "whatsapp" as const,
@@ -186,13 +180,7 @@ describe("resolveHeartbeatDeliveryTarget", () => {
   });
 
   it("skips when last route is webchat", () => {
-    const cfg: ClawdbotConfig = {
-      agents: {
-        defaults: {
-          heartbeat: { requireExplicitTarget: false },
-        },
-      },
-    };
+    const cfg: ClawdbotConfig = {};
     const entry = {
       ...baseEntry,
       lastChannel: "webchat" as const,
@@ -209,9 +197,7 @@ describe("resolveHeartbeatDeliveryTarget", () => {
 
   it("applies allowFrom fallback for WhatsApp targets", () => {
     const cfg: ClawdbotConfig = {
-      agents: {
-        defaults: { heartbeat: { target: "whatsapp", to: "+1999", requireExplicitTarget: false } },
-      },
+      agents: { defaults: { heartbeat: { target: "whatsapp", to: "+1999" } } },
       channels: { whatsapp: { allowFrom: ["+1555", "+1666"] } },
     };
     const entry = {
@@ -219,20 +205,18 @@ describe("resolveHeartbeatDeliveryTarget", () => {
       lastChannel: "whatsapp" as const,
       lastTo: "+1222",
     };
-    // Note: The reason field is set based on whether the final resolved target
-    // differs from what explicit mode would have returned. With heartbeat mode,
-    // the fallback behavior is expected.
-    const result = resolveHeartbeatDeliveryTarget({ cfg, entry });
-    expect(result.channel).toBe("whatsapp");
-    expect(result.to).toBe("+1555");
-    expect(result.lastChannel).toBe("whatsapp");
-    expect(result.accountId).toBeUndefined();
-    expect(result.lastAccountId).toBeUndefined();
+    expect(resolveHeartbeatDeliveryTarget({ cfg, entry })).toEqual({
+      channel: "whatsapp",
+      to: "+1555",
+      reason: "allowFrom-fallback",
+      accountId: undefined,
+      lastChannel: "whatsapp",
+      lastAccountId: undefined,
+    });
   });
 
   it("keeps WhatsApp group targets even with allowFrom set", () => {
     const cfg: ClawdbotConfig = {
-      agents: { defaults: { heartbeat: { requireExplicitTarget: false } } },
       channels: { whatsapp: { allowFrom: ["+1555"] } },
     };
     const entry = {
@@ -251,7 +235,6 @@ describe("resolveHeartbeatDeliveryTarget", () => {
 
   it("normalizes prefixed WhatsApp group targets for heartbeat delivery", () => {
     const cfg: ClawdbotConfig = {
-      agents: { defaults: { heartbeat: { requireExplicitTarget: false } } },
       channels: { whatsapp: { allowFrom: ["+1555"] } },
     };
     const entry = {
@@ -350,7 +333,7 @@ describe("runHeartbeatOnce", () => {
       const cfg: ClawdbotConfig = {
         agents: {
           defaults: {
-            heartbeat: { every: "5m", target: "whatsapp", requireExplicitTarget: false },
+            heartbeat: { every: "5m", target: "whatsapp" },
           },
         },
         channels: { whatsapp: { allowFrom: ["*"] } },
@@ -407,18 +390,13 @@ describe("runHeartbeatOnce", () => {
       const cfg: ClawdbotConfig = {
         agents: {
           defaults: {
-            heartbeat: { every: "30m", prompt: "Default prompt", requireExplicitTarget: false },
+            heartbeat: { every: "30m", prompt: "Default prompt" },
           },
           list: [
             { id: "main", default: true },
             {
               id: "ops",
-              heartbeat: {
-                every: "5m",
-                target: "whatsapp",
-                prompt: "Ops check",
-                requireExplicitTarget: false,
-              },
+              heartbeat: { every: "5m", target: "whatsapp", prompt: "Ops check" },
             },
           ],
         },
@@ -486,7 +464,6 @@ describe("runHeartbeatOnce", () => {
             heartbeat: {
               every: "5m",
               target: "last",
-              requireExplicitTarget: false,
             },
           },
         },
@@ -565,7 +542,7 @@ describe("runHeartbeatOnce", () => {
       const cfg: ClawdbotConfig = {
         agents: {
           defaults: {
-            heartbeat: { every: "5m", target: "whatsapp", requireExplicitTarget: false },
+            heartbeat: { every: "5m", target: "whatsapp" },
           },
         },
         channels: { whatsapp: { allowFrom: ["*"] } },
@@ -624,7 +601,6 @@ describe("runHeartbeatOnce", () => {
               every: "5m",
               target: "whatsapp",
               includeReasoning: true,
-              requireExplicitTarget: false,
             },
           },
         },
@@ -696,7 +672,6 @@ describe("runHeartbeatOnce", () => {
               every: "5m",
               target: "whatsapp",
               includeReasoning: true,
-              requireExplicitTarget: false,
             },
           },
         },
@@ -762,7 +737,7 @@ describe("runHeartbeatOnce", () => {
     try {
       const cfg: ClawdbotConfig = {
         agents: {
-          defaults: { heartbeat: { every: "5m", requireExplicitTarget: false } },
+          defaults: { heartbeat: { every: "5m" } },
           list: [{ id: "work", default: true }],
         },
         channels: { whatsapp: { allowFrom: ["*"] } },
@@ -838,7 +813,7 @@ describe("runHeartbeatOnce", () => {
         agents: {
           defaults: {
             workspace: workspaceDir,
-            heartbeat: { every: "5m", target: "whatsapp", requireExplicitTarget: false },
+            heartbeat: { every: "5m", target: "whatsapp" },
           },
         },
         channels: { whatsapp: { allowFrom: ["*"] } },
@@ -910,7 +885,7 @@ describe("runHeartbeatOnce", () => {
         agents: {
           defaults: {
             workspace: workspaceDir,
-            heartbeat: { every: "5m", target: "whatsapp", requireExplicitTarget: false },
+            heartbeat: { every: "5m", target: "whatsapp" },
           },
         },
         channels: { whatsapp: { allowFrom: ["*"] } },
@@ -974,7 +949,7 @@ describe("runHeartbeatOnce", () => {
         agents: {
           defaults: {
             workspace: workspaceDir,
-            heartbeat: { every: "5m", target: "whatsapp", requireExplicitTarget: false },
+            heartbeat: { every: "5m", target: "whatsapp" },
           },
         },
         channels: { whatsapp: { allowFrom: ["*"] } },
