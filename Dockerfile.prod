@@ -19,10 +19,8 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build
 
-# Force pnpm for UI build (Bun may fail on ARM/Synology architectures)
-ENV CLAWDBOT_PREFER_PNPM=1
-RUN pnpm ui:install
-RUN pnpm ui:build
+# Skip UI build - gateway-only deploy doesn't need it
+# (Also avoids extensions/memory-core requiring unreleased clawdbot version)
 
 # Stage 2: Build checkins extension
 FROM node:22-slim AS extension-builder
@@ -43,7 +41,7 @@ WORKDIR /app
 COPY --from=clawdbot-builder /app/dist ./dist
 COPY --from=clawdbot-builder /app/node_modules ./node_modules
 COPY --from=clawdbot-builder /app/package.json ./package.json
-COPY --from=clawdbot-builder /app/ui/dist ./ui/dist
+# UI not built - gateway-only deploy
 
 # Copy the pre-built extension to staging (PVC will mount over /root/.clawdbot)
 COPY --from=extension-builder /build /app/bundled-plugins/checkins
