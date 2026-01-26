@@ -11,7 +11,7 @@ read_when:
 
 Run a persistent Clawdbot Gateway on DigitalOcean for **$6/month** (or $4/mo with reserved pricing).
 
-If you want something even cheaper, see [Oracle Cloud (Free Tier)](#oracle-cloud-free-alternative) at the bottom — it's **actually free forever**.
+If you want something even cheaper, see the [Oracle Cloud guide](/platforms/oracle) — it's **actually free forever**.
 
 ## Cost Comparison (2026)
 
@@ -192,7 +192,7 @@ tar -czvf clawdbot-backup.tar.gz ~/.clawdbot ~/clawd
 
 ## Oracle Cloud Free Alternative
 
-Oracle Cloud offers **Always Free** ARM instances that are significantly more powerful:
+Oracle Cloud offers **Always Free** ARM instances that are significantly more powerful than any paid option here — for $0/month.
 
 | What you get | Specs |
 |--------------|-------|
@@ -201,19 +201,11 @@ Oracle Cloud offers **Always Free** ARM instances that are significantly more po
 | **200GB storage** | Block volume |
 | **Forever free** | No credit card charges |
 
-### Quick setup:
-1. Sign up at [oracle.com/cloud/free](https://www.oracle.com/cloud/free/)
-2. Create a VM.Standard.A1.Flex instance (ARM)
-3. Choose Oracle Linux or Ubuntu
-4. Allocate up to 4 OCPU / 24GB RAM within free tier
-5. Follow the same Clawdbot install steps above
-
 **Caveats:**
 - Signup can be finicky (retry if it fails)
 - ARM architecture — most things work, but some binaries need ARM builds
-- Oracle may reclaim idle instances (keep them active)
 
-For the full Oracle guide, see the [community docs](https://gist.github.com/rssnyder/51e3cfedd730e7dd5f4a816143b25dbd).
+For the full setup guide, see [Oracle Cloud](/platforms/oracle).
 
 ---
 

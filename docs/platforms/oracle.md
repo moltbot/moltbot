@@ -1,0 +1,298 @@
+---
+summary: "Clawdbot on Oracle Cloud (Always Free ARM, best value)"
+read_when:
+  - Setting up Clawdbot on Oracle Cloud
+  - Looking for free VPS hosting for Clawdbot
+  - Want 24/7 Clawdbot without paying anything
+---
+
+# Clawdbot on Oracle Cloud (OCI)
+
+## Goal
+
+Run a persistent Clawdbot Gateway on Oracle Cloud's **Always Free** ARM tier — **$0/month forever** with more resources than most paid VPS options.
+
+## Cost Comparison (2026)
+
+| Provider | Plan | Specs | Price/mo | Notes |
+|----------|------|-------|----------|-------|
+| **Oracle Cloud** | Always Free ARM | 4 OCPU, 24GB RAM | **$0** | Best value, this guide |
+| **Hetzner** | CX22 | 2 vCPU, 4GB RAM | €3.79 (~$4) | Cheapest paid, EU datacenters |
+| **DigitalOcean** | Basic | 1 vCPU, 1GB RAM | $6 | Easy UI, good docs |
+| **Vultr** | Cloud Compute | 1 vCPU, 1GB RAM | $6 | Many locations |
+| **Linode** | Nanode | 1 vCPU, 1GB RAM | $5 | Now part of Akamai |
+
+**Why Oracle?** The Always Free tier gives you 4x the CPU and 24x the RAM of a $6 DigitalOcean droplet — for $0. The tradeoff is ARM architecture (most things work) and Oracle's signup process (can be finicky).
+
+---
+
+## Prerequisites
+
+- Oracle Cloud account ([signup](https://www.oracle.com/cloud/free/))
+- Tailscale account (free at [tailscale.com](https://tailscale.com))
+- ~30 minutes
+
+## 1) Create an OCI Instance
+
+1. Log into [Oracle Cloud Console](https://cloud.oracle.com/)
+2. Navigate to **Compute → Instances → Create Instance**
+3. Configure:
+   - **Name:** `clawdbot`
+   - **Image:** Ubuntu 24.04 (aarch64)
+   - **Shape:** `VM.Standard.A1.Flex` (Ampere ARM)
+   - **OCPUs:** 2 (or up to 4)
+   - **Memory:** 12 GB (or up to 24 GB)
+   - **Boot volume:** 50 GB (up to 200 GB free)
+   - **SSH key:** Add your public key
+4. Click **Create**
+5. Note the public IP address
+
+**Tip:** If instance creation fails with "Out of capacity", try a different availability domain or retry later. Free tier capacity is limited.
+
+## 2) Configure VCN Security (Critical)
+
+OCI's Virtual Cloud Network (VCN) acts as a firewall at the network edge — traffic is blocked before it reaches your instance. This is more secure than host-based firewalls.
+
+1. Go to **Networking → Virtual Cloud Networks**
+2. Click your VCN → **Security Lists** → Default Security List
+3. **Remove** all ingress rules except:
+   - `0.0.0.0/0 UDP 41641` (Tailscale)
+4. Keep default egress rules (allow all outbound)
+
+This blocks everything except Tailscale. You'll SSH via Tailscale, not the public IP.
+
+## 3) Connect and Update
+
+```bash
+# Initial connection via public IP (one time only)
+ssh ubuntu@YOUR_PUBLIC_IP
+
+# Update system
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y build-essential unzip
+```
+
+**Note:** `build-essential` is required for ARM compilation of some dependencies.
+
+## 4) Configure User and Hostname
+
+```bash
+# Set hostname
+sudo hostnamectl set-hostname clawdbot
+
+# Set password for ubuntu user
+sudo passwd ubuntu
+
+# Enable lingering (keeps user services running after logout)
+sudo loginctl enable-linger ubuntu
+```
+
+## 5) Install Tailscale
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up --ssh --hostname=clawdbot
+```
+
+This enables Tailscale SSH, so you can connect via `ssh clawdbot` from any device on your tailnet — no public IP needed.
+
+Verify:
+```bash
+tailscale status
+```
+
+**From now on, connect via Tailscale:** `ssh ubuntu@clawdbot` (or use the Tailscale IP).
+
+## 6) Install Homebrew (ARM)
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Add to PATH
+echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.bashrc
+echo 'export HOMEBREW_NO_AUTO_UPDATE=1' >> ~/.bashrc
+echo 'export HOMEBREW_NO_ENV_HINTS=1' >> ~/.bashrc
+source ~/.bashrc
+
+# Install GCC (needed for some packages on ARM)
+brew install gcc
+```
+
+## 7) Install Clawdbot
+
+```bash
+curl -fsSL https://clawd.bot/install.sh | bash
+source ~/.bashrc
+```
+
+When prompted "How do you want to hatch your bot?", select **"Do this later"**.
+
+## 8) Configure Gateway with Tailscale Serve
+
+```bash
+clawdbot config set gateway.bind loopback
+clawdbot config set gateway.tailscale.mode serve
+clawdbot config set gateway.trustedProxies '["127.0.0.1"]'
+clawdbot config set gateway.auth.allowTailscale true
+clawdbot config set gateway.controlUi.allowInsecureAuth true
+systemctl --user restart clawdbot-gateway
+```
+
+This configures:
+- Gateway binds to loopback only (127.0.0.1)
+- Tailscale Serve provides HTTPS and handles external routing
+- Authentication via Tailscale identity headers (no tokens needed)
+
+## 9) Verify
+
+```bash
+# Check version
+clawdbot --version
+
+# Check daemon status
+systemctl --user status clawdbot-gateway
+
+# Check Tailscale Serve
+tailscale serve status
+
+# Test local response
+curl http://localhost:18789
+```
+
+---
+
+## Access the Control UI
+
+From any device on your Tailscale network:
+
+```
+https://clawdbot.<tailnet-name>.ts.net/
+```
+
+Replace `<tailnet-name>` with your tailnet name (visible in `tailscale status`).
+
+No SSH tunnel needed. Tailscale provides:
+- HTTPS encryption (automatic certs)
+- Authentication via Tailscale identity
+- Access from any device on your tailnet (laptop, phone, etc.)
+
+---
+
+## Security: Why VCN + Tailscale Is Enough
+
+With the VCN configured as above (only UDP 41641 open), you have **defense in depth** that makes traditional VPS hardening redundant.
+
+**How it works:** The VCN blocks traffic at the network edge — before it reaches your instance. Combined with Tailscale SSH (which bypasses sshd entirely), there's no attack surface for typical threats.
+
+### What's Already Protected
+
+| Traditional Step | Needed? | Why |
+|------------------|---------|-----|
+| UFW firewall | No | VCN blocks before traffic reaches instance |
+| fail2ban | No | No brute force if port 22 blocked at VCN |
+| sshd hardening | No | Tailscale SSH doesn't use sshd |
+| Disable root login | No | Tailscale uses Tailscale identity, not system users |
+| SSH key-only auth | No | Tailscale authenticates via your tailnet |
+| Disable IPv6 | No | OCI free tier doesn't assign public IPv6 |
+
+### Still Recommended
+
+- **Credential permissions:** `chmod 700 ~/.clawdbot`
+- **Security audit:** `clawdbot security audit`
+- **System updates:** `sudo apt update && sudo apt upgrade` regularly
+- **Monitor Tailscale:** Review devices in [Tailscale admin console](https://login.tailscale.com/admin)
+
+### Verify Security Posture
+
+```bash
+# Confirm no public ports listening
+sudo ss -tlnp | grep -v '127.0.0.1\|::1'
+
+# Verify Tailscale SSH is active
+tailscale status | grep -q 'offers: ssh' && echo "Tailscale SSH active"
+
+# Optional: disable sshd entirely
+sudo systemctl disable --now ssh
+```
+
+---
+
+## Fallback: SSH Tunnel
+
+If Tailscale Serve isn't working, use an SSH tunnel:
+
+```bash
+# From your local machine (via Tailscale)
+ssh -L 18789:127.0.0.1:18789 ubuntu@clawdbot
+```
+
+Then open `http://localhost:18789`.
+
+---
+
+## Troubleshooting
+
+### Instance creation fails ("Out of capacity")
+Free tier ARM instances are popular. Try:
+- Different availability domain
+- Retry during off-peak hours (early morning)
+- Use the "Always Free" filter when selecting shape
+
+### Tailscale won't connect
+```bash
+# Check status
+sudo tailscale status
+
+# Re-authenticate
+sudo tailscale up --ssh --hostname=clawdbot --reset
+```
+
+### Gateway won't start
+```bash
+clawdbot gateway status
+clawdbot doctor --non-interactive
+journalctl --user -u clawdbot-gateway -n 50
+```
+
+### Can't reach Control UI
+```bash
+# Verify Tailscale Serve is running
+tailscale serve status
+
+# Check gateway is listening
+curl http://localhost:18789
+
+# Restart if needed
+systemctl --user restart clawdbot-gateway
+```
+
+### ARM binary issues
+Some tools may not have ARM builds. Check:
+```bash
+uname -m  # Should show aarch64
+```
+
+Most npm packages work fine. For binaries, look for `linux-arm64` or `aarch64` releases.
+
+---
+
+## Persistence
+
+All state lives in:
+- `~/.clawdbot/` — config, credentials, session data
+- `~/clawd/` — workspace (SOUL.md, memory, artifacts)
+
+Back up periodically:
+```bash
+tar -czvf clawdbot-backup.tar.gz ~/.clawdbot ~/clawd
+```
+
+---
+
+## See Also
+
+- [Gateway remote access](/gateway/remote) — other remote access patterns
+- [Tailscale integration](/gateway/tailscale) — full Tailscale docs
+- [Gateway configuration](/gateway/configuration) — all config options
+- [DigitalOcean guide](/platforms/digitalocean) — if you want paid + easier signup
+- [Hetzner guide](/platforms/hetzner) — Docker-based alternative
