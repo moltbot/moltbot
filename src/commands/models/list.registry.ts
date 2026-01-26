@@ -80,6 +80,11 @@ export function toModelRow(params: {
       : (availableKeys?.has(modelKey(model.provider, model.id)) ?? false);
   const aliasTags = aliases.length > 0 ? [`alias:${aliases.join(",")}`] : [];
   const mergedTags = new Set(tags);
+
+  if ((model as any).confidentialCompute) {
+    mergedTags.add("TEE");
+  }
+
   if (aliasTags.length > 0) {
     for (const tag of mergedTags) {
       if (tag === "alias" || tag.startsWith("alias:")) mergedTags.delete(tag);

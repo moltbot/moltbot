@@ -7,6 +7,7 @@ import {
 import { ensureAuthProfileStore, listProfilesForProvider } from "./auth-profiles.js";
 import { resolveAwsSdkEnvVarName, resolveEnvApiKey } from "./model-auth.js";
 import { discoverBedrockModels } from "./bedrock-discovery.js";
+import { discoverChutesModels } from "./chutes-models.js";
 import {
   buildSyntheticModelDefinition,
   SYNTHETIC_BASE_URL,
@@ -40,6 +41,9 @@ const MOONSHOT_DEFAULT_COST = {
   cacheRead: 0,
   cacheWrite: 0,
 };
+
+const CHUTES_BASE_URL = "https://llm.chutes.ai/v1";
+
 const KIMI_CODE_BASE_URL = "https://api.kimi.com/coding/v1";
 const KIMI_CODE_MODEL_ID = "kimi-for-coding";
 const KIMI_CODE_CONTEXT_WINDOW = 262144;
@@ -286,6 +290,16 @@ function buildMoonshotProvider(): ProviderConfig {
   };
 }
 
+async function buildChutesProvider(opts?: { teeOnly?: boolean }): Promise<ProviderConfig> {
+  const models = await discoverChutesModels(opts);
+  return {
+    baseUrl: CHUTES_BASE_URL,
+    api: "openai-completions",
+    models,
+    teeOnly: opts?.teeOnly,
+  };
+}
+
 function buildKimiCodeProvider(): ProviderConfig {
   return {
     baseUrl: KIMI_CODE_BASE_URL,
@@ -379,6 +393,13 @@ export async function resolveImplicitProviders(params: {
     resolveApiKeyFromProfiles({ provider: "moonshot", store: authStore });
   if (moonshotKey) {
     providers.moonshot = { ...buildMoonshotProvider(), apiKey: moonshotKey };
+  }
+
+  const chutesKey =
+    resolveEnvApiKeyVarName("chutes") ??
+    resolveApiKeyFromProfiles({ provider: "chutes", store: authStore });
+  if (chutesKey) {
+    providers.chutes = { ...(await buildChutesProvider()), apiKey: chutesKey };
   }
 
   const kimiCodeKey =

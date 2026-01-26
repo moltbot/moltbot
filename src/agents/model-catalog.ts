@@ -8,6 +8,7 @@ export type ModelCatalogEntry = {
   provider: string;
   contextWindow?: number;
   reasoning?: boolean;
+  confidentialCompute?: boolean;
   input?: Array<"text" | "image">;
 };
 
@@ -17,6 +18,7 @@ type DiscoveredModel = {
   provider: string;
   contextWindow?: number;
   reasoning?: boolean;
+  confidentialCompute?: boolean;
   input?: Array<"text" | "image">;
 };
 
@@ -82,10 +84,12 @@ export async function loadModelCatalog(params?: {
             ? entry.contextWindow
             : undefined;
         const reasoning = typeof entry?.reasoning === "boolean" ? entry.reasoning : undefined;
+        const confidentialCompute =
+          typeof entry?.confidentialCompute === "boolean" ? entry.confidentialCompute : undefined;
         const input = Array.isArray(entry?.input)
           ? (entry.input as Array<"text" | "image">)
           : undefined;
-        models.push({ id, name, provider, contextWindow, reasoning, input });
+        models.push({ id, name, provider, contextWindow, reasoning, confidentialCompute, input });
       }
 
       if (models.length === 0) {

@@ -205,6 +205,7 @@ export async function promptDefaultModel(
     name?: string;
     contextWindow?: number;
     reasoning?: boolean;
+    confidentialCompute?: boolean;
   }) => {
     const key = modelKey(entry.provider, entry.id);
     if (seen.has(key)) return;
@@ -214,6 +215,7 @@ export async function promptDefaultModel(
     if (entry.name && entry.name !== entry.id) hints.push(entry.name);
     if (entry.contextWindow) hints.push(`ctx ${formatTokenK(entry.contextWindow)}`);
     if (entry.reasoning) hints.push("reasoning");
+    if (entry.confidentialCompute) hints.push("TEE");
     const aliases = aliasIndex.byKey.get(key);
     if (aliases?.length) hints.push(`alias: ${aliases.join(", ")}`);
     if (!hasAuth(entry.provider)) hints.push("auth missing");
@@ -341,6 +343,7 @@ export async function promptModelAllowlist(params: {
     if (entry.name && entry.name !== entry.id) hints.push(entry.name);
     if (entry.contextWindow) hints.push(`ctx ${formatTokenK(entry.contextWindow)}`);
     if (entry.reasoning) hints.push("reasoning");
+    if ((entry as any).confidentialCompute) hints.push("TEE");
     const aliases = aliasIndex.byKey.get(key);
     if (aliases?.length) hints.push(`alias: ${aliases.join(", ")}`);
     if (!hasAuth(entry.provider)) hints.push("auth missing");
