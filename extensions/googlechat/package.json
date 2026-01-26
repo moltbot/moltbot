@@ -34,6 +34,6 @@
     "clawdbot": "workspace:*"
   },
   "peerDependencies": {
-    "clawdbot": ">=2026.1.25"
+    "clawdbot": ">=2026.1.24"
   }
 }
