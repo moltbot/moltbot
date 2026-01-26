@@ -196,7 +196,7 @@ Each event includes:
 
 ```typescript
 {
-  type: 'command' | 'session' | 'agent' | 'gateway',
+  type: 'command' | 'session' | 'agent' | 'gateway' | 'message',
   action: string,              // e.g., 'new', 'reset', 'stop'
   sessionKey: string,          // Session identifier
   timestamp: Date,             // When the event occurred
@@ -241,6 +241,35 @@ These hooks are not event-stream listeners; they let plugins synchronously adjus
 
 - **`tool_result_persist`**: transform tool results before they are written to the session transcript. Must be synchronous; return the updated tool result payload or `undefined` to keep it as-is. See [Agent Loop](/concepts/agent-loop).
 
+### Message Events
+
+Triggered during the message lifecycle:
+
+- **`message:received`**: When an inbound message is received (fired alongside the plugin `message_received` hook)
+- **`message:sent`**: When an outbound reply is successfully delivered (fired alongside the plugin `message_sent` hook)
+
+#### `message:received` Context
+
+| Field            | Type                | Description                        |
+|------------------|---------------------|------------------------------------|
+| `from`           | `string`            | Sender identifier                  |
+| `content`        | `string`            | Message body text                  |
+| `channel`        | `string`            | Channel / surface (lowercase)      |
+| `conversationId` | `string \| undefined` | Conversation or chat identifier  |
+| `timestamp`      | `number`            | Message timestamp (epoch ms)       |
+| `messageId`      | `string \| undefined` | Platform message ID              |
+| `senderId`       | `string \| undefined` | Sender user ID                   |
+| `senderName`     | `string \| undefined` | Sender display name              |
+
+#### `message:sent` Context
+
+| Field     | Type     | Description                               |
+|-----------|----------|-------------------------------------------|
+| `content` | `string` | Reply body text                           |
+| `channel` | `string` | Channel / surface (lowercase)             |
+| `to`      | `string` | Recipient identifier                      |
+| `kind`    | `string` | Dispatch kind (`"tool"`, `"block"`, or `"final"`) |
+
 ### Future Events
 
 Planned event types:
@@ -248,8 +277,6 @@ Planned event types:
 - **`session:start`**: When a new session begins
 - **`session:end`**: When a session ends
 - **`agent:error`**: When an agent encounters an error
-- **`message:sent`**: When a message is sent
-- **`message:received`**: When a message is received
 
 ## Creating Custom Hooks
 
