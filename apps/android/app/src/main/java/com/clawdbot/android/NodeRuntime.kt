@@ -242,7 +242,7 @@ class NodeRuntime(context: Context) {
 
   private fun updateStatus() {
     _isConnected.value = operatorConnected
-    _statusText.value =
+    val rawStatus =
       when {
         operatorConnected && nodeConnected -> "Connected"
         operatorConnected && !nodeConnected -> "Connected (node offline)"
@@ -250,11 +250,54 @@ class NodeRuntime(context: Context) {
         operatorStatusText.isNotBlank() && operatorStatusText != "Offline" -> operatorStatusText
         else -> nodeStatusText
       }
+    _statusText.value = normalizeGatewayError(rawStatus)
   }
 
   private fun resolveMainSessionKey(): String {
     val trimmed = _mainSessionKey.value.trim()
     return if (trimmed.isEmpty()) "main" else trimmed
+  }
+
+  private fun resolveToken(): String? {
+    val manual = prefs.manualToken.value.trim()
+    return if (manual.isNotEmpty()) manual else prefs.loadGatewayToken()
+  }
+
+  private fun normalizeGatewayError(message: String): String {
+    if (message == "Connected" || message.startsWith("Connected (")) {
+      return message
+    }
+
+    val lower = message.lowercase()
+
+    if (("token" in lower || "auth" in lower || "unauthorized" in lower) &&
+        ("invalid" in lower || "failed" in lower || "required" in lower || "missing" in lower)) {
+      return "Authentication failed. Check token in Settings."
+    }
+
+    if (message.startsWith("Gateway closed:")) {
+      val reason = message.substringAfter("Gateway closed:").trim()
+      return if (reason.length > 100 || reason.contains("token=") || reason.contains("auth=")) {
+        "Connection closed by gateway"
+      } else {
+        "Gateway closed: $reason"
+      }
+    }
+
+    if (message.startsWith("Gateway error:")) {
+      val error = message.substringAfter("Gateway error:").trim()
+      return if (error.length > 100) {
+        "Connection error"
+      } else {
+        "Gateway error: $error"
+      }
+    }
+
+    return if (message.length > 150) {
+      "Connection failed"
+    } else {
+      message
+    }
   }
 
   private fun maybeNavigateToA2uiOnConnect() {
@@ -284,6 +327,7 @@ class NodeRuntime(context: Context) {
   val manualHost: StateFlow<String> = prefs.manualHost
   val manualPort: StateFlow<Int> = prefs.manualPort
   val manualTls: StateFlow<Boolean> = prefs.manualTls
+  val manualToken: StateFlow<String> = prefs.manualToken
   val lastDiscoveredStableId: StateFlow<String> = prefs.lastDiscoveredStableId
   val canvasDebugStatusEnabled: StateFlow<Boolean> = prefs.canvasDebugStatusEnabled
 
@@ -426,6 +470,14 @@ class NodeRuntime(context: Context) {
 
   fun setManualTls(value: Boolean) {
     prefs.setManualTls(value)
+  }
+
+  fun setManualToken(value: String) {
+    prefs.setManualToken(value)
+  }
+
+  fun clearManualToken() {
+    prefs.clearManualToken()
   }
 
   fun setCanvasDebugStatusEnabled(value: Boolean) {
@@ -604,7 +656,19 @@ class NodeRuntime(context: Context) {
       _statusText.value = "Failed: invalid manual host/port"
       return
     }
-    connect(GatewayEndpoint.manual(host = host, port = port))
+
+    val endpoint = GatewayEndpoint.manual(host = host, port = port)
+    connectedEndpoint = endpoint
+    operatorStatusText = "Connecting…"
+    nodeStatusText = "Connecting…"
+    updateStatus()
+
+    val token = resolveToken()
+    val password = prefs.loadGatewayPassword()
+    val tls = resolveTlsParams(endpoint)
+
+    operatorSession.connect(endpoint, token, password, buildOperatorConnectOptions(), tls)
+    nodeSession.connect(endpoint, token, password, buildNodeConnectOptions(), tls)
   }
 
   fun disconnect() {

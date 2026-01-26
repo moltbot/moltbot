@@ -31,11 +31,15 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -55,6 +59,9 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -82,6 +89,8 @@ fun SettingsSheet(viewModel: MainViewModel) {
   val manualHost by viewModel.manualHost.collectAsState()
   val manualPort by viewModel.manualPort.collectAsState()
   val manualTls by viewModel.manualTls.collectAsState()
+  val manualToken by viewModel.manualToken.collectAsState()
+  var tokenVisible by remember { mutableStateOf(false) }
   val canvasDebugStatusEnabled by viewModel.canvasDebugStatusEnabled.collectAsState()
   val statusText by viewModel.statusText.collectAsState()
   val serverName by viewModel.serverName.collectAsState()
@@ -402,6 +411,54 @@ fun SettingsSheet(viewModel: MainViewModel) {
             label = { Text("Port") },
             modifier = Modifier.fillMaxWidth(),
             enabled = manualEnabled,
+          )
+          OutlinedTextField(
+            value = manualToken,
+            onValueChange = viewModel::setManualToken,
+            label = { Text("Token (optional)") },
+            supportingText = {
+              Text(
+                if (manualToken.trim().isNotEmpty()) {
+                  "Using manual token"
+                } else {
+                  "Leave blank to use global token"
+                }
+              )
+            },
+            visualTransformation = if (tokenVisible) {
+              VisualTransformation.None
+            } else {
+              PasswordVisualTransformation()
+            },
+            keyboardOptions = KeyboardOptions(
+              keyboardType = KeyboardType.Password,
+              imeAction = ImeAction.Done,
+              autoCorrectEnabled = false
+            ),
+            trailingIcon = {
+              Row {
+                if (manualToken.isNotEmpty()) {
+                  IconButton(
+                    onClick = {
+                      viewModel.clearManualToken()
+                    }
+                  ) {
+                    Icon(Icons.Default.Clear, contentDescription = "Clear token")
+                  }
+                }
+                IconButton(
+                  onClick = { tokenVisible = !tokenVisible }
+                ) {
+                  Icon(
+                    if (tokenVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    contentDescription = if (tokenVisible) "Hide token" else "Show token"
+                  )
+                }
+              }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = manualEnabled,
+            singleLine = true,
           )
           ListItem(
             headlineContent = { Text("Require TLS") },
