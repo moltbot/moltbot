@@ -54,12 +54,7 @@ const DEFAULT_CLAUDE_BACKEND: CliBackendConfig = {
   modelAliases: CLAUDE_MODEL_ALIASES,
   sessionArg: "--session-id",
   sessionMode: "always",
-  sessionIdFields: [
-    "session_id",
-    "sessionId",
-    "conversation_id",
-    "conversationId",
-  ],
+  sessionIdFields: ["session_id", "sessionId", "conversation_id", "conversationId"],
   systemPromptArg: "--append-system-prompt",
   systemPromptMode: "append",
   systemPromptWhen: "first",
@@ -69,15 +64,7 @@ const DEFAULT_CLAUDE_BACKEND: CliBackendConfig = {
 
 const DEFAULT_CODEX_BACKEND: CliBackendConfig = {
   command: "codex",
-  args: [
-    "exec",
-    "--json",
-    "--color",
-    "never",
-    "--sandbox",
-    "read-only",
-    "--skip-git-repo-check",
-  ],
+  args: ["exec", "--json", "--color", "never", "--sandbox", "read-only", "--skip-git-repo-check"],
   resumeArgs: [
     "exec",
     "resume",
@@ -124,10 +111,7 @@ function pickBackendConfig(
   return undefined;
 }
 
-function mergeBackendConfig(
-  base: CliBackendConfig,
-  override?: CliBackendConfig,
-): CliBackendConfig {
+function mergeBackendConfig(base: CliBackendConfig, override?: CliBackendConfig): CliBackendConfig {
   if (!override) return { ...base };
   return {
     ...base,
@@ -135,9 +119,7 @@ function mergeBackendConfig(
     args: override.args ?? base.args,
     env: { ...base.env, ...override.env },
     modelAliases: { ...base.modelAliases, ...override.modelAliases },
-    clearEnv: Array.from(
-      new Set([...(base.clearEnv ?? []), ...(override.clearEnv ?? [])]),
-    ),
+    clearEnv: Array.from(new Set([...(base.clearEnv ?? []), ...(override.clearEnv ?? [])])),
     sessionIdFields: override.sessionIdFields ?? base.sessionIdFields,
     sessionArgs: override.sessionArgs ?? base.sessionArgs,
     resumeArgs: override.resumeArgs ?? base.resumeArgs,
