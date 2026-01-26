@@ -8,17 +8,20 @@ echo "HOME=${HOME}"
 
 CONFIG_DIR="${CLAWDBOT_STATE_DIR:-/data/.clawdbot}"
 CONFIG_FILE="${CONFIG_DIR}/clawdbot.json"
+HOME_CONFIG_DIR="${HOME}/.clawdbot"
+HOME_CONFIG_FILE="${HOME_CONFIG_DIR}/clawdbot.json"
 
 echo "Config dir: ${CONFIG_DIR}"
 echo "Config file: ${CONFIG_FILE}"
+echo "Home config dir: ${HOME_CONFIG_DIR}"
+echo "Home config file: ${HOME_CONFIG_FILE}"
 
-# Create config directory
+# Create config directories
 mkdir -p "${CONFIG_DIR}"
+mkdir -p "${HOME_CONFIG_DIR}"
 
-# Write config file with Render-specific settings
-# trustedProxies allows Render's internal proxy IPs to be trusted
-cat > "${CONFIG_FILE}" << 'EOF'
-{
+# Config content
+CONFIG_CONTENT='{
   "gateway": {
     "mode": "local",
     "trustedProxies": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
@@ -26,22 +29,27 @@ cat > "${CONFIG_FILE}" << 'EOF'
       "allowInsecureAuth": true
     }
   }
-}
-EOF
+}'
 
-echo "=== Config written to ${CONFIG_FILE} ==="
+# Write to both locations
+echo "${CONFIG_CONTENT}" > "${CONFIG_FILE}"
+echo "${CONFIG_CONTENT}" > "${HOME_CONFIG_FILE}"
+
+echo "=== Config written to BOTH locations ==="
+echo "=== ${CONFIG_FILE}: ==="
 cat "${CONFIG_FILE}"
+echo "=== ${HOME_CONFIG_FILE}: ==="
+cat "${HOME_CONFIG_FILE}"
 echo "=== End config ==="
 
-# Verify file exists
+# Verify files exist
+echo "=== Listing ${CONFIG_DIR}/ ==="
 ls -la "${CONFIG_DIR}/"
-
-# Also check default config location
-echo "=== Checking ~/.clawdbot ==="
-ls -la ~/.clawdbot/ 2>/dev/null || echo "~/.clawdbot does not exist"
+echo "=== Listing ${HOME_CONFIG_DIR}/ ==="
+ls -la "${HOME_CONFIG_DIR}/"
 
 # Start the gateway with token from env var
-echo "=== Starting gateway ==="
+echo "=== Starting gateway with CLAWDBOT_STATE_DIR=${CLAWDBOT_STATE_DIR} ==="
 exec node dist/index.js gateway \
   --port 8080 \
   --bind lan \
