@@ -12,6 +12,18 @@ coverage
 .worktrees/
 .DS_Store
 **/.DS_Store
+
+# Local development
+.claude/
+.scout-output/
+.tldr/
+.tldrignore
+thoughts/
+*.skill
+clawdbot-local-config-backup.json
+clawdbot-openrouter.json
+skills/
+**/__pycache__/
 ui/src/ui/__screenshots__/
 ui/playwright-report/
 ui/test-results/
