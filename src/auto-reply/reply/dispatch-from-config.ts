@@ -8,6 +8,7 @@ import {
   logMessageQueued,
   logSessionStateChange,
 } from "../../logging/diagnostic.js";
+import { createInternalHookEvent, triggerInternalHook } from "../../hooks/internal-hooks.js";
 import { getGlobalHookRunner } from "../../plugins/hook-runner-global.js";
 import { getReplyFromConfig } from "../reply.js";
 import type { FinalizedMsgContext } from "../templating.js";
@@ -133,31 +134,31 @@ export async function dispatchReplyFromConfig(params: {
 
   const inboundAudio = isInboundAudioContext(ctx);
   const sessionTtsAuto = resolveSessionTtsAuto(ctx, cfg);
+  // Extract message context for hooks (shared between plugin and internal hooks)
+  const hookTimestamp =
+    typeof ctx.Timestamp === "number" && Number.isFinite(ctx.Timestamp) ? ctx.Timestamp : undefined;
+  const hookMessageId =
+    ctx.MessageSidFull ?? ctx.MessageSid ?? ctx.MessageSidFirst ?? ctx.MessageSidLast;
+  const hookContent =
+    typeof ctx.BodyForCommands === "string"
+      ? ctx.BodyForCommands
+      : typeof ctx.RawBody === "string"
+        ? ctx.RawBody
+        : typeof ctx.Body === "string"
+          ? ctx.Body
+          : "";
+  const hookChannelId = (ctx.OriginatingChannel ?? ctx.Surface ?? ctx.Provider ?? "").toLowerCase();
+  const hookConversationId = ctx.OriginatingTo ?? ctx.To ?? ctx.From ?? undefined;
+
+  // Plugin hook: message_received
   const hookRunner = getGlobalHookRunner();
   if (hookRunner?.hasHooks("message_received")) {
-    const timestamp =
-      typeof ctx.Timestamp === "number" && Number.isFinite(ctx.Timestamp)
-        ? ctx.Timestamp
-        : undefined;
-    const messageIdForHook =
-      ctx.MessageSidFull ?? ctx.MessageSid ?? ctx.MessageSidFirst ?? ctx.MessageSidLast;
-    const content =
-      typeof ctx.BodyForCommands === "string"
-        ? ctx.BodyForCommands
-        : typeof ctx.RawBody === "string"
-          ? ctx.RawBody
-          : typeof ctx.Body === "string"
-            ? ctx.Body
-            : "";
-    const channelId = (ctx.OriginatingChannel ?? ctx.Surface ?? ctx.Provider ?? "").toLowerCase();
-    const conversationId = ctx.OriginatingTo ?? ctx.To ?? ctx.From ?? undefined;
-
     void hookRunner
       .runMessageReceived(
         {
           from: ctx.From ?? "",
-          content,
-          timestamp,
+          content: hookContent,
+          timestamp: hookTimestamp,
           metadata: {
             to: ctx.To,
             provider: ctx.Provider,
@@ -165,7 +166,7 @@ export async function dispatchReplyFromConfig(params: {
             threadId: ctx.MessageThreadId,
             originatingChannel: ctx.OriginatingChannel,
             originatingTo: ctx.OriginatingTo,
-            messageId: messageIdForHook,
+            messageId: hookMessageId,
             senderId: ctx.SenderId,
             senderName: ctx.SenderName,
             senderUsername: ctx.SenderUsername,
@@ -173,15 +174,29 @@ export async function dispatchReplyFromConfig(params: {
           },
         },
         {
-          channelId,
+          channelId: hookChannelId,
           accountId: ctx.AccountId,
-          conversationId,
+          conversationId: hookConversationId,
         },
       )
       .catch((err) => {
         logVerbose(`dispatch-from-config: message_received hook failed: ${String(err)}`);
       });
   }
+
+  // Internal hook: message:received
+  void triggerInternalHook(
+    createInternalHookEvent("message", "received", ctx.SessionKey ?? "", {
+      from: ctx.From ?? "",
+      content: hookContent,
+      channel: hookChannelId,
+      conversationId: hookConversationId,
+      timestamp: hookTimestamp ?? Date.now(),
+      messageId: hookMessageId,
+      senderId: ctx.SenderId,
+      senderName: ctx.SenderName,
+    }),
+  );
 
   // Check if we should route replies to originating channel instead of dispatcher.
   // Only route when the originating channel is DIFFERENT from the current surface.

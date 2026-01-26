@@ -42,6 +42,8 @@ export type ReplyDispatcherOptions = {
   onHeartbeatStrip?: () => void;
   onIdle?: () => void;
   onError?: ReplyDispatchErrorHandler;
+  /** Called after a reply is successfully delivered. */
+  onDelivered?: (payload: ReplyPayload, info: { kind: ReplyDispatchKind }) => void;
   /** Human-like delay between block replies for natural rhythm. */
   humanDelay?: HumanDelayConfig;
 };
@@ -116,6 +118,7 @@ export function createReplyDispatcher(options: ReplyDispatcherOptions): ReplyDis
           if (delayMs > 0) await sleep(delayMs);
         }
         await options.deliver(normalized, { kind });
+        options.onDelivered?.(normalized, { kind });
       })
       .catch((err) => {
         options.onError?.(err, { kind });

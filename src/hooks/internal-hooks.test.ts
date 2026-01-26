@@ -212,6 +212,82 @@ describe("hooks", () => {
     });
   });
 
+  describe("message events", () => {
+    it("should trigger message:received handlers", async () => {
+      const handler = vi.fn();
+      registerInternalHook("message:received", handler);
+
+      const event = createInternalHookEvent("message", "received", "test-session", {
+        from: "+1234567890",
+        content: "Hello world",
+        channel: "telegram",
+        conversationId: "chat-123",
+        timestamp: Date.now(),
+        messageId: "msg-1",
+        senderId: "user-1",
+        senderName: "Alice",
+      });
+      await triggerInternalHook(event);
+
+      expect(handler).toHaveBeenCalledWith(event);
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it("should trigger message:sent handlers", async () => {
+      const handler = vi.fn();
+      registerInternalHook("message:sent", handler);
+
+      const event = createInternalHookEvent("message", "sent", "test-session", {
+        content: "Reply text",
+        channel: "telegram",
+        to: "chat-123",
+        kind: "final",
+      });
+      await triggerInternalHook(event);
+
+      expect(handler).toHaveBeenCalledWith(event);
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it("should trigger general message handler for both received and sent", async () => {
+      const handler = vi.fn();
+      registerInternalHook("message", handler);
+
+      const receivedEvent = createInternalHookEvent("message", "received", "test-session", {
+        from: "user-1",
+        content: "Hello",
+        channel: "telegram",
+      });
+      const sentEvent = createInternalHookEvent("message", "sent", "test-session", {
+        content: "Hi there",
+        channel: "telegram",
+        to: "user-1",
+        kind: "final",
+      });
+
+      await triggerInternalHook(receivedEvent);
+      await triggerInternalHook(sentEvent);
+
+      expect(handler).toHaveBeenCalledTimes(2);
+      expect(handler).toHaveBeenCalledWith(receivedEvent);
+      expect(handler).toHaveBeenCalledWith(sentEvent);
+    });
+
+    it("should not trigger message:sent handler for message:received events", async () => {
+      const sentHandler = vi.fn();
+      registerInternalHook("message:sent", sentHandler);
+
+      const event = createInternalHookEvent("message", "received", "test-session", {
+        from: "user-1",
+        content: "Hello",
+        channel: "telegram",
+      });
+      await triggerInternalHook(event);
+
+      expect(sentHandler).not.toHaveBeenCalled();
+    });
+  });
+
   describe("integration", () => {
     it("should handle a complete hook lifecycle", async () => {
       const results: InternalHookEvent[] = [];
