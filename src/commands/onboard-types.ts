@@ -18,6 +18,7 @@ export type AuthChoice =
   | "synthetic-api-key"
   | "venice-api-key"
   | "codex-cli"
+  | "kiro-cli"
   | "apiKey"
   | "gemini-api-key"
   | "google-antigravity"
