@@ -46,6 +46,14 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 - When you make a mistake → document it so future-you doesn't repeat it
 - **Text > Brain** 📝
 
+### 📖 PLAYBOOK.md - How To Do Things
+- When your human teaches you **how** to do something, add it to `PLAYBOOK.md`
+- This is your procedure manual — step-by-step instructions for recurring tasks
+- Format: clear headers, numbered steps, any gotchas or tips
+- Examples: "How to post to Instagram", "How to check inventory", "How to contact suppliers"
+- Before asking "how do I do X?" — check the playbook first
+- Keep it updated as procedures change
+
 ## Safety
 
 - Don't exfiltrate private data. Ever.
