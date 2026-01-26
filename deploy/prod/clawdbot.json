@@ -1,0 +1,87 @@
+{
+  "gateway": {
+    "mode": "local"
+  },
+  "agents": {
+    "list": [
+      {
+        "id": "main",
+        "identity": {
+          "name": "tobais",
+          "emoji": "🤖"
+        }
+      }
+    ],
+    "defaults": {
+      "model": {
+        "primary": "anthropic/claude-sonnet-4-20250514"
+      },
+      "thinkingDefault": "off",
+      "timeoutSeconds": 300,
+      "maxConcurrent": 2
+    }
+  },
+  "channels": {
+    "discord": {
+      "enabled": true,
+      "groupPolicy": "allowlist",
+      "dm": {
+        "enabled": true,
+        "policy": "allowlist",
+        "allowFrom": ["213199879525105664"]
+      },
+      "guilds": {
+        "884603707658997780": {
+          "slug": "techops",
+          "requireMention": true,
+          "channels": {
+            "1437982793564160070": {
+              "allow": true,
+              "requireMention": false
+            },
+            "1461818628424073309": {
+              "allow": true,
+              "requireMention": false
+            },
+            "907225024753180672": {
+              "allow": true,
+              "requireMention": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "session": {
+    "scope": "per-sender",
+    "dmScope": "per-channel-peer",
+    "reset": {
+      "mode": "idle",
+      "idleMinutes": 60
+    },
+    "resetTriggers": ["/new", "/reset"]
+  },
+  "messages": {
+    "ackReaction": "👀",
+    "inbound": {
+      "debounceMs": 2000
+    }
+  },
+  "skills": {
+    "allowBundled": ["self-improving-agent", "github"]
+  },
+  "logging": {
+    "level": "info",
+    "consoleStyle": "compact"
+  },
+  "plugins": {
+    "entries": {
+      "discord": {
+        "enabled": true
+      },
+      "checkins": {
+        "enabled": true
+      }
+    }
+  }
+}

@@ -1,0 +1,41 @@
+# Stage 1: Build extension
+FROM node:22-slim AS builder
+
+# Install git (needed by npm for some deps)
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+COPY extensions/checkins ./
+
+# Install all deps (including devDependencies for tsc) and build
+RUN npm install && npm run build
+
+# Stage 2: Production image
+FROM ghcr.io/clawdbot/clawdbot:main
+
+# Copy the pre-built extension to staging (PVC will mount over /root/.clawdbot)
+COPY --from=builder /build /app/bundled-plugins/checkins
+
+# Copy default config
+COPY deploy/prod/clawdbot.json /app/clawdbot.default.json
+
+# Install production dependencies in staging
+WORKDIR /app/bundled-plugins/checkins
+RUN rm -rf node_modules && npm install --omit=dev
+
+# Create entrypoint script - copies plugin from staging to plugins dir at runtime
+RUN echo '#!/bin/sh\n\
+if [ ! -f "/root/.clawdbot/clawdbot.json" ]; then\n\
+  echo "Creating default config..."\n\
+  mkdir -p /root/.clawdbot\n\
+  cp /app/clawdbot.default.json /root/.clawdbot/clawdbot.json\n\
+fi\n\
+echo "Installing checkins plugin..."\n\
+mkdir -p /root/.clawdbot/extensions\n\
+cp -r /app/bundled-plugins/checkins /root/.clawdbot/extensions/\n\
+exec node /app/dist/entry.js gateway run\n\
+' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+
+WORKDIR /root/.clawdbot
+
+ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]

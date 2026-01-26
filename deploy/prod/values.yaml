@@ -1,0 +1,96 @@
+replicaCount: 1  # Single replica - SQLite doesn't support multiple writers
+
+service:
+  enabled: false  # No HTTP service needed - Discord bot uses WebSocket
+  tls:
+    enabled: false
+
+ingress:
+  enabled: false  # No ingress - Discord bot
+
+image:
+  repository: ${ECR_REGISTRY}/clawdbot
+  tag: ${IMAGE_TAG}
+  pullPolicy: Always
+
+deployment:
+  enabled: true
+  volumes:
+    - name: clawdbot-data
+      mountPath: /root/.clawdbot
+      provisioner: ebs.csi.aws.com
+      bindingMode: WaitForFirstConsumer
+      accessModes:
+        - ReadWriteOnce
+      parameters:
+        type: gp3
+      reclaimPolicy: Retain
+      resources:
+        requests:
+          storage: 10Gi
+
+serviceAccount:
+  create: false
+
+podAnnotations:
+  reloader.stakater.com/auto: "true"
+
+podSecurityContext:
+  fsGroup: 0
+
+securityContext:
+  runAsNonRoot: false
+  runAsUser: 0
+
+resources:
+  limits:
+    memory: 2Gi
+  requests:
+    cpu: 10m
+    memory: 512Mi
+
+# Minimal probes - chart requires valid probe config even when not needed
+# Using exec with 'true' command as no-op since Discord bot has no HTTP endpoint
+livenessProbe:
+  exec:
+    command: ["true"]
+  initialDelaySeconds: 10
+  periodSeconds: 60
+
+readinessProbe:
+  exec:
+    command: ["true"]
+  initialDelaySeconds: 5
+  periodSeconds: 60
+
+# Persistent storage for SQLite database
+persistence:
+  enabled: true
+  storageClass: gp3
+  accessMode: ReadWriteOnce
+  size: 10Gi
+  mountPath: /root/.clawdbot
+
+env:
+  NODE_ENV:
+    type: kv
+    value: "production"
+  # Discord bot token from SSM
+  DISCORD_BOT_TOKEN:
+    type: parameterStore
+    name: discord-bot-token
+    parameter_name: /eks/maker-prod/clawdbot/discord-bot-token
+  # Anthropic API key from SSM
+  ANTHROPIC_API_KEY:
+    type: parameterStore
+    name: anthropic-api-key
+    parameter_name: /eks/maker-prod/clawdbot/anthropic-api-key
+
+externalSecrets:
+  clusterSecretStoreName: maker-prod
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
