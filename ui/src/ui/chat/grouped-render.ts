@@ -35,9 +35,7 @@ function extractImages(message: unknown): ImageBlock[] {
           const data = source.data as string;
           const mediaType = (source.media_type as string) || "image/png";
           // If data is already a data URL, use it directly
-          const url = data.startsWith("data:")
-            ? data
-            : `data:${mediaType};base64,${data}`;
+          const url = data.startsWith("data:") ? data : `data:${mediaType};base64,${data}`;
           images.push({ url });
         } else if (typeof b.url === "string") {
           images.push({ url: b.url });
@@ -260,14 +258,18 @@ function renderGroupedMessage(
     <div class="${bubbleClasses}">
       ${canCopyMarkdown ? renderCopyAsMarkdownButton(markdown!) : nothing}
       ${renderMessageImages(images)}
-      ${reasoningMarkdown
-        ? html`<div class="chat-thinking">${unsafeHTML(
-            toSanitizedMarkdownHtml(reasoningMarkdown),
-          )}</div>`
-        : nothing}
-      ${markdown
-        ? html`<div class="chat-text">${unsafeHTML(toSanitizedMarkdownHtml(markdown))}</div>`
-        : nothing}
+      ${
+        reasoningMarkdown
+          ? html`<div class="chat-thinking">${unsafeHTML(
+              toSanitizedMarkdownHtml(reasoningMarkdown),
+            )}</div>`
+          : nothing
+      }
+      ${
+        markdown
+          ? html`<div class="chat-text">${unsafeHTML(toSanitizedMarkdownHtml(markdown))}</div>`
+          : nothing
+      }
       ${toolCards.map((card) => renderToolCardSidebar(card, onOpenSidebar))}
     </div>
   `;

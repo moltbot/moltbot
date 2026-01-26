@@ -99,10 +99,7 @@ function generateAttachmentId(): string {
   return `att-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function handlePaste(
-  e: ClipboardEvent,
-  props: ChatProps,
-) {
+function handlePaste(e: ClipboardEvent, props: ChatProps) {
   const items = e.clipboardData?.items;
   if (!items || !props.onAttachmentsChange) return;
 
@@ -156,9 +153,7 @@ function renderAttachmentPreview(props: ChatProps) {
               type="button"
               aria-label="Remove attachment"
               @click=${() => {
-                const next = (props.attachments ?? []).filter(
-                  (a) => a.id !== att.id,
-                );
+                const next = (props.attachments ?? []).filter((a) => a.id !== att.id);
                 props.onAttachmentsChange?.(next);
               }}
             >
@@ -305,10 +300,10 @@ export function renderChat(props: ChatProps) {
                   (item) => html`
                     <div class="chat-queue__item">
                       <div class="chat-queue__text">
-                        ${item.text ||
-                        (item.attachments?.length
-                          ? `Image (${item.attachments.length})`
-                          : "")}
+                        ${
+                          item.text ||
+                          (item.attachments?.length ? `Image (${item.attachments.length})` : "")
+                        }
                       </div>
                       <button
                         class="btn chat-queue__remove"
@@ -343,8 +338,7 @@ export function renderChat(props: ChatProps) {
                 e.preventDefault();
                 if (canCompose) props.onSend();
               }}
-              @input=${(e: Event) =>
-                props.onDraftChange((e.target as HTMLTextAreaElement).value)}
+              @input=${(e: Event) => props.onDraftChange((e.target as HTMLTextAreaElement).value)}
               @paste=${(e: ClipboardEvent) => handlePaste(e, props)}
               placeholder=${composePlaceholder}
             ></textarea>
