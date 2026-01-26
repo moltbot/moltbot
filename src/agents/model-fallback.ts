@@ -14,9 +14,9 @@ import {
   resolveModelRefFromString,
 } from "./model-selection.js";
 import type { FailoverReason } from "./pi-embedded-helpers.js";
-import { loadAuthProfileStore, isProfileInCooldown } from "./auth-profiles/usage.js";
+import { isProfileInCooldown } from "./auth-profiles/usage.js";
+import { loadAuthProfileStore } from "./auth-profiles/store.js";
 import { resolveAuthProfileOrder } from "./auth-profiles/order.js";
-import { getAgentAuthStoreDir } from "./agent-dirs.js";
 
 type ModelCandidate = {
   provider: string;
@@ -215,9 +215,7 @@ export async function runWithModelFallback<T>(params: {
     fallbacksOverride: params.fallbacksOverride,
   });
 
-  const authStore = params.cfg
-    ? loadAuthProfileStore(getAgentAuthStoreDir(params.cfg, "main"))
-    : null;
+  const authStore = params.cfg ? loadAuthProfileStore() : null;
 
   const attempts: FallbackAttempt[] = [];
   let lastError: unknown;
@@ -227,7 +225,11 @@ export async function runWithModelFallback<T>(params: {
 
     // Skip candidates that are in cooldown
     if (authStore) {
-      const profileIds = resolveAuthProfileOrder(authStore, candidate.provider);
+      const profileIds = resolveAuthProfileOrder({
+        cfg: params.cfg,
+        store: authStore,
+        provider: candidate.provider,
+      });
       const isAnyProfileAvailable = profileIds.some((id) => !isProfileInCooldown(authStore, id));
 
       if (profileIds.length > 0 && !isAnyProfileAvailable) {
