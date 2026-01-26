@@ -59,8 +59,8 @@ const WebSearchSchema = Type.Object({
 
 type WebSearchConfig = NonNullable<ClawdbotConfig["tools"]>["web"] extends infer Web
   ? Web extends { search?: infer Search }
-    ? Search
-    : undefined
+  ? Search
+  : undefined
   : undefined;
 
 type BraveSearchResult = {

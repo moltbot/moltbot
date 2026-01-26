@@ -1,7 +1,10 @@
 // Zoho Cliq Channel Plugin - Core Stub
 // Full implementation is in extensions/zoho-cliq
 
-import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../../routing/session-key.js";
+import {
+  DEFAULT_ACCOUNT_ID,
+  normalizeAccountId,
+} from "../../routing/session-key.js";
 import type { ChannelMeta } from "./types.js";
 import type { ChannelPlugin } from "./types.js";
 
@@ -63,10 +66,7 @@ export const zohoCliqPlugin: ChannelPlugin<ResolvedZohoCliqAccount> = {
       const resolvedAccountId = normalizeAccountId(accountId);
       const channelCfg = (cfg as any).channels?.["zoho-cliq"];
       const accounts = channelCfg?.accounts;
-      const accountCfg =
-        accounts?.[resolvedAccountId] ??
-        (resolvedAccountId === DEFAULT_ACCOUNT_ID ? channelCfg : undefined) ??
-        {};
+      const accountCfg = accounts?.[resolvedAccountId] ?? (resolvedAccountId === DEFAULT_ACCOUNT_ID ? channelCfg : undefined) ?? {};
 
       const clientId = accountCfg.clientId ?? process.env.ZOHO_CLIQ_CLIENT_ID ?? "";
       const clientSecret = accountCfg.clientSecret ?? process.env.ZOHO_CLIQ_CLIENT_SECRET ?? "";
@@ -89,7 +89,9 @@ export const zohoCliqPlugin: ChannelPlugin<ResolvedZohoCliqAccount> = {
     defaultAccountId: (cfg) => {
       const accounts = (cfg as any).channels?.["zoho-cliq"]?.accounts;
       if (!accounts) return DEFAULT_ACCOUNT_ID;
-      const enabled = Object.entries(accounts).filter(([_, a]) => (a as any).enabled ?? true);
+      const enabled = Object.entries(accounts).filter(
+        ([_, a]) => (a as any).enabled ?? true,
+      );
       if (enabled.length === 1) return enabled[0][0];
       if (Object.hasOwn(accounts, DEFAULT_ACCOUNT_ID)) {
         return DEFAULT_ACCOUNT_ID;
