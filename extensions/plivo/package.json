@@ -1,0 +1,56 @@
+{
+  "name": "@clawdbot/plivo",
+  "version": "2026.1.26",
+  "type": "module",
+  "description": "Clawdbot Plivo SMS/MMS channel plugin - Universal SMS access to your AI assistant",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "clawdbot",
+    "plivo",
+    "sms",
+    "mms",
+    "channel",
+    "messaging"
+  ],
+  "author": "",
+  "license": "MIT",
+  "clawdbot": {
+    "extensions": ["./dist/index.js"],
+    "channel": {
+      "id": "plivo",
+      "label": "Plivo",
+      "selectionLabel": "Plivo SMS",
+      "docsPath": "/channels/plivo",
+      "docsLabel": "plivo",
+      "blurb": "SMS/MMS via Plivo; universal phone access to your AI assistant.",
+      "order": 45
+    },
+    "install": {
+      "npmSpec": "@clawdbot/plivo",
+      "localPath": "extensions/plivo",
+      "defaultChoice": "local"
+    }
+  },
+  "dependencies": {
+    "plivo": "^4.58.0"
+  },
+  "peerDependencies": {
+    "clawdbot": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.2"
+  }
+}
