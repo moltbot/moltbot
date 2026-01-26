@@ -51,18 +51,31 @@ async function requireRiskAcknowledgement(params: {
 
   await params.prompter.note(
     [
-      "Please read: https://docs.clawd.bot/security",
+      "STOP — SECURITY WARNING",
       "",
-      "Clawdbot agents can run commands, read/write files, and act through any tools you enable. They can only send messages on channels you configure (for example, an account you log in on this machine, or a bot account like Slack/Discord).",
+      "Prompt injection can override your bot. This risk is real and not solved.",
       "",
-      "If you’re new to this, start with the sandbox and least privilege. It helps limit what an agent can do if it’s tricked or makes a mistake.",
-      "Learn more: https://docs.clawd.bot/sandboxing",
+      "Untrusted content can carry hostile instructions (links, web pages, files, logs, pasted text).",
+      "If tools are enabled, a bad prompt can leak secrets, run commands, or access files.",
+      "",
+      "Model policy (required for tool-enabled or untrusted input):",
+      "- Recommended: Anthropic Opus 4.5.",
+      "- Not recommended: weaker tiers like Sonnet or Haiku.",
+      "- Supported but not recommended: free models, cheap models, or local models.",
+      "",
+      "Required safeguards:",
+      "- Pairing/allowlists + mention-gating.",
+      "- Sandboxing + minimal tool access.",
+      "- Keep secrets out of the agent’s reachable filesystem.",
+      "",
+      "Docs: https://docs.clawd.bot/gateway/security",
     ].join("\n"),
     "Security",
   );
 
   const ok = await params.prompter.confirm({
-    message: "I understand this is powerful and inherently risky. Continue?",
+    message:
+      "I have read and understand the security warning, and I accept responsibility for secure configuration. Continue?",
     initialValue: false,
   });
   if (!ok) {
