@@ -54,6 +54,7 @@ export type SlackActionConfig = {
   memberInfo?: boolean;
   channelInfo?: boolean;
   emojiList?: boolean;
+  canvases?: boolean;
 };
 
 export type SlackSlashCommandConfig = {
@@ -122,6 +123,10 @@ export type SlackAccountConfig = {
   /** Merge streamed block replies before sending. */
   blockStreamingCoalesce?: BlockStreamingCoalesceConfig;
   mediaMaxMb?: number;
+  /** Max size for downloaded Slack canvas content (MB). Default: 2. */
+  canvasMaxMb?: number;
+  /** Max characters of Slack canvas text injected into prompt (default: 20000). */
+  canvasTextMaxChars?: number;
   /** Reaction notification mode (off|own|all|allowlist). Default: own. */
   reactionNotifications?: SlackReactionNotificationMode;
   /** Allowlist for reaction notifications when mode is allowlist. */
