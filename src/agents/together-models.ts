@@ -74,7 +74,7 @@ export async function discoverTogetherModels(apiKey?: string): Promise<ModelDefi
         const errorText = await response.text();
         console.warn(`[together-models] Error response body: ${errorText}`);
       } catch (e) {
-        console.warn(`[together-models] Could not read error response body: ${e}`);
+        console.warn(`[together-models] Could not read error response body: ${String(e)}`);
       }
 
       return [];
@@ -101,7 +101,7 @@ export async function discoverTogetherModels(apiKey?: string): Promise<ModelDefi
         return [];
       }
     } catch (e) {
-      console.error(`[together-models] Failed to parse JSON: ${e}`);
+      console.error(`[together-models] Failed to parse JSON: ${String(e)}`);
       console.error(`[together-models] Raw response: ${rawResponse}`);
       return [];
     }

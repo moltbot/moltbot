@@ -80,17 +80,31 @@ const TOGETHER_MODEL_CATALOG = [
     },
   },
   {
-    id: "Qwen/Qwen2.5-72B-Instruct-Turbo",
-    name: "Qwen 2.5 72B Instruct Turbo",
+    id: "zai-org/GLM-4.7",
+    name: "GLM 4.7 Fp8",
     reasoning: false,
     input: ["text"],
-    contextWindow: 131072,
+    contextWindow: 202752,
     maxTokens: 8192,
     cost: {
-      input: 0.35,
-      output: 0.8,
-      cacheRead: 0.35,
-      cacheWrite: 0.35,
+      input: 0.45,
+      output: 2.0,
+      cacheRead: 0.45,
+      cacheWrite: 2.0,
+    },
+  },
+  {
+    id: "moonshotai/Kimi-K2-Instruct-0905",
+    name: "Kimi K2-Instruct 0905",
+    reasoning: false,
+    input: ["text"],
+    contextWindow: 262144,
+    maxTokens: 8192,
+    cost: {
+      input: 1.0,
+      output: 3.0,
+      cacheRead: 1.0,
+      cacheWrite: 3.0,
     },
   },
 ];
@@ -545,7 +559,9 @@ export async function applyTogetherProviderConfig(cfg: ClawdbotConfig): Promise<
       togetherModels = await discoverTogetherModels(normalizedApiKey);
       console.log(`[together-models] Dynamic discovery found ${togetherModels.length} models`);
     } catch (error) {
-      console.warn(`[together-models] Dynamic discovery failed, using static catalog: ${error}`);
+      console.warn(
+        `[together-models] Dynamic discovery failed, using static catalog: ${String(error)}`,
+      );
       togetherModels = TOGETHER_MODEL_CATALOG.map(buildTogetherModelDefinition);
     }
   } else {
