@@ -4,6 +4,111 @@ import {
   SYNTHETIC_DEFAULT_MODEL_REF,
   SYNTHETIC_MODEL_CATALOG,
 } from "../agents/synthetic-models.js";
+
+// Together AI constants and models - inline to avoid separate models file
+const TOGETHER_BASE_URL = "https://api.together.xyz/v1";
+const TOGETHER_MODEL_CATALOG = [
+  {
+    id: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    name: "Llama 3.3 70B Instruct Turbo",
+    reasoning: false,
+    input: ["text"],
+    contextWindow: 131072,
+    maxTokens: 8192,
+    cost: {
+      input: 0.88,
+      output: 0.88,
+      cacheRead: 0.88,
+      cacheWrite: 0.88,
+    },
+  },
+  {
+    id: "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+    name: "Llama 4 Scout 17B 16E Instruct",
+    reasoning: false,
+    input: ["text", "image"],
+    contextWindow: 10000000,
+    maxTokens: 32768,
+    cost: {
+      input: 0.18,
+      output: 0.59,
+      cacheRead: 0.18,
+      cacheWrite: 0.18,
+    },
+  },
+  {
+    id: "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
+    name: "Llama 4 Maverick 17B 128E Instruct FP8",
+    reasoning: false,
+    input: ["text", "image"],
+    contextWindow: 20000000,
+    maxTokens: 32768,
+    cost: {
+      input: 0.27,
+      output: 0.85,
+      cacheRead: 0.27,
+      cacheWrite: 0.27,
+    },
+  },
+  {
+    id: "deepseek-ai/DeepSeek-V3.1",
+    name: "DeepSeek V3.1",
+    reasoning: false,
+    input: ["text"],
+    contextWindow: 131072,
+    maxTokens: 8192,
+    cost: {
+      input: 0.6,
+      output: 1.25,
+      cacheRead: 0.6,
+      cacheWrite: 0.6,
+    },
+  },
+  {
+    id: "deepseek-ai/DeepSeek-R1",
+    name: "DeepSeek R1",
+    reasoning: true,
+    input: ["text"],
+    contextWindow: 131072,
+    maxTokens: 8192,
+    cost: {
+      input: 3.0,
+      output: 7.0,
+      cacheRead: 3.0,
+      cacheWrite: 3.0,
+    },
+  },
+  {
+    id: "Qwen/Qwen2.5-72B-Instruct-Turbo",
+    name: "Qwen 2.5 72B Instruct Turbo",
+    reasoning: false,
+    input: ["text"],
+    contextWindow: 131072,
+    maxTokens: 8192,
+    cost: {
+      input: 0.35,
+      output: 0.8,
+      cacheRead: 0.35,
+      cacheWrite: 0.35,
+    },
+  },
+];
+
+function buildTogetherModelDefinition(
+  model: (typeof TOGETHER_MODEL_CATALOG)[number],
+): ModelDefinitionConfig {
+  return {
+    id: model.id,
+    name: model.name,
+    api: "openai-completions",
+    reasoning: model.reasoning,
+    input: model.input as ("text" | "image")[],
+    cost: model.cost,
+    contextWindow: model.contextWindow,
+    maxTokens: model.maxTokens,
+  };
+}
+
 import {
   buildVeniceModelDefinition,
   VENICE_BASE_URL,
@@ -11,8 +116,10 @@ import {
   VENICE_MODEL_CATALOG,
 } from "../agents/venice-models.js";
 import type { ClawdbotConfig } from "../config/config.js";
+import type { ModelDefinitionConfig } from "../config/types.models.js";
 import {
   OPENROUTER_DEFAULT_MODEL_REF,
+  TOGETHER_DEFAULT_MODEL_REF,
   VERCEL_AI_GATEWAY_DEFAULT_MODEL_REF,
   ZAI_DEFAULT_MODEL_REF,
 } from "./onboard-auth.credentials.js";
@@ -405,6 +512,75 @@ export function applyVeniceConfig(cfg: ClawdbotConfig): ClawdbotConfig {
               }
             : undefined),
           primary: VENICE_DEFAULT_MODEL_REF,
+        },
+      },
+    },
+  };
+}
+
+export function applyTogetherProviderConfig(cfg: ClawdbotConfig): ClawdbotConfig {
+  const models = { ...cfg.agents?.defaults?.models };
+  models[TOGETHER_DEFAULT_MODEL_REF] = {
+    ...models[TOGETHER_DEFAULT_MODEL_REF],
+    alias: models[TOGETHER_DEFAULT_MODEL_REF]?.alias ?? "Together AI",
+  };
+
+  const providers = { ...cfg.models?.providers };
+  const existingProvider = providers.together;
+  const existingModels = Array.isArray(existingProvider?.models) ? existingProvider.models : [];
+  const togetherModels = TOGETHER_MODEL_CATALOG.map(buildTogetherModelDefinition);
+  const mergedModels = [
+    ...existingModels,
+    ...togetherModels.filter(
+      (model) => !existingModels.some((existing) => existing.id === model.id),
+    ),
+  ];
+  const { apiKey: existingApiKey, ...existingProviderRest } = (existingProvider ?? {}) as Record<
+    string,
+    unknown
+  > as { apiKey?: string };
+  const resolvedApiKey = typeof existingApiKey === "string" ? existingApiKey : undefined;
+  const normalizedApiKey = resolvedApiKey?.trim();
+  providers.together = {
+    ...existingProviderRest,
+    baseUrl: TOGETHER_BASE_URL,
+    api: "openai-completions",
+    ...(normalizedApiKey ? { apiKey: normalizedApiKey } : {}),
+    models: mergedModels.length > 0 ? mergedModels : togetherModels,
+  };
+
+  return {
+    ...cfg,
+    agents: {
+      ...cfg.agents,
+      defaults: {
+        ...cfg.agents?.defaults,
+        models,
+      },
+    },
+    models: {
+      mode: cfg.models?.mode ?? "merge",
+      providers,
+    },
+  };
+}
+
+export function applyTogetherConfig(cfg: ClawdbotConfig): ClawdbotConfig {
+  const next = applyTogetherProviderConfig(cfg);
+  const existingModel = next.agents?.defaults?.model;
+  return {
+    ...next,
+    agents: {
+      ...next.agents,
+      defaults: {
+        ...next.agents?.defaults,
+        model: {
+          ...(existingModel && "fallbacks" in (existingModel as Record<string, unknown>)
+            ? {
+                fallbacks: (existingModel as { fallbacks?: string[] }).fallbacks,
+              }
+            : undefined),
+          primary: TOGETHER_DEFAULT_MODEL_REF,
         },
       },
     },

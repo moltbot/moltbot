@@ -203,6 +203,11 @@ export function buildAuthChoiceOptions(params: {
     hint: "Privacy-focused inference (uncensored models)",
   });
   options.push({
+    value: "together-api-key",
+    label: "Together AI API key",
+    hint: "Access to Llama, DeepSeek, Qwen, and more open models",
+  });
+  options.push({
     value: "github-copilot",
     label: "GitHub Copilot (GitHub device login)",
     hint: "Uses GitHub device flow",
