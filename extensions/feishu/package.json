@@ -1,0 +1,38 @@
+{
+  "name": "@clawdbot/feishu",
+  "version": "2026.1.25",
+  "description": "Clawdbot Feishu channel plugin",
+  "type": "module",
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "clawdbot": "workspace:*"
+  },
+  "peerDependencies": {
+    "clawdbot": ">=2026.1.25"
+  },
+  "clawdbot": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "channel": {
+      "id": "feishu",
+      "label": "Feishu",
+      "selectionLabel": "Feishu (Bot API)",
+      "docsPath": "/channels/feishu",
+      "docsLabel": "feishu",
+      "blurb": "Feishu bot with HTTP webhook events.",
+      "aliases": [
+        "fs"
+      ],
+      "order": 85,
+      "quickstartAllowFrom": true
+    },
+    "install": {
+      "npmSpec": "@clawdbot/feishu",
+      "localPath": "extensions/feishu",
+      "defaultChoice": "npm"
+    }
+  }
+}
