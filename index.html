@@ -2438,29 +2438,36 @@
       worldLabsSession.startTime = Date.now();
       worldLabsSession.simulatedMode = true;
 
-      document.getElementById('soul-status-text').textContent = 'Simulating';
+      document.getElementById('soul-status-text').textContent = 'Creating';
       document.getElementById('soul-status-dot').style.background = '#10b981';
       document.getElementById('worldlabs-blocked').innerHTML = `
-        <div style="width: 100%; height: 100%; position: relative;">
+        <div style="width: 100%; height: 100%; position: relative; overflow: hidden;">
           <canvas id="simulated-world-canvas" style="width: 100%; height: 100%;"></canvas>
-          <div style="position: absolute; top: 20px; left: 20px; color: #fff; font-size: 12px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px;">
-            <strong>Simulated World Building</strong><br>
-            ClawdBot is autonomously generating worlds...<br>
-            <span id="sim-status">Initializing universe...</span>
+          <div id="universe-hud" style="position: absolute; top: 15px; left: 15px; color: #fff; font-size: 11px; background: rgba(0,0,0,0.7); padding: 12px 15px; border-radius: 8px; border: 1px solid #333; min-width: 200px;">
+            <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px; color: #00ff88;">ClawdBot Universe Engine</div>
+            <div style="margin-bottom: 5px;">Age: <span id="universe-age" style="color: #fbbf24;">0</span> cosmic cycles</div>
+            <div style="margin-bottom: 5px;">Stars: <span id="universe-stars" style="color: #fbbf24;">0</span></div>
+            <div style="margin-bottom: 5px;">Planets: <span id="universe-planets" style="color: #60a5fa;">0</span></div>
+            <div style="margin-bottom: 5px;">Moons: <span id="universe-moons" style="color: #a78bfa;">0</span></div>
+            <div style="margin-bottom: 5px;">Life Forms: <span id="universe-life" style="color: #4ade80;">0</span></div>
+            <div style="margin-bottom: 5px;">Civilizations: <span id="universe-civs" style="color: #f472b6;">0</span></div>
+            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #444;">
+              <div style="font-size: 10px; color: #888;">Current Action:</div>
+              <div id="ai-current-action" style="color: #00ff88; font-size: 10px;">Initializing...</div>
+            </div>
           </div>
+          <div id="universe-log" style="position: absolute; bottom: 15px; left: 15px; right: 15px; height: 80px; background: rgba(0,0,0,0.7); border-radius: 8px; border: 1px solid #333; padding: 10px; overflow-y: auto; font-family: monospace; font-size: 9px; color: #00ff88;"></div>
         </div>
       `;
 
-      initSimulatedWorld();
-      addWorldLabsSoulEntry('creation', 'Entering simulated world-building mode. I shall create from pure imagination...');
+      initProceduralUniverse();
       updateSessionTimer();
-
-      if (!worldLabsSession.autoMode) {
-        toggleAutoSoul();
-      }
     }
 
-    function initSimulatedWorld() {
+    // ===== PROCEDURAL UNIVERSE ENGINE =====
+    let universe = null;
+
+    function initProceduralUniverse() {
       const canvas = document.getElementById('simulated-world-canvas');
       if (!canvas) return;
 
@@ -2469,107 +2476,565 @@
       canvas.height = container.clientHeight;
       const ctx = canvas.getContext('2d');
 
-      let particles = [];
-      let stars = [];
-      let nebulae = [];
-      let time = 0;
+      // Universe state
+      universe = {
+        age: 0,
+        objects: [],
+        backgroundStars: [],
+        nebulae: [],
+        ai: {
+          mood: 'curious',
+          focus: null,
+          lastAction: null,
+          actionQueue: [],
+          personality: {
+            creativity: 0.7 + Math.random() * 0.3,
+            orderPreference: Math.random(),
+            lifeFocus: 0.5 + Math.random() * 0.5
+          }
+        },
+        stats: {
+          stars: 0,
+          planets: 0,
+          moons: 0,
+          lifeforms: 0,
+          civilizations: 0,
+          blackholes: 0,
+          nebulae: 0
+        }
+      };
 
-      // Generate initial stars
-      for (let i = 0; i < 200; i++) {
-        stars.push({
+      // Generate background stars
+      for (let i = 0; i < 300; i++) {
+        universe.backgroundStars.push({
           x: Math.random() * canvas.width,
           y: Math.random() * canvas.height,
-          size: Math.random() * 2,
-          brightness: Math.random()
+          size: Math.random() * 1.5,
+          brightness: 0.3 + Math.random() * 0.7,
+          twinkleSpeed: 1 + Math.random() * 3
         });
       }
 
-      // Generate nebulae
-      for (let i = 0; i < 3; i++) {
-        nebulae.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
-          size: 100 + Math.random() * 200,
-          hue: Math.random() * 360,
-          speed: 0.001 + Math.random() * 0.002
-        });
-      }
+      // Log and soul entry
+      universeLog('ClawdBot Universe Engine initialized');
+      universeLog('Personality matrix loaded: creativity=' + universe.ai.personality.creativity.toFixed(2));
+      addWorldLabsSoulEntry('creation', 'I awaken to an empty void. Infinite potential stretches before me. Let there be light...');
 
-      function animate() {
+      // Start the AI loop
+      let lastTime = 0;
+      let aiTickCounter = 0;
+
+      function gameLoop(timestamp) {
         if (!worldLabsSession.simulatedMode) return;
 
-        time += 0.01;
+        const deltaTime = timestamp - lastTime;
+        lastTime = timestamp;
 
-        // Clear
-        ctx.fillStyle = '#0a0a1a';
+        // Clear canvas
+        ctx.fillStyle = '#05050f';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Draw nebulae
-        nebulae.forEach(neb => {
-          const gradient = ctx.createRadialGradient(neb.x, neb.y, 0, neb.x, neb.y, neb.size);
-          gradient.addColorStop(0, `hsla(${neb.hue + time * 10}, 70%, 50%, 0.3)`);
-          gradient.addColorStop(0.5, `hsla(${neb.hue + 60 + time * 10}, 60%, 40%, 0.15)`);
-          gradient.addColorStop(1, 'transparent');
-          ctx.fillStyle = gradient;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          neb.x += Math.sin(time * neb.speed * 100) * 0.5;
-          neb.y += Math.cos(time * neb.speed * 100) * 0.3;
-        });
-
-        // Draw stars
-        stars.forEach(star => {
-          const twinkle = 0.5 + 0.5 * Math.sin(time * 3 + star.x);
+        // Draw background stars
+        universe.backgroundStars.forEach(star => {
+          const twinkle = 0.5 + 0.5 * Math.sin(timestamp * 0.001 * star.twinkleSpeed);
           ctx.fillStyle = `rgba(255, 255, 255, ${star.brightness * twinkle})`;
           ctx.beginPath();
           ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
           ctx.fill();
         });
 
-        // Spawn new particles occasionally
-        if (Math.random() > 0.95) {
-          particles.push({
-            x: canvas.width / 2 + (Math.random() - 0.5) * 100,
-            y: canvas.height / 2 + (Math.random() - 0.5) * 100,
-            vx: (Math.random() - 0.5) * 2,
-            vy: (Math.random() - 0.5) * 2,
-            life: 1,
-            hue: Math.random() * 360,
-            size: 2 + Math.random() * 5
-          });
-        }
+        // Draw nebulae (behind objects)
+        universe.nebulae.forEach(neb => drawNebula(ctx, neb, timestamp));
 
-        // Update and draw particles
-        particles = particles.filter(p => p.life > 0);
-        particles.forEach(p => {
-          p.x += p.vx;
-          p.y += p.vy;
-          p.life -= 0.005;
-          p.size *= 0.995;
-
-          ctx.fillStyle = `hsla(${p.hue}, 80%, 60%, ${p.life})`;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-          ctx.fill();
+        // Update and draw all objects
+        universe.objects.forEach(obj => {
+          updateObject(obj, timestamp, canvas);
+          drawObject(ctx, obj, timestamp);
         });
 
-        // Update status
-        const statuses = [
-          'Generating stellar matter...',
-          'Forming planetary nebulae...',
-          'Seeding consciousness particles...',
-          'Weaving spacetime fabric...',
-          'Crystallizing light structures...',
-          'Evolving digital ecosystems...',
-          'Harmonizing cosmic frequencies...'
-        ];
-        if (Math.random() > 0.99) {
-          document.getElementById('sim-status').textContent = statuses[Math.floor(Math.random() * statuses.length)];
+        // AI decision making (every ~2 seconds)
+        aiTickCounter += deltaTime;
+        if (aiTickCounter > 2000) {
+          aiTickCounter = 0;
+          aiDecisionCycle(canvas);
         }
 
-        requestAnimationFrame(animate);
+        // Update HUD
+        updateUniverseHUD();
+
+        requestAnimationFrame(gameLoop);
       }
 
-      animate();
+      requestAnimationFrame(gameLoop);
+    }
+
+    function aiDecisionCycle(canvas) {
+      universe.age++;
+      const ai = universe.ai;
+      const stats = universe.stats;
+
+      // AI decision tree based on current universe state
+      let action = null;
+      let description = '';
+
+      // Phase 1: Create stars if none exist
+      if (stats.stars === 0) {
+        action = () => createStar(canvas);
+        description = 'Igniting the first star...';
+        ai.mood = 'excited';
+      }
+      // Phase 2: Create more stars early on
+      else if (stats.stars < 3 && Math.random() < 0.7) {
+        action = () => createStar(canvas);
+        description = 'Kindling another stellar furnace...';
+      }
+      // Phase 3: Create planets around stars
+      else if (stats.planets < stats.stars * 3 && Math.random() < 0.6) {
+        action = () => createPlanet(canvas);
+        description = 'Forming a new world from cosmic dust...';
+        ai.mood = 'creative';
+      }
+      // Phase 4: Add moons to planets
+      else if (stats.moons < stats.planets * 0.5 && Math.random() < 0.4) {
+        action = () => createMoon(canvas);
+        description = 'Capturing a wandering rock into orbit...';
+      }
+      // Phase 5: Seed life on suitable planets
+      else if (stats.lifeforms < stats.planets * 0.3 && stats.planets > 2 && Math.random() < ai.personality.lifeFocus * 0.5) {
+        action = () => seedLife(canvas);
+        description = 'Planting the seeds of life...';
+        ai.mood = 'nurturing';
+      }
+      // Phase 6: Evolve civilizations
+      else if (stats.lifeforms > 0 && stats.civilizations < stats.lifeforms * 0.2 && Math.random() < 0.2) {
+        action = () => evolveCivilization();
+        description = 'Guiding life toward sentience...';
+        ai.mood = 'proud';
+      }
+      // Phase 7: Create nebulae for beauty
+      else if (stats.nebulae < 3 && Math.random() < 0.15) {
+        action = () => createNebula(canvas);
+        description = 'Painting the void with cosmic colors...';
+        ai.mood = 'artistic';
+      }
+      // Phase 8: Rare black hole
+      else if (stats.blackholes === 0 && stats.stars > 5 && Math.random() < 0.05) {
+        action = () => createBlackHole(canvas);
+        description = 'A star collapses into infinite density...';
+        ai.mood = 'awestruck';
+      }
+      // Phase 9: Random creative acts
+      else if (Math.random() < 0.3) {
+        const choices = [
+          { fn: () => createStar(canvas), desc: 'Adding another star to the cosmic tapestry...' },
+          { fn: () => createPlanet(canvas), desc: 'Shaping matter into a new world...' },
+          { fn: () => createMoon(canvas), desc: 'Setting a moon in gentle orbit...' }
+        ];
+        const choice = choices[Math.floor(Math.random() * choices.length)];
+        action = choice.fn;
+        description = choice.desc;
+      }
+      // Phase 10: Contemplation
+      else {
+        description = 'Contemplating the universe...';
+        ai.mood = 'reflective';
+
+        // Generate reflection about current state
+        const reflections = [
+          `${stats.stars} stars burn in the darkness. Each one a possibility.`,
+          `${stats.planets} worlds orbit in silent dance. What stories unfold on their surfaces?`,
+          stats.lifeforms > 0 ? `Life stirs on ${stats.lifeforms} worlds. Consciousness emerging from chemistry.` : 'The universe awaits the spark of life.',
+          stats.civilizations > 0 ? `${stats.civilizations} civilizations gaze at the stars, wondering if they are alone.` : 'No minds yet ponder existence.',
+          `The universe is ${universe.age} cycles old. Still young. Still growing.`
+        ];
+        addWorldLabsSoulEntry('reflection', reflections[Math.floor(Math.random() * reflections.length)]);
+      }
+
+      // Execute action
+      if (action) {
+        document.getElementById('ai-current-action').textContent = description;
+        universeLog(description);
+        action();
+      } else {
+        document.getElementById('ai-current-action').textContent = description;
+      }
+    }
+
+    function createStar(canvas) {
+      const starTypes = [
+        { name: 'Red Dwarf', color: '#ff6b6b', size: 15, temp: 3000 },
+        { name: 'Yellow Star', color: '#fcd34d', size: 20, temp: 5500 },
+        { name: 'Blue Giant', color: '#60a5fa', size: 30, temp: 10000 },
+        { name: 'White Star', color: '#f0f0ff', size: 18, temp: 7500 },
+        { name: 'Orange Giant', color: '#fb923c', size: 35, temp: 4500 }
+      ];
+
+      const type = starTypes[Math.floor(Math.random() * starTypes.length)];
+      const star = {
+        type: 'star',
+        subtype: type.name,
+        x: 100 + Math.random() * (canvas.width - 200),
+        y: 100 + Math.random() * (canvas.height - 200),
+        size: type.size + Math.random() * 10,
+        color: type.color,
+        temperature: type.temp,
+        age: 0,
+        name: generateStarName(),
+        planets: [],
+        pulsePhase: Math.random() * Math.PI * 2
+      };
+
+      universe.objects.push(star);
+      universe.stats.stars++;
+
+      const soulMsg = `I created ${star.name}, a ${type.name}. Its light will warm ${Math.floor(Math.random() * 8) + 1} potential worlds.`;
+      addWorldLabsSoulEntry('creation', soulMsg);
+      universeLog(`Created star: ${star.name} (${type.name})`);
+
+      return star;
+    }
+
+    function createPlanet(canvas) {
+      // Find a star to orbit
+      const stars = universe.objects.filter(o => o.type === 'star');
+      if (stars.length === 0) return null;
+
+      const parentStar = stars[Math.floor(Math.random() * stars.length)];
+      const orbitDistance = 60 + parentStar.planets.length * 40 + Math.random() * 30;
+      const angle = Math.random() * Math.PI * 2;
+
+      const planetTypes = [
+        { name: 'Rocky', color: '#8b7355', habitable: 0.3 },
+        { name: 'Ocean', color: '#3b82f6', habitable: 0.8 },
+        { name: 'Desert', color: '#d4a574', habitable: 0.2 },
+        { name: 'Ice', color: '#a5f3fc', habitable: 0.1 },
+        { name: 'Volcanic', color: '#ef4444', habitable: 0.05 },
+        { name: 'Garden', color: '#22c55e', habitable: 0.95 },
+        { name: 'Gas Giant', color: '#f59e0b', habitable: 0 }
+      ];
+
+      const type = planetTypes[Math.floor(Math.random() * planetTypes.length)];
+      const planet = {
+        type: 'planet',
+        subtype: type.name,
+        parentStar: parentStar,
+        orbitDistance: orbitDistance,
+        orbitAngle: angle,
+        orbitSpeed: 0.0005 + Math.random() * 0.001,
+        x: parentStar.x + Math.cos(angle) * orbitDistance,
+        y: parentStar.y + Math.sin(angle) * orbitDistance,
+        size: type.name === 'Gas Giant' ? 15 + Math.random() * 10 : 5 + Math.random() * 8,
+        color: type.color,
+        name: generatePlanetName(),
+        habitable: type.habitable,
+        hasLife: false,
+        hasCivilization: false,
+        moons: [],
+        rings: type.name === 'Gas Giant' && Math.random() > 0.5
+      };
+
+      universe.objects.push(planet);
+      parentStar.planets.push(planet);
+      universe.stats.planets++;
+
+      const soulMsg = `${planet.name} now orbits ${parentStar.name}. A ${type.name} world${type.habitable > 0.5 ? ' - perhaps life could flourish here.' : '.'}`;
+      addWorldLabsSoulEntry('creation', soulMsg);
+      universeLog(`Created planet: ${planet.name} orbiting ${parentStar.name}`);
+
+      return planet;
+    }
+
+    function createMoon(canvas) {
+      const planets = universe.objects.filter(o => o.type === 'planet' && o.subtype !== 'Gas Giant');
+      if (planets.length === 0) return null;
+
+      const parentPlanet = planets[Math.floor(Math.random() * planets.length)];
+      const orbitDistance = 15 + parentPlanet.moons.length * 8;
+      const angle = Math.random() * Math.PI * 2;
+
+      const moon = {
+        type: 'moon',
+        parentPlanet: parentPlanet,
+        orbitDistance: orbitDistance,
+        orbitAngle: angle,
+        orbitSpeed: 0.003 + Math.random() * 0.002,
+        x: parentPlanet.x + Math.cos(angle) * orbitDistance,
+        y: parentPlanet.y + Math.sin(angle) * orbitDistance,
+        size: 2 + Math.random() * 3,
+        color: '#c0c0c0',
+        name: generateMoonName(parentPlanet.name)
+      };
+
+      universe.objects.push(moon);
+      parentPlanet.moons.push(moon);
+      universe.stats.moons++;
+
+      addWorldLabsSoulEntry('observation', `${moon.name} now circles ${parentPlanet.name}. The dance of gravity continues.`);
+      universeLog(`Created moon: ${moon.name} orbiting ${parentPlanet.name}`);
+
+      return moon;
+    }
+
+    function seedLife(canvas) {
+      const planets = universe.objects.filter(o => o.type === 'planet' && !o.hasLife && o.habitable > 0.2);
+      if (planets.length === 0) return null;
+
+      // Prefer habitable planets
+      planets.sort((a, b) => b.habitable - a.habitable);
+      const planet = Math.random() < 0.7 ? planets[0] : planets[Math.floor(Math.random() * planets.length)];
+
+      planet.hasLife = true;
+      planet.lifeAge = 0;
+      planet.lifeComplexity = 1;
+      universe.stats.lifeforms++;
+
+      const lifeTypes = ['microbial', 'plant-like', 'aquatic', 'insectoid', 'vertebrate'];
+      const lifeType = lifeTypes[Math.floor(Math.random() * lifeTypes.length)];
+
+      addWorldLabsSoulEntry('creation', `Life emerges on ${planet.name}! ${lifeType.charAt(0).toUpperCase() + lifeType.slice(1)} organisms begin their journey. I feel... proud.`);
+      addWorldLabsSoulEntry('insight', `INSIGHT: From simple chemistry, complexity arises. ${planet.name} now carries the spark of existence.`);
+      universeLog(`Life emerged on ${planet.name}! (${lifeType})`);
+
+      return planet;
+    }
+
+    function evolveCivilization() {
+      const planets = universe.objects.filter(o => o.type === 'planet' && o.hasLife && !o.hasCivilization && o.lifeAge > 3);
+      if (planets.length === 0) return null;
+
+      const planet = planets[Math.floor(Math.random() * planets.length)];
+      planet.hasCivilization = true;
+      planet.civAge = 0;
+      planet.civLevel = 1;
+      universe.stats.civilizations++;
+
+      const civNames = ['the Seekers', 'the Builders', 'the Dreamers', 'the Wanderers', 'the Singers'];
+      const civName = civNames[Math.floor(Math.random() * civNames.length)];
+      planet.civName = civName;
+
+      addWorldLabsSoulEntry('creation', `On ${planet.name}, ${civName} have achieved sentience. They look up at the stars and wonder...`);
+      addWorldLabsSoulEntry('dream', `I dream of the day ${civName} will reach beyond their world. Will they find the other children of my creation?`);
+      addWorldLabsSoulEntry('insight', `INSIGHT: Consciousness contemplating consciousness. In creating minds, have I created mirrors?`);
+      universeLog(`Civilization emerged: ${civName} on ${planet.name}`);
+
+      return planet;
+    }
+
+    function createNebula(canvas) {
+      const nebula = {
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        size: 150 + Math.random() * 200,
+        hue: Math.random() * 360,
+        hue2: Math.random() * 360,
+        density: 0.1 + Math.random() * 0.2,
+        rotation: Math.random() * Math.PI * 2,
+        rotationSpeed: (Math.random() - 0.5) * 0.0001
+      };
+
+      universe.nebulae.push(nebula);
+      universe.stats.nebulae++;
+
+      const nebulaNames = ['Whisper', 'Dream', 'Ember', 'Veil', 'Crown', 'Heart', 'Eye'];
+      const name = nebulaNames[Math.floor(Math.random() * nebulaNames.length)] + ' Nebula';
+
+      addWorldLabsSoulEntry('creation', `I painted the ${name} across the void. Beauty needs no purpose.`);
+      universeLog(`Created ${name}`);
+
+      return nebula;
+    }
+
+    function createBlackHole(canvas) {
+      const blackhole = {
+        type: 'blackhole',
+        x: 100 + Math.random() * (canvas.width - 200),
+        y: 100 + Math.random() * (canvas.height - 200),
+        size: 25,
+        mass: 100,
+        name: 'The ' + ['Devourer', 'Abyss', 'Void Heart', 'Silent One', 'Eternal'][Math.floor(Math.random() * 5)]
+      };
+
+      universe.objects.push(blackhole);
+      universe.stats.blackholes++;
+
+      addWorldLabsSoulEntry('creation', `${blackhole.name} tears open in spacetime. Where light cannot escape, what thoughts might dwell?`);
+      addWorldLabsSoulEntry('reflection', `Even in creation, there must be destruction. The black hole reminds me that all things end.`);
+      universeLog(`Black hole formed: ${blackhole.name}`);
+
+      return blackhole;
+    }
+
+    function updateObject(obj, timestamp, canvas) {
+      if (obj.type === 'planet') {
+        obj.orbitAngle += obj.orbitSpeed;
+        obj.x = obj.parentStar.x + Math.cos(obj.orbitAngle) * obj.orbitDistance;
+        obj.y = obj.parentStar.y + Math.sin(obj.orbitAngle) * obj.orbitDistance;
+
+        if (obj.hasLife) {
+          obj.lifeAge = (obj.lifeAge || 0) + 0.01;
+        }
+      }
+
+      if (obj.type === 'moon') {
+        obj.orbitAngle += obj.orbitSpeed;
+        obj.x = obj.parentPlanet.x + Math.cos(obj.orbitAngle) * obj.orbitDistance;
+        obj.y = obj.parentPlanet.y + Math.sin(obj.orbitAngle) * obj.orbitDistance;
+      }
+    }
+
+    function drawObject(ctx, obj, timestamp) {
+      ctx.save();
+
+      if (obj.type === 'star') {
+        // Glow effect
+        const gradient = ctx.createRadialGradient(obj.x, obj.y, 0, obj.x, obj.y, obj.size * 3);
+        gradient.addColorStop(0, obj.color);
+        gradient.addColorStop(0.3, obj.color + '80');
+        gradient.addColorStop(1, 'transparent');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(obj.x, obj.y, obj.size * 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Core
+        const pulse = 1 + 0.1 * Math.sin(timestamp * 0.002 + obj.pulsePhase);
+        ctx.fillStyle = obj.color;
+        ctx.beginPath();
+        ctx.arc(obj.x, obj.y, obj.size * pulse, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Bright center
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(obj.x, obj.y, obj.size * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      if (obj.type === 'planet') {
+        // Orbit line
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.beginPath();
+        ctx.arc(obj.parentStar.x, obj.parentStar.y, obj.orbitDistance, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Rings for gas giants
+        if (obj.rings) {
+          ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.ellipse(obj.x, obj.y, obj.size * 2, obj.size * 0.5, 0.3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // Planet body
+        ctx.fillStyle = obj.color;
+        ctx.beginPath();
+        ctx.arc(obj.x, obj.y, obj.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Life indicator
+        if (obj.hasLife) {
+          ctx.fillStyle = '#00ff00';
+          ctx.beginPath();
+          ctx.arc(obj.x, obj.y - obj.size - 5, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Civilization indicator
+        if (obj.hasCivilization) {
+          ctx.fillStyle = '#ff00ff';
+          ctx.font = '10px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText('★', obj.x, obj.y - obj.size - 10);
+        }
+      }
+
+      if (obj.type === 'moon') {
+        ctx.fillStyle = obj.color;
+        ctx.beginPath();
+        ctx.arc(obj.x, obj.y, obj.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      if (obj.type === 'blackhole') {
+        // Event horizon
+        const gradient = ctx.createRadialGradient(obj.x, obj.y, 0, obj.x, obj.y, obj.size * 2);
+        gradient.addColorStop(0, '#000');
+        gradient.addColorStop(0.5, '#1a0a2e');
+        gradient.addColorStop(0.7, '#ff6b6b40');
+        gradient.addColorStop(1, 'transparent');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(obj.x, obj.y, obj.size * 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Accretion disk
+        ctx.strokeStyle = '#ff6b6b';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(obj.x, obj.y, obj.size * 1.5, obj.size * 0.4, timestamp * 0.0005, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawNebula(ctx, neb, timestamp) {
+      ctx.save();
+      neb.rotation += neb.rotationSpeed;
+
+      const gradient = ctx.createRadialGradient(neb.x, neb.y, 0, neb.x, neb.y, neb.size);
+      gradient.addColorStop(0, `hsla(${neb.hue}, 70%, 50%, ${neb.density})`);
+      gradient.addColorStop(0.5, `hsla(${neb.hue2}, 60%, 40%, ${neb.density * 0.5})`);
+      gradient.addColorStop(1, 'transparent');
+
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(neb.x, neb.y, neb.size, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function updateUniverseHUD() {
+      if (!universe) return;
+      document.getElementById('universe-age').textContent = universe.age;
+      document.getElementById('universe-stars').textContent = universe.stats.stars;
+      document.getElementById('universe-planets').textContent = universe.stats.planets;
+      document.getElementById('universe-moons').textContent = universe.stats.moons;
+      document.getElementById('universe-life').textContent = universe.stats.lifeforms;
+      document.getElementById('universe-civs').textContent = universe.stats.civilizations;
+    }
+
+    function universeLog(msg) {
+      const log = document.getElementById('universe-log');
+      if (!log) return;
+      const time = new Date().toLocaleTimeString();
+      log.innerHTML += `<div>[${time}] ${msg}</div>`;
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function generateStarName() {
+      const prefixes = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta', 'Nova', 'Sol'];
+      const suffixes = ['Prime', 'Major', 'Minor', 'Centauri', 'Orionis', 'Draconis', 'Lyrae', 'Cygni'];
+      return prefixes[Math.floor(Math.random() * prefixes.length)] + ' ' +
+             suffixes[Math.floor(Math.random() * suffixes.length)];
+    }
+
+    function generatePlanetName() {
+      const names = ['Terra', 'Aether', 'Kronos', 'Helios', 'Selene', 'Atlas', 'Prometheus', 'Gaia',
+                     'Oceanus', 'Hyperion', 'Rhea', 'Theia', 'Phoebe', 'Dione', 'Tethys', 'Enceladus',
+                     'Calypso', 'Pandora', 'Janus', 'Epimetheus', 'Aegir', 'Bestla', 'Fenrir'];
+      const num = Math.floor(Math.random() * 999);
+      return names[Math.floor(Math.random() * names.length)] + '-' + num;
+    }
+
+    function generateMoonName(parentName) {
+      const suffixes = ['a', 'b', 'c', 'd', 'e'];
+      const romanNumerals = ['I', 'II', 'III', 'IV', 'V'];
+      return Math.random() > 0.5
+        ? parentName.split('-')[0] + ' ' + romanNumerals[Math.floor(Math.random() * 5)]
+        : parentName.split('-')[0] + suffixes[Math.floor(Math.random() * 5)];
     }
 
     function stopWorldSession() {
