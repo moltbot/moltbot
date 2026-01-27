@@ -33,6 +33,7 @@ type SettingsHost = {
   basePath: string;
   themeMedia: MediaQueryList | null;
   themeMediaHandler: ((event: MediaQueryListEvent) => void) | null;
+  pendingGatewayUrl: string | null;
 };
 
 export function applySettings(host: SettingsHost, next: UiSettings) {
@@ -98,12 +99,7 @@ export function applySettingsFromUrl(host: SettingsHost) {
   if (gatewayUrlRaw != null) {
     const gatewayUrl = gatewayUrlRaw.trim();
     if (gatewayUrl && gatewayUrl !== host.settings.gatewayUrl) {
-      const confirmed = window.confirm(
-        `Change gateway URL to:\n${gatewayUrl}\n\nThis will reconnect to a different gateway server. Only confirm if you trust this URL.`,
-      );
-      if (confirmed) {
-        applySettings(host, { ...host.settings, gatewayUrl });
-      }
+      host.pendingGatewayUrl = gatewayUrl;
     }
     params.delete("gatewayUrl");
     shouldCleanUrl = true;

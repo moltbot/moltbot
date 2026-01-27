@@ -152,6 +152,7 @@ export class MoltbotApp extends LitElement {
   @state() execApprovalQueue: ExecApprovalRequest[] = [];
   @state() execApprovalBusy = false;
   @state() execApprovalError: string | null = null;
+  @state() pendingGatewayUrl: string | null = null;
 
   @state() configLoading = false;
   @state() configRaw = "{\n}\n";
@@ -446,6 +447,19 @@ export class MoltbotApp extends LitElement {
     } finally {
       this.execApprovalBusy = false;
     }
+  }
+
+  handleGatewayUrlConfirm() {
+    if (!this.pendingGatewayUrl) return;
+    applySettingsInternal(
+      this as unknown as Parameters<typeof applySettingsInternal>[0],
+      { ...this.settings, gatewayUrl: this.pendingGatewayUrl },
+    );
+    this.pendingGatewayUrl = null;
+  }
+
+  handleGatewayUrlCancel() {
+    this.pendingGatewayUrl = null;
   }
 
   // Sidebar handlers for tool output viewing
