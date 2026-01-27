@@ -85,4 +85,40 @@ describe("scanOpenRouterModels", () => {
       }
     }
   });
+
+  it("avoids double-prefixing openrouter/ in modelRef", async () => {
+    const fetchImpl = createFetchFixture({
+      data: [
+        {
+          id: "openrouter/auto",
+          name: "OpenRouter Auto",
+          context_length: 128_000,
+          max_completion_tokens: 4096,
+          supported_parameters: ["tools"],
+          modality: "text",
+          pricing: { prompt: "0", completion: "0" },
+        },
+        {
+          id: "meta-llama/llama-3.3-70b:free",
+          name: "Llama 3.3 70B",
+          context_length: 8_192,
+          supported_parameters: [],
+          modality: "text",
+          pricing: { prompt: "0", completion: "0" },
+        },
+      ],
+    });
+
+    const results = await scanOpenRouterModels({
+      fetchImpl,
+      probe: false,
+    });
+
+    // IDs are normalized (prefix stripped), but modelRefs are correct
+    expect(results.map((entry) => entry.id)).toEqual(["auto", "meta-llama/llama-3.3-70b:free"]);
+    expect(results.map((entry) => entry.modelRef)).toEqual([
+      "openrouter/auto",
+      "openrouter/meta-llama/llama-3.3-70b:free",
+    ]);
+  });
 });

@@ -49,7 +49,14 @@ export function resolveModel(
   const resolvedAgentDir = agentDir ?? resolveClawdbotAgentDir();
   const authStorage = discoverAuthStorage(resolvedAgentDir);
   const modelRegistry = discoverModels(authStorage, resolvedAgentDir);
-  const model = modelRegistry.find(provider, modelId) as Model<Api> | null;
+  let model = modelRegistry.find(provider, modelId) as Model<Api> | null;
+
+  // Fallback: Some models in pi-ai have the provider prefix in their ID (e.g., "openrouter/auto").
+  // Our internal representation normalizes this to "auto", but pi-ai expects "openrouter/auto".
+  if (!model && provider === "openrouter") {
+    model = modelRegistry.find(provider, `${provider}/${modelId}`) as Model<Api> | null;
+  }
+
   if (!model) {
     const providers = cfg?.models?.providers ?? {};
     const inlineModels = buildInlineProviderModels(providers);

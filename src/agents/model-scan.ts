@@ -177,8 +177,13 @@ async function fetchOpenRouterModels(fetchImpl: typeof fetch): Promise<OpenRoute
     .map((entry) => {
       if (!entry || typeof entry !== "object") return null;
       const obj = entry as Record<string, unknown>;
-      const id = typeof obj.id === "string" ? obj.id.trim() : "";
+      let id = typeof obj.id === "string" ? obj.id.trim() : "";
       if (!id) return null;
+      // Normalize: strip "openrouter/" prefix if present to keep internal IDs clean.
+      // The prefix will be added back when constructing modelRef.
+      if (id.startsWith("openrouter/")) {
+        id = id.slice("openrouter/".length);
+      }
       const name = typeof obj.name === "string" && obj.name.trim() ? obj.name.trim() : id;
 
       const contextLength =
