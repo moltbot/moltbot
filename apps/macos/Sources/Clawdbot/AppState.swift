@@ -316,7 +316,12 @@ final class AppState {
         }
 
         if !self.isPreview {
-            Task { await VoiceWakeRuntime.shared.refresh(state: self) }
+            // Delay voice wake startup to give audio subsystem time to initialize at app launch.
+            // This prevents crashes from AVAudioEngine tap installation when called too early.
+            Task {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s delay
+                await VoiceWakeRuntime.shared.refresh(state: self)
+            }
             Task { await TalkModeController.shared.setEnabled(self.talkEnabled) }
         }
 

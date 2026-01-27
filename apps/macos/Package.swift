@@ -25,6 +25,10 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "ObjCExceptionCatcher",
+            dependencies: [],
+            publicHeadersPath: "include"),
+        .target(
             name: "ClawdbotIPC",
             dependencies: [],
             swiftSettings: [
@@ -44,6 +48,7 @@ let package = Package(
             dependencies: [
                 "ClawdbotIPC",
                 "ClawdbotDiscovery",
+                "ObjCExceptionCatcher",
                 .product(name: "ClawdbotKit", package: "ClawdbotKit"),
                 .product(name: "ClawdbotChatUI", package: "ClawdbotKit"),
                 .product(name: "ClawdbotProtocol", package: "ClawdbotKit"),

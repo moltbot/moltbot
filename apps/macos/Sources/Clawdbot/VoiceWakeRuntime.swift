@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import ObjCExceptionCatcher
 import OSLog
 import Speech
 import SwabbleKit
@@ -47,6 +48,8 @@ actor VoiceWakeRuntime {
     private var preDetectTask: Task<Void, Never>?
     private var isStarting: Bool = false
     private var triggerOnlyTask: Task<Void, Never>?
+    private var startRetryCount: Int = 0
+    private var pendingRetryTask: Task<Void, Never>?
 
     // Tunables
     // Silence threshold once we've captured user speech (post-trigger).
@@ -174,17 +177,37 @@ actor VoiceWakeRuntime {
                     code: 1,
                     userInfo: [NSLocalizedDescriptionKey: "No audio input available"])
             }
+
+            // Prepare the engine first to ensure the audio graph is properly configured.
+            audioEngine.prepare()
+
+            // Remove any existing tap before installing a new one.
             input.removeTap(onBus: 0)
-            input.installTap(onBus: 0, bufferSize: 2048, format: format) { [weak self, weak request] buffer, _ in
-                request?.append(buffer)
-                guard let rms = Self.rmsLevel(buffer: buffer) else { return }
-                Task.detached { [weak self] in
-                    await self?.noteAudioLevel(rms: rms)
-                    await self?.noteAudioTap(rms: rms)
-                }
+
+            // Use the ObjC exception catcher to safely install the tap.
+            // AVAudioNode.installTap can throw ObjC exceptions that Swift cannot catch,
+            // particularly when the audio subsystem isn't fully initialized at app launch.
+            var tapError: NSError?
+            let tapInstalled = CBTryInstallTap(
+                input, 0, 2048, nil,
+                { [weak self, weak request] buffer, _ in
+                    request?.append(buffer)
+                    guard let rms = Self.rmsLevel(buffer: buffer) else { return }
+                    Task.detached { [weak self] in
+                        await self?.noteAudioLevel(rms: rms)
+                        await self?.noteAudioTap(rms: rms)
+                    }
+                },
+                &tapError)
+
+            guard tapInstalled else {
+                let msg = tapError?.localizedDescription ?? "Unknown tap installation error"
+                throw NSError(
+                    domain: "VoiceWakeRuntime",
+                    code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: msg])
             }
 
-            audioEngine.prepare()
             try audioEngine.start()
 
             self.currentConfig = config
@@ -218,9 +241,35 @@ actor VoiceWakeRuntime {
                 "locale": config.localeID ?? "",
                 "micID": config.micID ?? "",
             ])
+            // Reset retry counter on successful start.
+            self.startRetryCount = 0
         } catch {
             self.logger.error("voicewake runtime failed to start: \(error.localizedDescription, privacy: .public)")
             self.stop()
+            // Schedule a retry with exponential backoff (max 5 retries, max 16s delay).
+            self.scheduleStartRetry(config: config)
+        }
+    }
+
+    /// Schedules a retry to start the voice wake runtime with exponential backoff.
+    private func scheduleStartRetry(config: RuntimeConfig) {
+        let maxRetries = 5
+        guard self.startRetryCount < maxRetries else {
+            self.logger.warning("voicewake runtime: max retries (\(maxRetries)) reached, giving up")
+            self.startRetryCount = 0
+            return
+        }
+
+        self.pendingRetryTask?.cancel()
+        self.startRetryCount += 1
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+        let delaySeconds = min(16.0, pow(2.0, Double(self.startRetryCount - 1)))
+        self.logger.info("voicewake runtime: scheduling retry #\(self.startRetryCount) in \(delaySeconds)s")
+
+        self.pendingRetryTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
+            guard let self, !Task.isCancelled else { return }
+            await self.start(with: config)
         }
     }
 
@@ -228,6 +277,9 @@ actor VoiceWakeRuntime {
         if cancelScheduledRestart {
             self.scheduledRestartTask?.cancel()
             self.scheduledRestartTask = nil
+            self.pendingRetryTask?.cancel()
+            self.pendingRetryTask = nil
+            self.startRetryCount = 0
         }
         self.captureTask?.cancel()
         self.captureTask = nil
