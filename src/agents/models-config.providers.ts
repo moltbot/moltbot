@@ -360,7 +360,7 @@ async function buildOllamaProvider(): Promise<ProviderConfig> {
   };
 }
 
-async function buildTogetherProvider(_apiKey?: string): Promise<ProviderConfig> {
+function buildTogetherProvider(): ProviderConfig {
   // Always use static catalog instead of dynamic discovery
   // This prevents timeout issues with the Together AI API
   const models = TOGETHER_MODEL_CATALOG;
@@ -439,7 +439,7 @@ export async function resolveImplicitProviders(params: {
     resolveApiKeyFromProfiles({ provider: "together", store: authStore });
   if (togetherKey) {
     providers.together = {
-      ...(await buildTogetherProvider(togetherKey)),
+      ...buildTogetherProvider(),
       apiKey: togetherKey,
     };
   }
