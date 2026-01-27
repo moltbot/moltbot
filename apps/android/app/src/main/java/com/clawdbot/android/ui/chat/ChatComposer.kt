@@ -37,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import com.clawdbot.android.chat.ChatSessionEntry
 
@@ -61,6 +63,7 @@ fun ChatComposer(
   var input by rememberSaveable { mutableStateOf("") }
   var showThinkingMenu by remember { mutableStateOf(false) }
   var showSessionMenu by remember { mutableStateOf(false) }
+  val haptic = LocalHapticFeedback.current
 
   val sessionOptions = resolveSessionChoices(sessionKey, sessions, mainSessionKey = mainSessionKey)
   val currentSessionLabel =
@@ -165,6 +168,7 @@ fun ChatComposer(
           }
         } else {
           FilledTonalIconButton(onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             val text = input
             input = ""
             onSend(text)

@@ -16,9 +16,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import com.clawdbot.android.chat.ChatMessage
 import com.clawdbot.android.chat.ChatPendingToolCall
@@ -32,6 +38,19 @@ fun ChatMessageListCard(
   modifier: Modifier = Modifier,
 ) {
   val listState = rememberLazyListState()
+  val haptic = LocalHapticFeedback.current
+  var previousMessageCount by remember { mutableIntStateOf(messages.size) }
+
+  // Haptic feedback when a new assistant message arrives
+  LaunchedEffect(messages.size) {
+    if (messages.size > previousMessageCount) {
+      val lastMessage = messages.lastOrNull()
+      if (lastMessage != null && lastMessage.role.lowercase() == "assistant") {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+      }
+    }
+    previousMessageCount = messages.size
+  }
 
   LaunchedEffect(messages.size, pendingRunCount, pendingToolCalls.size, streamingAssistantText) {
     val total =
