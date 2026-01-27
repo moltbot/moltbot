@@ -30,10 +30,20 @@ collect_files() {
 }
 
 compute_hash() {
+  # Use sha256sum on Linux/Windows (Git Bash), shasum on macOS
+  local sha_cmd
+  if command -v sha256sum &>/dev/null; then
+    sha_cmd="sha256sum"
+  elif command -v shasum &>/dev/null; then
+    sha_cmd="shasum -a 256"
+  else
+    echo "No sha256 tool found (sha256sum or shasum)" >&2
+    exit 1
+  fi
   collect_files \
     | LC_ALL=C sort -z \
-    | xargs -0 shasum -a 256 \
-    | shasum -a 256 \
+    | xargs -0 $sha_cmd \
+    | $sha_cmd \
     | awk '{print $1}'
 }
 
