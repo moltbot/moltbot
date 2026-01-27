@@ -253,6 +253,27 @@ export const telegramPlugin: ChannelPlugin<ResolvedTelegramAccount> = {
     chunker: (text, limit) => getTelegramRuntime().channel.text.chunkMarkdownText(text, limit),
     chunkerMode: "markdown",
     textChunkLimit: 4000,
+    sendPayload: async (ctx) => {
+      const send =
+        ctx.deps?.sendTelegram ?? getTelegramRuntime().channel.telegram.sendMessageTelegram;
+      const replyToMessageId = parseReplyToMessageId(ctx.replyToId);
+      const messageThreadId = parseThreadId(ctx.threadId);
+      // Extract buttons from channelData.telegram.buttons
+      type TelegramButtons = Array<Array<{ text: string; callback_data: string }>>;
+      const channelData = ctx.payload.channelData;
+      const telegram = channelData?.telegram as { buttons?: TelegramButtons } | undefined;
+      const buttons = telegram?.buttons;
+      const result = await send(ctx.to, ctx.text, {
+        verbose: false,
+        mediaUrl: ctx.mediaUrl,
+        textMode: "html",
+        messageThreadId,
+        replyToMessageId,
+        accountId: ctx.accountId ?? undefined,
+        buttons,
+      });
+      return { channel: "telegram", ...result };
+    },
     sendText: async ({ to, text, accountId, deps, replyToId, threadId }) => {
       const send =
         deps?.sendTelegram ?? getTelegramRuntime().channel.telegram.sendMessageTelegram;

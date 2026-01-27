@@ -508,14 +508,20 @@ export function matchAllowlist(
   entries: ExecAllowlistEntry[],
   resolution: CommandResolution | null,
 ): ExecAllowlistEntry | null {
-  if (!entries.length || !resolution?.resolvedPath) return null;
+  if (!entries.length || !resolution) return null;
+  const rawExecutable = resolution.rawExecutable;
   const resolvedPath = resolution.resolvedPath;
+  const executableName = resolution.executableName;
   for (const entry of entries) {
     const pattern = entry.pattern?.trim();
     if (!pattern) continue;
     const hasPath = pattern.includes("/") || pattern.includes("\\") || pattern.includes("~");
-    if (!hasPath) continue;
-    if (matchesPattern(pattern, resolvedPath)) return entry;
+    if (hasPath) {
+      const target = resolvedPath ?? rawExecutable;
+      if (target && matchesPattern(pattern, target)) return entry;
+      continue;
+    }
+    if (executableName && matchesPattern(pattern, executableName)) return entry;
   }
   return null;
 }

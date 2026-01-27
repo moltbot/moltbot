@@ -14,6 +14,12 @@ import { resolveSessionDeliveryTarget } from "./outbound/targets.js";
 
 const log = createSubsystemLogger("gateway/exec-approvals");
 
+// Batch approval constants
+const BATCH_WINDOW_MS = 1500; // Initial window: collect requests for 1.5 seconds
+const BATCH_EXTEND_WINDOW_MS = 10000; // Extended window when session has pending approvals
+const BATCH_MAX_WINDOW_MS = 30000; // Maximum time to wait before flushing (30 seconds)
+const BATCH_TTL_MS = 5 * 60 * 1000; // Batch IDs expire after 5 minutes
+
 export type ExecApprovalRequest = {
   id: string;
   request: {
@@ -43,7 +49,62 @@ type PendingApproval = {
   request: ExecApprovalRequest;
   targets: ForwardTarget[];
   timeoutId: NodeJS.Timeout | null;
+  batchId?: string;
 };
+
+type PendingBatch = {
+  sessionKey: string;
+  requests: ExecApprovalRequest[];
+  targets: ForwardTarget[];
+  flushTimeoutId: NodeJS.Timeout | null;
+  createdAtMs: number;
+  lastRequestAtMs: number;
+};
+
+type BatchEntry = {
+  approvalIds: string[];
+  sessionKey: string;
+  createdAtMs: number;
+};
+
+// Global batch registry - maps batch IDs to their approval IDs
+const batchRegistry = new Map<string, BatchEntry>();
+
+function generateBatchId(): string {
+  return `batch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function cleanupExpiredBatches(nowMs: number): void {
+  for (const [batchId, entry] of batchRegistry) {
+    if (nowMs - entry.createdAtMs > BATCH_TTL_MS) {
+      batchRegistry.delete(batchId);
+    }
+  }
+}
+
+export function getBatchApprovalIds(batchId: string): string[] | null {
+  // Cleanup expired batches opportunistically
+  cleanupExpiredBatches(Date.now());
+  const entry = batchRegistry.get(batchId);
+  if (!entry) return null;
+  return entry.approvalIds;
+}
+
+export function deleteBatch(batchId: string): void {
+  batchRegistry.delete(batchId);
+}
+
+export function updateBatchApprovalIds(batchId: string, approvalIds: string[]): void {
+  if (approvalIds.length === 0) {
+    batchRegistry.delete(batchId);
+    return;
+  }
+  // Cleanup expired batches opportunistically
+  cleanupExpiredBatches(Date.now());
+  const entry = batchRegistry.get(batchId);
+  if (!entry) return;
+  entry.approvalIds = approvalIds;
+}
 
 export type ExecApprovalForwarder = {
   handleRequested: (request: ExecApprovalRequest) => Promise<void>;
@@ -105,7 +166,12 @@ function buildTargetKey(target: ExecApprovalForwardTarget): string {
   return [channel, target.to, accountId, threadId].join(":");
 }
 
-function buildRequestMessage(request: ExecApprovalRequest, nowMs: number) {
+type ApprovalMessage = {
+  text: string;
+  buttons: Array<Array<{ text: string; callback_data: string }>>;
+};
+
+function buildRequestMessage(request: ExecApprovalRequest, nowMs: number): ApprovalMessage {
   const lines: string[] = ["🔒 Exec approval required", `ID: ${request.id}`];
   lines.push(`Command: ${request.request.command}`);
   if (request.request.cwd) lines.push(`CWD: ${request.request.cwd}`);
@@ -115,8 +181,16 @@ function buildRequestMessage(request: ExecApprovalRequest, nowMs: number) {
   if (request.request.ask) lines.push(`Ask: ${request.request.ask}`);
   const expiresIn = Math.max(0, Math.round((request.expiresAtMs - nowMs) / 1000));
   lines.push(`Expires in: ${expiresIn}s`);
-  lines.push("Reply with: /approve <id> allow-once|allow-always|deny");
-  return lines.join("\n");
+
+  const buttons = [
+    [
+      { text: "✅ Allow Once", callback_data: `/approve ${request.id} allow-once` },
+      { text: "✅ Always Allow", callback_data: `/approve ${request.id} allow-always` },
+    ],
+    [{ text: "❌ Deny", callback_data: `/approve ${request.id} deny` }],
+  ];
+
+  return { text: lines.join("\n"), buttons };
 }
 
 function decisionLabel(decision: ExecApprovalDecision): string {
@@ -133,6 +207,53 @@ function buildResolvedMessage(resolved: ExecApprovalResolved) {
 
 function buildExpiredMessage(request: ExecApprovalRequest) {
   return `⏱️ Exec approval expired. ID: ${request.id}`;
+}
+
+function buildBatchRequestMessage(
+  requests: ExecApprovalRequest[],
+  batchId: string,
+  nowMs: number,
+): ApprovalMessage {
+  const count = requests.length;
+  const lines: string[] = [
+    `🔒 Exec approval required (${count} command${count > 1 ? "s" : ""})`,
+    `Batch ID: ${batchId}`,
+  ];
+  lines.push("");
+
+  // List each command with a number
+  requests.forEach((req, idx) => {
+    const cmd = req.request.command;
+    // Truncate long commands for readability
+    const displayCmd = cmd.length > 60 ? cmd.slice(0, 57) + "..." : cmd;
+    lines.push(`${idx + 1}. ${displayCmd} (${req.id})`);
+  });
+
+  lines.push("");
+
+  // Show session info if available
+  const sessionKey = requests[0]?.request.sessionKey;
+  if (sessionKey) {
+    // Truncate long session keys
+    const displayKey = sessionKey.length > 40 ? "..." + sessionKey.slice(-37) : sessionKey;
+    lines.push(`Session: ${displayKey}`);
+  }
+
+  // Use the earliest expiry time
+  const earliestExpiry = Math.min(...requests.map((r) => r.expiresAtMs));
+  const expiresIn = Math.max(0, Math.round((earliestExpiry - nowMs) / 1000));
+  lines.push(`Expires in: ${expiresIn}s`);
+  lines.push(`Approve: /approve-batch ${batchId} allow-once|deny`);
+  lines.push("Or: /approve <id> allow-once|allow-always|deny");
+
+  const buttons = [
+    [
+      { text: `✅ Approve All (${count})`, callback_data: `/approve-batch ${batchId} allow-once` },
+      { text: `❌ Deny All`, callback_data: `/approve-batch ${batchId} deny` },
+    ],
+  ];
+
+  return { text: lines.join("\n"), buttons };
 }
 
 function defaultResolveSessionTarget(params: {
@@ -158,10 +279,25 @@ function defaultResolveSessionTarget(params: {
   };
 }
 
+type TelegramButtons = Array<Array<{ text: string; callback_data: string }>>;
+
+function buildPayloadWithButtons(text: string, buttons?: TelegramButtons) {
+  if (!buttons?.length) {
+    log.debug("exec approvals: buildPayloadWithButtons called without buttons");
+    return { text };
+  }
+  log.debug(`exec approvals: buildPayloadWithButtons adding ${buttons.length} button rows`);
+  return {
+    text,
+    channelData: { telegram: { buttons } },
+  };
+}
+
 async function deliverToTargets(params: {
   cfg: ClawdbotConfig;
   targets: ForwardTarget[];
   text: string;
+  buttons?: TelegramButtons;
   deliver: typeof deliverOutboundPayloads;
   shouldSend?: () => boolean;
 }) {
@@ -170,13 +306,17 @@ async function deliverToTargets(params: {
     const channel = normalizeMessageChannel(target.channel) ?? target.channel;
     if (!isDeliverableMessageChannel(channel)) return;
     try {
+      const payload = buildPayloadWithButtons(params.text, params.buttons);
+      log.info(
+        `exec approvals: delivering to ${channel}:${target.to} payload=${JSON.stringify(payload).slice(0, 200)}`,
+      );
       await params.deliver({
         cfg: params.cfg,
         channel,
         to: target.to,
         accountId: target.accountId,
         threadId: target.threadId,
-        payloads: [{ text: params.text }],
+        payloads: [payload],
       });
     } catch (err) {
       log.error(`exec approvals: failed to deliver to ${channel}:${target.to}: ${String(err)}`);
@@ -193,12 +333,10 @@ export function createExecApprovalForwarder(
   const nowMs = deps.nowMs ?? Date.now;
   const resolveSessionTarget = deps.resolveSessionTarget ?? defaultResolveSessionTarget;
   const pending = new Map<string, PendingApproval>();
+  const pendingBatches = new Map<string, PendingBatch>();
 
-  const handleRequested = async (request: ExecApprovalRequest) => {
-    const cfg = getConfig();
+  const resolveTargets = (cfg: ClawdbotConfig, request: ExecApprovalRequest): ForwardTarget[] => {
     const config = cfg.approvals?.exec;
-    if (!shouldForward({ config, request })) return;
-
     const mode = normalizeMode(config?.mode);
     const targets: ForwardTarget[] = [];
     const seen = new Set<string>();
@@ -224,8 +362,94 @@ export function createExecApprovalForwarder(
       }
     }
 
+    return targets;
+  };
+
+  const flushBatch = async (sessionKey: string) => {
+    const batch = pendingBatches.get(sessionKey);
+    if (!batch) return;
+    pendingBatches.delete(sessionKey);
+
+    if (batch.flushTimeoutId) clearTimeout(batch.flushTimeoutId);
+
+    const cfg = getConfig();
+    const { requests, targets } = batch;
+    const liveRequests = requests.filter((req) => pending.has(req.id));
+
+    if (liveRequests.length === 0 || targets.length === 0) return;
+
+    let batchId: string | null = null;
+    if (liveRequests.length > 1) {
+      // Generate batch ID and register it
+      batchId = generateBatchId();
+      const approvalIds = liveRequests.map((r) => r.id);
+      // Cleanup any expired batches before inserting
+      cleanupExpiredBatches(nowMs());
+      batchRegistry.set(batchId, {
+        approvalIds,
+        sessionKey,
+        createdAtMs: nowMs(),
+      });
+
+      // Update pending entries with batch ID
+      for (const req of liveRequests) {
+        const entry = pending.get(req.id);
+        if (entry) entry.batchId = batchId;
+      }
+    }
+
+    log.info(
+      `exec approvals: flushing ${
+        liveRequests.length > 1 ? `batch ${batchId}` : "single request"
+      } with ${liveRequests.length} request${liveRequests.length > 1 ? "s" : ""}`,
+    );
+
+    // Send single or batch message depending on count
+    if (liveRequests.length === 1) {
+      // Single request - use original format with all buttons
+      const message = buildRequestMessage(liveRequests[0], nowMs());
+      await deliverToTargets({
+        cfg,
+        targets,
+        text: message.text,
+        buttons: message.buttons,
+        deliver,
+        shouldSend: () => pending.has(liveRequests[0].id),
+      });
+    } else {
+      // Multiple requests - use batch format
+      if (!batchId) return;
+      const message = buildBatchRequestMessage(liveRequests, batchId, nowMs());
+      await deliverToTargets({
+        cfg,
+        targets,
+        text: message.text,
+        buttons: message.buttons,
+        deliver,
+      });
+    }
+  };
+
+  // Count pending (unresolved) approvals for a session
+  const countPendingForSession = (sessionKey: string): number => {
+    let count = 0;
+    for (const entry of pending.values()) {
+      if (entry.request.request.sessionKey === sessionKey) {
+        count++;
+      }
+    }
+    return count;
+  };
+
+  const handleRequested = async (request: ExecApprovalRequest) => {
+    const cfg = getConfig();
+    const config = cfg.approvals?.exec;
+    if (!shouldForward({ config, request })) return;
+
+    const targets = resolveTargets(cfg, request);
     if (targets.length === 0) return;
 
+    // Set up expiry timeout for this request
     const expiresInMs = Math.max(0, request.expiresAtMs - nowMs());
     const timeoutId = setTimeout(() => {
       void (async () => {
@@ -241,16 +465,75 @@ export function createExecApprovalForwarder(
     const pendingEntry: PendingApproval = { request, targets, timeoutId };
     pending.set(request.id, pendingEntry);
 
-    if (pending.get(request.id) !== pendingEntry) return;
+    // Batch by session key
+    const sessionKey = request.request.sessionKey ?? "default";
+    const now = nowMs();
+    let batch = pendingBatches.get(sessionKey);
 
-    const text = buildRequestMessage(request, nowMs());
-    await deliverToTargets({
-      cfg,
-      targets,
-      text,
-      deliver,
-      shouldSend: () => pending.get(request.id) === pendingEntry,
-    });
+    // Check if there are already pending (unresolved) approvals for this session
+    // (excluding the one we just added)
+    const existingPendingCount = countPendingForSession(sessionKey) - 1;
+    const hasPendingApprovals = existingPendingCount > 0;
+
+    if (!batch) {
+      // Start a new batch
+      // Use extended window if there are already pending approvals for this session
+      const windowMs = hasPendingApprovals ? BATCH_EXTEND_WINDOW_MS : BATCH_WINDOW_MS;
+
+      batch = {
+        sessionKey,
+        requests: [],
+        targets,
+        flushTimeoutId: null,
+        createdAtMs: now,
+        lastRequestAtMs: now,
+      };
+      pendingBatches.set(sessionKey, batch);
+
+      log.info(
+        `exec approvals: starting new batch for session, window=${windowMs}ms, hasPending=${hasPendingApprovals}`,
+      );
+
+      // Set up flush timeout
+      batch.flushTimeoutId = setTimeout(() => {
+        void flushBatch(sessionKey);
+      }, windowMs);
+      batch.flushTimeoutId.unref?.();
+    } else {
+      // Batch already exists - extend the window if we haven't hit the max
+      const batchAge = now - batch.createdAtMs;
+      const timeRemaining = BATCH_MAX_WINDOW_MS - batchAge;
+
+      if (timeRemaining > 0) {
+        // Clear existing timeout and set a new one
+        if (batch.flushTimeoutId) clearTimeout(batch.flushTimeoutId);
+
+        // Use the shorter of: extended window or time remaining until max
+        const extensionMs = Math.min(BATCH_EXTEND_WINDOW_MS, timeRemaining);
+
+        log.info(
+          `exec approvals: extending batch window by ${extensionMs}ms (age=${batchAge}ms, requests=${batch.requests.length + 1})`,
+        );
+
+        batch.flushTimeoutId = setTimeout(() => {
+          void flushBatch(sessionKey);
+        }, extensionMs);
+        batch.flushTimeoutId.unref?.();
+      } else {
+        log.info(`exec approvals: batch at max window (${BATCH_MAX_WINDOW_MS}ms), will flush soon`);
+      }
+
+      batch.lastRequestAtMs = now;
+    }
+
+    batch.requests.push(request);
+    // Merge targets (in case they differ, though unlikely)
+    for (const target of targets) {
+      const key = buildTargetKey(target);
+      if (!batch.targets.some((t) => buildTargetKey(t) === key)) {
+        batch.targets.push(target);
+      }
+    }
   };
 
   const handleResolved = async (resolved: ExecApprovalResolved) => {
@@ -269,6 +552,10 @@ export function createExecApprovalForwarder(
       if (entry.timeoutId) clearTimeout(entry.timeoutId);
     }
     pending.clear();
+    for (const batch of pendingBatches.values()) {
+      if (batch.flushTimeoutId) clearTimeout(batch.flushTimeoutId);
+    }
+    pendingBatches.clear();
   };
 
   return { handleRequested, handleResolved, stop };

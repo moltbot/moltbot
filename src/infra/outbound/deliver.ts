@@ -17,6 +17,7 @@ import { sendMessageSignal } from "../../signal/send.js";
 import type { sendMessageSlack } from "../../slack/send.js";
 import type { sendMessageTelegram } from "../../telegram/send.js";
 import type { sendMessageWhatsApp } from "../../web/outbound.js";
+import { createSubsystemLogger } from "../../logging/subsystem.js";
 import {
   appendAssistantMessageToSessionTranscript,
   resolveMirroredTranscriptText,
@@ -27,6 +28,8 @@ import type { OutboundChannel } from "./targets.js";
 
 export type { NormalizedOutboundPayload } from "./payloads.js";
 export { normalizeOutboundPayloads } from "./payloads.js";
+
+const log = createSubsystemLogger("gateway/outbound");
 
 type SendMatrixMessage = (
   to: string,
@@ -321,7 +324,11 @@ export async function deliverOutboundPayloads(params: {
     try {
       throwIfAborted(abortSignal);
       params.onPayload?.(payloadSummary);
+      log.debug(
+        `outbound: channel=${channel} hasSendPayload=${!!handler.sendPayload} hasChannelData=${!!payload.channelData}`,
+      );
       if (handler.sendPayload && payload.channelData) {
+        log.debug(`outbound: using sendPayload for ${channel}`);
         results.push(await handler.sendPayload(payload));
         continue;
       }

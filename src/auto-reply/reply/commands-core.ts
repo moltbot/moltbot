@@ -14,7 +14,7 @@ import {
   handleWhoamiCommand,
 } from "./commands-info.js";
 import { handleAllowlistCommand } from "./commands-allowlist.js";
-import { handleApproveCommand } from "./commands-approve.js";
+import { handleApproveCommand, handleApproveBatchCommand } from "./commands-approve.js";
 import { handleSubagentsCommand } from "./commands-subagents.js";
 import { handleModelsCommand } from "./commands-models.js";
 import { handleTtsCommands } from "./commands-tts.js";
@@ -47,6 +47,7 @@ const HANDLERS: CommandHandler[] = [
   handleStatusCommand,
   handleAllowlistCommand,
   handleApproveCommand,
+  handleApproveBatchCommand,
   handleContextCommand,
   handleWhoamiCommand,
   handleSubagentsCommand,

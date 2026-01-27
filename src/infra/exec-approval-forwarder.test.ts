@@ -34,6 +34,8 @@ describe("exec approval forwarder", () => {
     });
 
     await forwarder.handleRequested(baseRequest);
+    expect(deliver).toHaveBeenCalledTimes(0);
+    await vi.advanceTimersByTimeAsync(1500);
     expect(deliver).toHaveBeenCalledTimes(1);
 
     await forwarder.handleResolved({
@@ -69,6 +71,8 @@ describe("exec approval forwarder", () => {
     });
 
     await forwarder.handleRequested(baseRequest);
+    expect(deliver).toHaveBeenCalledTimes(0);
+    await vi.advanceTimersByTimeAsync(1500);
     expect(deliver).toHaveBeenCalledTimes(1);
 
     await vi.runAllTimersAsync();

@@ -33,7 +33,7 @@ function makeTempDir() {
 }
 
 describe("exec approvals allowlist matching", () => {
-  it("ignores basename-only patterns", () => {
+  it("matches basename-only patterns case-insensitively", () => {
     const resolution = {
       rawExecutable: "rg",
       resolvedPath: "/opt/homebrew/bin/rg",
@@ -41,7 +41,7 @@ describe("exec approvals allowlist matching", () => {
     };
     const entries: ExecAllowlistEntry[] = [{ pattern: "RG" }];
     const match = matchAllowlist(entries, resolution);
-    expect(match).toBeNull();
+    expect(match?.pattern).toBe("RG");
   });
 
   it("matches by resolved path with **", () => {
@@ -66,7 +66,7 @@ describe("exec approvals allowlist matching", () => {
     expect(match).toBeNull();
   });
 
-  it("requires a resolved path", () => {
+  it("falls back to rawExecutable when resolvedPath is undefined", () => {
     const resolution = {
       rawExecutable: "bin/rg",
       resolvedPath: undefined,
@@ -74,7 +74,7 @@ describe("exec approvals allowlist matching", () => {
     };
     const entries: ExecAllowlistEntry[] = [{ pattern: "bin/rg" }];
     const match = matchAllowlist(entries, resolution);
-    expect(match).toBeNull();
+    expect(match?.pattern).toBe("bin/rg");
   });
 });
 
