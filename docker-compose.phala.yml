@@ -26,26 +26,26 @@ services:
       TELEGRAM_ALLOWED_USERS: ${TELEGRAM_ALLOWED_USERS:-}
       DISCORD_ALLOWED_USERS: ${DISCORD_ALLOWED_USERS:-}
       # Gateway configuration
-      GATEWAY_BIND: ${GATEWAY_BIND:-loopback}
+      GATEWAY_BIND: ${GATEWAY_BIND:-lan}
       GATEWAY_PORT: ${GATEWAY_PORT:-18789}
       GATEWAY_AUTH: ${GATEWAY_AUTH:-off}
       GATEWAY_TOKEN: ${GATEWAY_TOKEN:-}
       GATEWAY_PASSWORD: ${GATEWAY_PASSWORD:-}
       # Persistence paths inside container
-      CLAWDBOT_STATE_DIR: /data/.clawdbot
-      CLAWDBOT_WORKSPACE_DIR: /data/workspace
+      CLAWDBOT_STATE_DIR: /home/node/.clawdbot
+      CLAWDBOT_WORKSPACE_DIR: /home/node/clawd
     volumes:
       # Persistent storage for credentials, agents, sessions
-      - clawdbot-data:/data
+      - clawdbot-data:/home/node
     # Host network mode: container shares CVM's network stack
-    # Gateway binds to loopback by default, accessible via CVM's public IP
+    # Gateway binds to LAN (0.0.0.0) by default, accessible via dstack proxy
     network_mode: host
     restart: unless-stopped
     user: root
     command: >
       bash -c "
-      mkdir -p /data/.clawdbot /data/workspace &&
-      chown -R node:node /data &&
+      mkdir -p /home/node/.clawdbot /home/node/clawd &&
+      chown -R node:node /home/node &&
       su node -c '/bin/bash /app/scripts/docker-entrypoint-phala.sh'
       "
 

@@ -3,7 +3,7 @@
 
 set -e
 
-CONFIG_DIR="${CLAWDBOT_STATE_DIR:-/data/.clawdbot}"
+CONFIG_DIR="${CLAWDBOT_STATE_DIR:-/home/node/.clawdbot}"
 CONFIG_FILE="$CONFIG_DIR/clawdbot.json"
 
 # Create state directory if it doesn't exist
@@ -38,7 +38,7 @@ if [ ! -f "$CONFIG_FILE" ] && [ -n "$REDPILL_API_KEY" ]; then
     --accept-risk \
     --mode local \
     --auth-choice redpill-api-key \
-    --workspace "${CLAWDBOT_WORKSPACE_DIR:-/data/workspace}" \
+    --workspace "${CLAWDBOT_WORKSPACE_DIR:-/home/node/clawd}" \
     --gateway-bind ${GATEWAY_BIND:-loopback} \
     $GATEWAY_AUTH_ARGS \
     --skip-daemon \
@@ -47,6 +47,12 @@ if [ ! -f "$CONFIG_FILE" ] && [ -n "$REDPILL_API_KEY" ]; then
     --skip-ui
 
   echo "Auto-configuration complete."
+
+  # Enable password/token-only auth for remote Control UI access
+  # This allows the web UI to connect without device pairing (Web Crypto API)
+  # which is required for HTTPS proxy deployments like Phala dstack
+  node dist/index.js config set gateway.controlUi.allowInsecureAuth true --json
+  echo "✓ Control UI configured for remote access"
 
   # Configure channel allowlists if user IDs are provided
   if [ -n "$TELEGRAM_ALLOWED_USERS" ] || [ -n "$DISCORD_ALLOWED_USERS" ]; then

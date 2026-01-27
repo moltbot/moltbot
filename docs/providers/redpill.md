@@ -296,10 +296,10 @@ services:
       GATEWAY_PORT: ${GATEWAY_PORT:-18789}
       GATEWAY_AUTH: ${GATEWAY_AUTH:-off}
       # Persistence paths
-      CLAWDBOT_STATE_DIR: /data/.clawdbot
-      CLAWDBOT_WORKSPACE_DIR: /data/workspace
+      CLAWDBOT_STATE_DIR: /home/node/.clawdbot
+      CLAWDBOT_WORKSPACE_DIR: /home/node/clawd
     volumes:
-      - clawdbot-data:/data
+      - clawdbot-data:/home/node
     network_mode: host
     restart: unless-stopped
 
@@ -387,8 +387,8 @@ Access your gateway URL to:
 | `GATEWAY_AUTH` | No | Gateway auth mode: `off`, `token`, or `password` (default: `off`) |
 | `GATEWAY_TOKEN` | No | Gateway token (required when `GATEWAY_AUTH=token`) |
 | `GATEWAY_PASSWORD` | No | Gateway password (required when `GATEWAY_AUTH=password`) |
-| `CLAWDBOT_STATE_DIR` | No | Config/credentials path (default: `/data/.clawdbot`) |
-| `CLAWDBOT_WORKSPACE_DIR` | No | Workspace path (default: `/data/workspace`) |
+| `CLAWDBOT_STATE_DIR` | No | Config/credentials path (default: `/home/node/.clawdbot`) |
+| `CLAWDBOT_WORKSPACE_DIR` | No | Workspace path (default: `/home/node/clawd`) |
 
 ### Securing Your Deployment
 
