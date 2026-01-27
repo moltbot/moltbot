@@ -55,6 +55,7 @@ export function installTestEnv(): { cleanup: () => void; tempHome: string } {
 
   const restore: RestoreEntry[] = [
     { key: "CLAWDBOT_TEST_FAST", value: process.env.CLAWDBOT_TEST_FAST },
+    { key: "CLAWDBOT_PROFILE", value: process.env.CLAWDBOT_PROFILE },
     { key: "HOME", value: process.env.HOME },
     { key: "USERPROFILE", value: process.env.USERPROFILE },
     { key: "XDG_CONFIG_HOME", value: process.env.XDG_CONFIG_HOME },
@@ -86,6 +87,7 @@ export function installTestEnv(): { cleanup: () => void; tempHome: string } {
   process.env.USERPROFILE = tempHome;
   process.env.CLAWDBOT_TEST_HOME = tempHome;
   process.env.CLAWDBOT_TEST_FAST = "1";
+  process.env.CLAWDBOT_PROFILE = "isolated";
 
   // Ensure test runs never touch the developer's real config/state, even if they have overrides set.
   delete process.env.CLAWDBOT_CONFIG_PATH;
