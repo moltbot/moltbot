@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { promptYesNo } from "../cli/prompt.js";
 import { danger, info, logVerbose, shouldLogVerbose, warn } from "../globals.js";
+import { logInfo } from "../logger.js";
 import { runExec } from "../process/exec.js";
 import { defaultRuntime, type RuntimeEnv } from "../runtime.js";
 import { colorize, isRich, theme } from "../terminal/theme.js";
@@ -317,7 +318,7 @@ export async function ensureFunnel(
         timeoutMs: 15_000,
       },
     );
-    if (stdout.trim()) console.log(stdout.trim());
+    if (stdout.trim()) logInfo(stdout.trim());
   } catch (err) {
     const errOutput = err as { stdout?: unknown; stderr?: unknown };
     const stdout = typeof errOutput.stdout === "string" ? errOutput.stdout : "";
