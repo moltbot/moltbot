@@ -77,16 +77,17 @@ If you already use `gog` for Google Workspace, you can reuse its OAuth client + 
    - For headless systems, switch to file keyring + password (see `gog` docs). citeturn6view0
 4) Verify `gog` is visible to the gateway user:
    ```bash
-   gog auth tokens --json
+   gog auth tokens list --json
    ```
    If this fails, install `gog` on the gateway host and ensure the keyring is accessible.
+   For non-interactive services, set `GOG_KEYRING_PASSWORD` in the gateway environment so `gog` can unlock the keyring.
 
 Clawdbot reads `gog` OAuth client files from:
 - `~/.config/gogcli/credentials.json`
 - `~/.config/gogcli/credentials-<client>.json`
 - `~/.config/gogcli/credentials-<domain>.json` (or macOS equivalent) citeturn9view0
 
-Clawdbot queries `gog auth tokens --json` to reuse the stored refresh token. If this fails, set `oauthRefreshToken` manually.
+Clawdbot queries `gog auth tokens list --json` (and falls back to `gog auth tokens export --json`) to reuse the stored refresh token. If this fails, set `oauthRefreshToken` manually.
 
 ### Option B: Manual OAuth
 1) Configure OAuth consent + create OAuth client credentials in your Google Cloud project (desktop app recommended). citeturn6view0

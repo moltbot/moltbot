@@ -543,6 +543,16 @@ export const googlechatPlugin: ChannelPlugin<ResolvedGoogleChatAccount> = {
         const configured = entry.configured === true;
         if (!enabled || !configured) return [];
         const issues = [];
+        if (entry.oauthFromGog && entry.userCredentialSource === "none") {
+          issues.push({
+            channel: "googlechat",
+            accountId,
+            kind: "auth",
+            message:
+              "Google Chat OAuth is set to reuse gog, but no gog OAuth credentials were detected.",
+            fix: "Ensure gog is installed and the keyring is unlocked (set GOG_KEYRING_PASSWORD), or set oauthRefreshToken/oauthClientFile manually.",
+          });
+        }
         if (!entry.audience) {
           issues.push({
             channel: "googlechat",
@@ -584,6 +594,8 @@ export const googlechatPlugin: ChannelPlugin<ResolvedGoogleChatAccount> = {
       enabled: account.enabled,
       configured: account.credentialSource !== "none",
       credentialSource: account.credentialSource,
+      oauthFromGog: account.config.oauthFromGog ?? false,
+      userCredentialSource: account.userCredentialSource,
       audienceType: account.config.audienceType,
       audience: account.config.audience,
       webhookPath: account.config.webhookPath,

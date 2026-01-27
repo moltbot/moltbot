@@ -109,25 +109,37 @@ export function readGogRefreshTokenSync(params: {
   const cached = tokenCache.get(cacheKey);
   if (cached) return cached;
 
-  let stdout = "";
-  try {
-    stdout = execFileSync("gog", ["auth", "tokens", "--json"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-  } catch {
-    return null;
-  }
+  const env = {
+    ...process.env,
+    ...(params.gogAccount?.trim() ? { GOG_ACCOUNT: params.gogAccount.trim() } : {}),
+    ...(params.gogClient?.trim() ? { GOG_CLIENT: params.gogClient.trim() } : {}),
+  };
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(stdout);
-  } catch {
-    return null;
-  }
+  const runGogJson = (args: string[]): unknown | null => {
+    try {
+      const stdout = execFileSync("gog", ["--no-input", ...args], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 3000,
+        env,
+      });
+      return JSON.parse(stdout);
+    } catch {
+      return null;
+    }
+  };
 
+  const parsed = runGogJson(["auth", "tokens", "list", "--json"]);
   const tokens: GogTokenEntry[] = [];
-  collectTokens(parsed, tokens);
+  if (parsed) {
+    collectTokens(parsed, tokens);
+  }
+  if (tokens.length === 0) {
+    const exported = runGogJson(["auth", "tokens", "export", "--json"]);
+    if (exported) {
+      collectTokens(exported, tokens);
+    }
+  }
   if (tokens.length === 0) return null;
 
   const target = params.gogAccount?.trim().toLowerCase();
