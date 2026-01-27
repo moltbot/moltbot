@@ -57,7 +57,6 @@ export async function deliverReplies(params: {
     replyQuoteText,
   } = params;
   const chunkMode = params.chunkMode ?? "length";
-  const threadParams = buildTelegramThreadParams(messageThreadId);
   let hasReplied = false;
   const chunkText = (markdown: string) => {
     const markdownChunks =
