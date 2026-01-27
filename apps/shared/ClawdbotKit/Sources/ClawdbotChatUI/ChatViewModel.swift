@@ -51,6 +51,7 @@ public final class ClawdbotChatViewModel {
     }
 
     private var lastHealthPollAt: Date?
+    private var hasInitiallyLoaded = false
 
     public init(sessionKey: String, transport: any ClawdbotChatTransport) {
         self.sessionKey = sessionKey
@@ -76,6 +77,7 @@ public final class ClawdbotChatViewModel {
     }
 
     public func load() {
+        guard !self.hasInitiallyLoaded else { return }
         Task { await self.bootstrap() }
     }
 
@@ -174,6 +176,7 @@ public final class ClawdbotChatViewModel {
             await self.pollHealthIfNeeded(force: true)
             await self.fetchSessions(limit: 50)
             self.errorText = nil
+            self.hasInitiallyLoaded = true
         } catch {
             self.errorText = error.localizedDescription
             chatUILogger.error("bootstrap failed \(error.localizedDescription, privacy: .public)")
@@ -329,6 +332,7 @@ public final class ClawdbotChatViewModel {
         guard !next.isEmpty else { return }
         guard next != self.sessionKey else { return }
         self.sessionKey = next
+        self.hasInitiallyLoaded = false
         await self.bootstrap()
     }
 
