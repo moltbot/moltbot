@@ -9,11 +9,7 @@
 
 import type { MoltbotConfig } from "../config/config.js";
 import { logVerbose } from "../globals.js";
-import {
-  shouldRespond,
-  type EngagementConfig,
-  type EngagementState,
-} from "../config/engagement.js";
+import { shouldRespond, type EngagementState } from "../config/engagement.js";
 import {
   resolveChannelGroupEngagement,
   resolveChannelGroupMode,

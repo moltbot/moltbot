@@ -13,11 +13,7 @@ import { buildMentionConfig, debugMention, resolveOwnerList } from "../mentions.
 import type { WebInboundMsg } from "../types.js";
 import { recordPendingHistoryEntryIfEnabled } from "../../../auto-reply/reply/history.js";
 import { stripMentionsForCommand } from "./commands.js";
-import {
-  resolveGroupActivationFor,
-  resolveGroupModeFor,
-  resolveGroupPolicyFor,
-} from "./group-activation.js";
+import { resolveGroupActivationFor, resolveGroupPolicyFor } from "./group-activation.js";
 import { noteGroupMember } from "./group-members.js";
 
 export type GroupHistoryEntry = {
