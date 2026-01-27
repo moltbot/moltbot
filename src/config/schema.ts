@@ -461,6 +461,13 @@ const FIELD_HELP: Record<string, string> = {
   "tools.web.fetch.firecrawl.maxAgeMs":
     "Firecrawl maxAge (ms) for cached results when supported by the API.",
   "tools.web.fetch.firecrawl.timeoutSeconds": "Timeout in seconds for Firecrawl requests.",
+  "tools.web.fetch.exa.enabled": "Enable Exa content extraction for web_fetch (default: false).",
+  "tools.web.fetch.exa.apiKey": "Exa API key (fallback: EXA_API_KEY env var).",
+  "tools.web.fetch.exa.contents":
+    "Include page text in Exa results; when false, only URLs and titles are returned (default: true).",
+  "tools.web.fetch.exa.maxChars":
+    "Max characters of page text per Exa result; higher values provide more context but use more tokens (default: 1500).",
+  "tools.web.fetch.exa.timeoutSeconds": "Timeout in seconds for Exa requests.",
   "channels.slack.allowBots":
     "Allow bot-authored messages to trigger Slack replies (default: false).",
   "channels.slack.thread.historyScope":

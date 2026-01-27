@@ -1,9 +1,10 @@
 ---
-summary: "Web search + fetch tools (Brave Search API, Perplexity direct/OpenRouter)"
+summary: "Web search + fetch tools (Brave Search API, Perplexity direct/OpenRouter, Exa)"
 read_when:
   - You want to enable web_search or web_fetch
   - You need Brave Search API key setup
   - You want to use Perplexity Sonar for web search
+  - You want to use Exa for content extraction
 ---
 
 # Web tools
@@ -11,7 +12,7 @@ read_when:
 Clawdbot ships two lightweight web tools:
 
 - `web_search` — Search the web via Brave Search API (default) or Perplexity Sonar (direct or via OpenRouter).
-- `web_fetch` — HTTP fetch + readable extraction (HTML → markdown/text).
+- `web_fetch` — HTTP fetch + readable extraction (HTML → markdown/text). Supports Readability, Firecrawl, and Exa extract.
 
 These are **not** browser automation. For JS-heavy sites or logins, use the
 [Browser tool](/tools/browser).
@@ -138,6 +139,41 @@ If no base URL is set, Clawdbot chooses a default based on the API key source:
 | `perplexity/sonar-pro` (default) | Multi-step reasoning with web search | Complex questions |
 | `perplexity/sonar-reasoning-pro` | Chain-of-thought analysis | Deep research |
 
+## Using Exa for content extraction
+
+Exa provides a `/contents` API endpoint optimized for extracting text content from web pages. You can enable Exa as a content extractor for `web_fetch`, and it will be tried first before falling back to Readability or Firecrawl.
+
+### Getting an Exa API key
+
+1. Sign up at https://exa.ai/
+2. Generate an API key in your account settings
+
+### Setting up Exa content extraction
+
+```json5
+{
+  tools: {
+    web: {
+      fetch: {
+        exa: {
+          enabled: true,
+          // API key (optional if EXA_API_KEY is set)
+          apiKey: "your-exa-api-key",
+          // Include page text in results (default: true)
+          contents: true,
+          // Max characters of page text per result (default: 1500)
+          maxChars: 1500
+        }
+      }
+    }
+  }
+}
+```
+
+**Environment alternative:** set `EXA_API_KEY` in the Gateway environment. For a gateway install, put it in `~/.clawdbot/.env`.
+
+When enabled, Exa extract is tried first for HTML content. If it fails, Clawdbot falls back to Readability and then Firecrawl (if configured).
+
 ## web_search
 
 Search the web using your configured provider.
@@ -209,7 +245,8 @@ Fetch a URL and extract readable content.
 ### Requirements
 
 - `tools.web.fetch.enabled` must not be `false` (default: enabled)
-- Optional Firecrawl fallback: set `tools.web.fetch.firecrawl.apiKey` or `FIRECRAWL_API_KEY`.
+- Optional Exa content extraction: set `tools.web.fetch.exa.enabled` and `tools.web.fetch.exa.apiKey` or `EXA_API_KEY`
+- Optional Firecrawl fallback: set `tools.web.fetch.firecrawl.apiKey` or `FIRECRAWL_API_KEY`
 
 ### Config
 
@@ -225,6 +262,13 @@ Fetch a URL and extract readable content.
         maxRedirects: 3,
         userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         readability: true,
+        exa: {
+          enabled: true,
+          apiKey: "EXA_API_KEY_HERE", // optional if EXA_API_KEY is set
+          contents: true,
+          maxChars: 1500,
+          timeoutSeconds: 30
+        },
         firecrawl: {
           enabled: true,
           apiKey: "FIRECRAWL_API_KEY_HERE", // optional if FIRECRAWL_API_KEY is set
@@ -246,7 +290,7 @@ Fetch a URL and extract readable content.
 - `maxChars` (truncate long pages)
 
 Notes:
-- `web_fetch` uses Readability (main-content extraction) first, then Firecrawl (if configured). If both fail, the tool returns an error.
+- `web_fetch` tries Exa content extraction first (if enabled), then Readability (main-content extraction), then Firecrawl (if configured). If all fail, the tool returns an error.
 - Firecrawl requests use bot-circumvention mode and cache results by default.
 - `web_fetch` sends a Chrome-like User-Agent and `Accept-Language` by default; override `userAgent` if needed.
 - `web_fetch` blocks private/internal hostnames and re-checks redirects (limit with `maxRedirects`).

@@ -381,6 +381,19 @@ export type ToolsConfig = {
         /** Timeout in seconds for Firecrawl requests. */
         timeoutSeconds?: number;
       };
+      /** Exa-specific configuration for content extraction. */
+      exa?: {
+        /** Enable Exa content extraction (default: false). */
+        enabled?: boolean;
+        /** API key for Exa (defaults to EXA_API_KEY env var). */
+        apiKey?: string;
+        /** Include page text in results (default: true). */
+        contents?: boolean;
+        /** Max characters of page text per result (default: 1500). */
+        maxChars?: number;
+        /** Timeout in seconds for Exa requests. */
+        timeoutSeconds?: number;
+      };
     };
   };
   media?: MediaToolsConfig;

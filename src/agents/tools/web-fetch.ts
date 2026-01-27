@@ -40,6 +40,8 @@ const DEFAULT_FETCH_MAX_REDIRECTS = 3;
 const DEFAULT_ERROR_MAX_CHARS = 4_000;
 const DEFAULT_FIRECRAWL_BASE_URL = "https://api.firecrawl.dev";
 const DEFAULT_FIRECRAWL_MAX_AGE_MS = 172_800_000;
+const EXA_CONTENTS_ENDPOINT = "https://api.exa.ai/contents";
+const DEFAULT_EXA_MAX_CHARS = 1500;
 const DEFAULT_FETCH_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
 
@@ -77,6 +79,25 @@ type FirecrawlFetchConfig =
       timeoutSeconds?: number;
     }
   | undefined;
+
+type ExaExtractConfig =
+  | {
+      enabled?: boolean;
+      apiKey?: string;
+      contents?: boolean;
+      maxChars?: number;
+      timeoutSeconds?: number;
+    }
+  | undefined;
+
+type ExaContentsResponse = {
+  results: Array<{
+    url: string;
+    title?: string | null;
+    text?: string | null;
+    publishedDate?: string | null;
+  }>;
+};
 
 function resolveFetchConfig(cfg?: ClawdbotConfig): WebFetchConfig {
   const fetch = cfg?.tools?.web?.fetch;
@@ -145,6 +166,35 @@ function resolveFirecrawlMaxAgeMsOrDefault(firecrawl?: FirecrawlFetchConfig): nu
   const resolved = resolveFirecrawlMaxAgeMs(firecrawl);
   if (typeof resolved === "number") return resolved;
   return DEFAULT_FIRECRAWL_MAX_AGE_MS;
+}
+
+function resolveExaExtractConfig(fetch?: WebFetchConfig): ExaExtractConfig {
+  if (!fetch || typeof fetch !== "object") return undefined;
+  const exa = "exa" in fetch ? fetch.exa : undefined;
+  if (!exa || typeof exa !== "object") return undefined;
+  return exa as ExaExtractConfig;
+}
+
+function resolveExaExtractApiKey(exa?: ExaExtractConfig): string | undefined {
+  const fromConfig =
+    exa && "apiKey" in exa && typeof exa.apiKey === "string" ? exa.apiKey.trim() : "";
+  const fromEnv = (process.env.EXA_API_KEY ?? "").trim();
+  return fromConfig || fromEnv || undefined;
+}
+
+function resolveExaExtractEnabled(params: { exa?: ExaExtractConfig; apiKey?: string }): boolean {
+  if (typeof params.exa?.enabled === "boolean") return params.exa.enabled;
+  return false;
+}
+
+function resolveExaExtractContents(exa?: ExaExtractConfig): boolean {
+  if (typeof exa?.contents === "boolean") return exa.contents;
+  return true;
+}
+
+function resolveExaExtractMaxChars(exa?: ExaExtractConfig): number {
+  if (typeof exa?.maxChars === "number" && exa.maxChars > 0) return exa.maxChars;
+  return DEFAULT_EXA_MAX_CHARS;
 }
 
 function resolveMaxChars(value: unknown, fallback: number): number {
@@ -329,6 +379,60 @@ export async function fetchFirecrawlContent(params: {
   };
 }
 
+export async function fetchExaContent(params: {
+  url: string;
+  extractMode: ExtractMode;
+  apiKey: string;
+  contents: boolean;
+  maxChars: number;
+  timeoutSeconds: number;
+}): Promise<{
+  text: string;
+  title?: string;
+  finalUrl?: string;
+  status?: number;
+}> {
+  const body: Record<string, unknown> = {
+    ids: [params.url],
+  };
+
+  if (params.contents) {
+    body.text = { maxCharacters: params.maxChars };
+  }
+
+  const res = await fetch(EXA_CONTENTS_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": params.apiKey,
+    },
+    body: JSON.stringify(body),
+    signal: withTimeout(undefined, params.timeoutSeconds * 1000),
+  });
+
+  const payload = (await res.json()) as ExaContentsResponse;
+
+  if (!res.ok) {
+    const detail = await readResponseText(res);
+    throw new Error(`Exa contents API error (${res.status}): ${detail || res.statusText}`);
+  }
+
+  const result = payload.results?.[0];
+  if (!result) {
+    throw new Error("Exa contents returned no results");
+  }
+
+  const rawText = result.text ?? "";
+  const text = params.extractMode === "text" ? markdownToText(rawText) : rawText;
+
+  return {
+    text,
+    title: result.title ?? undefined,
+    finalUrl: result.url,
+    status: 200,
+  };
+}
+
 async function runWebFetch(params: {
   url: string;
   extractMode: ExtractMode;
@@ -346,6 +450,11 @@ async function runWebFetch(params: {
   firecrawlProxy: "auto" | "basic" | "stealth";
   firecrawlStoreInCache: boolean;
   firecrawlTimeoutSeconds: number;
+  exaExtractEnabled: boolean;
+  exaExtractApiKey?: string;
+  exaExtractContents: boolean;
+  exaExtractMaxChars: number;
+  exaExtractTimeoutSeconds: number;
 }): Promise<Record<string, unknown>> {
   const cacheKey = normalizeCacheKey(
     `fetch:${params.url}:${params.extractMode}:${params.maxChars}`,
@@ -464,7 +573,29 @@ async function runWebFetch(params: {
     let extractor = "raw";
     let text = body;
     if (contentType.includes("text/html")) {
-      if (params.readabilityEnabled) {
+      // Try Exa extract first if enabled
+      if (params.exaExtractEnabled && params.exaExtractApiKey) {
+        try {
+          const exa = await fetchExaContent({
+            url: finalUrl,
+            extractMode: params.extractMode,
+            apiKey: params.exaExtractApiKey,
+            contents: params.exaExtractContents,
+            maxChars: params.exaExtractMaxChars,
+            timeoutSeconds: params.exaExtractTimeoutSeconds,
+          });
+          if (exa.text) {
+            text = exa.text;
+            title = exa.title;
+            extractor = "exa";
+          }
+        } catch {
+          // Fall back to Readability/Firecrawl if Exa fails
+        }
+      }
+
+      // If Exa didn't succeed, try Readability
+      if (extractor === "raw" && params.readabilityEnabled) {
         const readable = await extractReadableContent({
           html: body,
           url: finalUrl,
@@ -480,13 +611,13 @@ async function runWebFetch(params: {
             text = firecrawl.text;
             title = firecrawl.title;
             extractor = "firecrawl";
-          } else {
+          } else if (!params.exaExtractEnabled) {
             throw new Error(
               "Web fetch extraction failed: Readability and Firecrawl returned no content.",
             );
           }
         }
-      } else {
+      } else if (extractor === "raw" && !params.exaExtractEnabled) {
         throw new Error(
           "Web fetch extraction failed: Readability disabled and Firecrawl unavailable.",
         );
@@ -586,6 +717,15 @@ export function createWebFetchTool(options?: {
     firecrawl?.timeoutSeconds ?? fetch?.timeoutSeconds,
     DEFAULT_TIMEOUT_SECONDS,
   );
+  const exaExtract = resolveExaExtractConfig(fetch);
+  const exaExtractApiKey = resolveExaExtractApiKey(exaExtract);
+  const exaExtractEnabled = resolveExaExtractEnabled({ exa: exaExtract, apiKey: exaExtractApiKey });
+  const exaExtractContents = resolveExaExtractContents(exaExtract);
+  const exaExtractMaxChars = resolveExaExtractMaxChars(exaExtract);
+  const exaExtractTimeoutSeconds = resolveTimeoutSeconds(
+    exaExtract?.timeoutSeconds ?? fetch?.timeoutSeconds,
+    DEFAULT_TIMEOUT_SECONDS,
+  );
   const userAgent =
     (fetch && "userAgent" in fetch && typeof fetch.userAgent === "string" && fetch.userAgent) ||
     DEFAULT_FETCH_USER_AGENT;
@@ -617,6 +757,11 @@ export function createWebFetchTool(options?: {
         firecrawlProxy: "auto",
         firecrawlStoreInCache: true,
         firecrawlTimeoutSeconds,
+        exaExtractEnabled,
+        exaExtractApiKey,
+        exaExtractContents,
+        exaExtractMaxChars,
+        exaExtractTimeoutSeconds,
       });
       return jsonResult(result);
     },
