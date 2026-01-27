@@ -63,6 +63,12 @@ const WebSearchSchema = Type.Object({
         "Filter results by discovery time (Brave only). Values: 'pd' (past 24h), 'pw' (past week), 'pm' (past month), 'py' (past year), or date range 'YYYY-MM-DDtoYYYY-MM-DD'.",
     }),
   ),
+  model: Type.Optional(
+    Type.String({
+      description:
+        "Perplexity model to use (Perplexity provider only). Overrides the configured default. Examples: 'sonar', 'sonar-pro', 'sonar-reasoning'.",
+    }),
+  ),
 });
 
 type WebSearchConfig = NonNullable<MoltbotConfig["tools"]>["web"] extends infer Web
@@ -265,6 +271,62 @@ function resolveSiteName(url: string | undefined): string | undefined {
   }
 }
 
+function resolvePerplexityRequestParams(params: { baseUrl?: string; model?: string }): {
+  effectivePerplexityBaseUrl: string;
+  effectivePerplexityModel: string;
+  cachePerplexityBaseUrl: string;
+  cachePerplexityModel: string;
+} {
+  const normalizedPerplexityModel = typeof params.model === "string" ? params.model.trim() : "";
+
+  const normalizedPerplexityBaseUrlRaw =
+    typeof params.baseUrl === "string" ? params.baseUrl.trim() : "";
+  const normalizedPerplexityBaseUrl = normalizedPerplexityBaseUrlRaw.replace(/\/+$/, "");
+  const effectivePerplexityBaseUrl = normalizedPerplexityBaseUrl || DEFAULT_PERPLEXITY_BASE_URL;
+  const cachePerplexityBaseUrl =
+    !normalizedPerplexityBaseUrl || normalizedPerplexityBaseUrl === DEFAULT_PERPLEXITY_BASE_URL
+      ? "default"
+      : normalizedPerplexityBaseUrl;
+  const isOpenRouterBaseUrl = effectivePerplexityBaseUrl === DEFAULT_PERPLEXITY_BASE_URL;
+  const resolvedPerplexityModel = normalizedPerplexityModel || DEFAULT_PERPLEXITY_MODEL;
+  const effectivePerplexityModel =
+    isOpenRouterBaseUrl &&
+    resolvedPerplexityModel &&
+    !resolvedPerplexityModel.startsWith("perplexity/")
+      ? `perplexity/${resolvedPerplexityModel}`
+      : resolvedPerplexityModel;
+  const cachePerplexityModel =
+    !normalizedPerplexityModel || effectivePerplexityModel === DEFAULT_PERPLEXITY_MODEL
+      ? "default"
+      : effectivePerplexityModel;
+
+  return {
+    effectivePerplexityBaseUrl,
+    effectivePerplexityModel,
+    cachePerplexityBaseUrl,
+    cachePerplexityModel,
+  };
+}
+
+function buildWebSearchCacheKey(params: {
+  provider: (typeof SEARCH_PROVIDERS)[number];
+  query: string;
+  count: number;
+  country?: string;
+  search_lang?: string;
+  ui_lang?: string;
+  freshness?: string;
+  perplexityBaseUrl?: string;
+  perplexityModel?: string;
+}): string {
+  const base = `${params.provider}:${params.query}:${params.count}:${params.country || "default"}:${params.search_lang || "default"}:${params.ui_lang || "default"}`;
+  const suffix =
+    params.provider === "brave"
+      ? `${params.freshness || "default"}`
+      : `${params.perplexityModel || "default"}:${params.perplexityBaseUrl || "default"}`;
+  return normalizeCacheKey(`${base}:${suffix}`);
+}
+
 async function runPerplexitySearch(params: {
   query: string;
   apiKey: string;
@@ -320,11 +382,27 @@ async function runWebSearch(params: {
   perplexityBaseUrl?: string;
   perplexityModel?: string;
 }): Promise<Record<string, unknown>> {
-  const cacheKey = normalizeCacheKey(
-    params.provider === "brave"
-      ? `${params.provider}:${params.query}:${params.count}:${params.country || "default"}:${params.search_lang || "default"}:${params.ui_lang || "default"}:${params.freshness || "default"}`
-      : `${params.provider}:${params.query}:${params.count}:${params.country || "default"}:${params.search_lang || "default"}:${params.ui_lang || "default"}`,
-  );
+  const {
+    effectivePerplexityBaseUrl,
+    effectivePerplexityModel,
+    cachePerplexityBaseUrl,
+    cachePerplexityModel,
+  } = resolvePerplexityRequestParams({
+    baseUrl: params.perplexityBaseUrl,
+    model: params.perplexityModel,
+  });
+
+  const cacheKey = buildWebSearchCacheKey({
+    provider: params.provider,
+    query: params.query,
+    count: params.count,
+    country: params.country,
+    search_lang: params.search_lang,
+    ui_lang: params.ui_lang,
+    freshness: params.freshness,
+    perplexityBaseUrl: cachePerplexityBaseUrl,
+    perplexityModel: cachePerplexityModel,
+  });
   const cached = readCache(SEARCH_CACHE, cacheKey);
   if (cached) return { ...cached.value, cached: true };
 
@@ -334,15 +412,15 @@ async function runWebSearch(params: {
     const { content, citations } = await runPerplexitySearch({
       query: params.query,
       apiKey: params.apiKey,
-      baseUrl: params.perplexityBaseUrl ?? DEFAULT_PERPLEXITY_BASE_URL,
-      model: params.perplexityModel ?? DEFAULT_PERPLEXITY_MODEL,
+      baseUrl: effectivePerplexityBaseUrl,
+      model: effectivePerplexityModel,
       timeoutSeconds: params.timeoutSeconds,
     });
 
     const payload = {
       query: params.query,
       provider: params.provider,
-      model: params.perplexityModel ?? DEFAULT_PERPLEXITY_MODEL,
+      model: effectivePerplexityModel,
       tookMs: Date.now() - start,
       content,
       citations,
@@ -450,6 +528,14 @@ export function createWebSearchTool(options?: {
           docs: "https://docs.molt.bot/tools/web",
         });
       }
+      const modelOverride = readStringParam(params, "model");
+      if (modelOverride && provider !== "perplexity") {
+        return jsonResult({
+          error: "unsupported_model_override",
+          message: "model parameter is only supported by the Perplexity web_search provider.",
+          docs: "https://docs.molt.bot/tools/web",
+        });
+      }
       const freshness = rawFreshness ? normalizeFreshness(rawFreshness) : undefined;
       if (rawFreshness && !freshness) {
         return jsonResult({
@@ -475,7 +561,7 @@ export function createWebSearchTool(options?: {
           perplexityAuth?.source,
           perplexityAuth?.apiKey,
         ),
-        perplexityModel: resolvePerplexityModel(perplexityConfig),
+        perplexityModel: modelOverride || resolvePerplexityModel(perplexityConfig),
       });
       return jsonResult(result);
     },
@@ -486,4 +572,6 @@ export const __testing = {
   inferPerplexityBaseUrlFromApiKey,
   resolvePerplexityBaseUrl,
   normalizeFreshness,
+  resolvePerplexityRequestParams,
+  buildWebSearchCacheKey,
 } as const;
