@@ -1,8 +1,9 @@
-import type { AudioTranscriptionRequest, AudioTranscriptionResult } from "../../types.js";
+import { GOOGLE_GENERATIVE_API_BASE } from "../../../config/api-endpoints.js";
 import { normalizeGoogleModelId } from "../../../agents/models-config.providers.js";
+import type { AudioTranscriptionRequest, AudioTranscriptionResult } from "../../types.js";
 import { fetchWithTimeout, normalizeBaseUrl, readErrorResponse } from "../shared.js";
 
-export const DEFAULT_GOOGLE_AUDIO_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
+export const DEFAULT_GOOGLE_AUDIO_BASE_URL = GOOGLE_GENERATIVE_API_BASE;
 const DEFAULT_GOOGLE_AUDIO_MODEL = "gemini-3-flash-preview";
 const DEFAULT_GOOGLE_AUDIO_PROMPT = "Transcribe the audio.";
 

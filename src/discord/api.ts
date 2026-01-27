@@ -1,7 +1,6 @@
+import { DISCORD_API_BASE } from "../config/api-endpoints.js";
 import { resolveFetch } from "../infra/fetch.js";
 import { resolveRetryConfig, retryAsync, type RetryConfig } from "../infra/retry.js";
-
-const DISCORD_API_BASE = "https://discord.com/api/v10";
 const DISCORD_API_RETRY_DEFAULTS = {
   attempts: 3,
   minDelayMs: 500,

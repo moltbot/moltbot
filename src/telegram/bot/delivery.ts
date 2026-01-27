@@ -1,4 +1,5 @@
 import { type Bot, GrammyError, InputFile } from "grammy";
+import { TELEGRAM_API_BASE } from "../../config/api-endpoints.js";
 import {
   markdownToTelegramChunks,
   markdownToTelegramHtml,
@@ -274,7 +275,7 @@ export async function resolveMedia(
   if (!fetchImpl) {
     throw new Error("fetch is not available; set channels.telegram.proxy in config");
   }
-  const url = `https://api.telegram.org/file/bot${token}/${file.file_path}`;
+  const url = `${TELEGRAM_API_BASE}/file/bot${token}/${file.file_path}`;
   const fetched = await fetchRemoteMedia({
     url,
     fetchImpl,

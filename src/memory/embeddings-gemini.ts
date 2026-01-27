@@ -1,4 +1,5 @@
 import { requireApiKey, resolveApiKeyForProvider } from "../agents/model-auth.js";
+import { GOOGLE_GENERATIVE_API_BASE } from "../config/api-endpoints.js";
 import { isTruthyEnvValue } from "../infra/env.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import type { EmbeddingProvider, EmbeddingProviderOptions } from "./embeddings.js";
@@ -10,7 +11,7 @@ export type GeminiEmbeddingClient = {
   modelPath: string;
 };
 
-const DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
+const DEFAULT_GEMINI_BASE_URL = GOOGLE_GENERATIVE_API_BASE;
 export const DEFAULT_GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
 const debugEmbeddings = isTruthyEnvValue(process.env.CLAWDBOT_DEBUG_MEMORY_EMBEDDINGS);
 const log = createSubsystemLogger("memory/embeddings");

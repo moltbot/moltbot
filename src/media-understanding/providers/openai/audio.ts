@@ -1,9 +1,10 @@
 import path from "node:path";
 
+import { OPENAI_API_BASE } from "../../../config/api-endpoints.js";
 import type { AudioTranscriptionRequest, AudioTranscriptionResult } from "../../types.js";
 import { fetchWithTimeout, normalizeBaseUrl, readErrorResponse } from "../shared.js";
 
-export const DEFAULT_OPENAI_AUDIO_BASE_URL = "https://api.openai.com/v1";
+export const DEFAULT_OPENAI_AUDIO_BASE_URL = OPENAI_API_BASE;
 const DEFAULT_OPENAI_AUDIO_MODEL = "gpt-4o-mini-transcribe";
 
 function resolveModel(model?: string): string {

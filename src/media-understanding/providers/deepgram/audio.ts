@@ -1,7 +1,8 @@
+import { DEEPGRAM_API_BASE } from "../../../config/api-endpoints.js";
 import type { AudioTranscriptionRequest, AudioTranscriptionResult } from "../../types.js";
 import { fetchWithTimeout, normalizeBaseUrl, readErrorResponse } from "../shared.js";
 
-export const DEFAULT_DEEPGRAM_AUDIO_BASE_URL = "https://api.deepgram.com/v1";
+export const DEFAULT_DEEPGRAM_AUDIO_BASE_URL = DEEPGRAM_API_BASE;
 export const DEFAULT_DEEPGRAM_AUDIO_MODEL = "nova-3";
 
 function resolveModel(model?: string): string {

@@ -1,6 +1,5 @@
+import { TELEGRAM_API_BASE } from "../config/api-endpoints.js";
 import { makeProxyFetch } from "./proxy.js";
-
-const TELEGRAM_API_BASE = "https://api.telegram.org";
 
 export type TelegramProbe = {
   ok: boolean;

@@ -15,6 +15,7 @@ import { completeSimple, type TextContent } from "@mariozechner/pi-ai";
 import { EdgeTTS } from "node-edge-tts";
 
 import type { ReplyPayload } from "../auto-reply/types.js";
+import { ELEVENLABS_API_BASE, OPENAI_TTS_BASE } from "../config/api-endpoints.js";
 import { normalizeChannelId } from "../channels/plugins/index.js";
 import type { ChannelId } from "../channels/plugins/types.js";
 import type { ClawdbotConfig } from "../config/config.js";
@@ -43,7 +44,7 @@ const DEFAULT_TTS_SUMMARIZE = true;
 const DEFAULT_MAX_TEXT_LENGTH = 4096;
 const TEMP_FILE_CLEANUP_DELAY_MS = 5 * 60 * 1000; // 5 minutes
 
-const DEFAULT_ELEVENLABS_BASE_URL = "https://api.elevenlabs.io";
+const DEFAULT_ELEVENLABS_BASE_URL = ELEVENLABS_API_BASE;
 const DEFAULT_ELEVENLABS_VOICE_ID = "pMsXgVXv3BLzUgSXRplE";
 const DEFAULT_ELEVENLABS_MODEL_ID = "eleven_multilingual_v2";
 const DEFAULT_OPENAI_MODEL = "gpt-4o-mini-tts";
@@ -758,9 +759,7 @@ export const OPENAI_TTS_MODELS = ["gpt-4o-mini-tts", "tts-1", "tts-1-hd"] as con
  * When set, model/voice validation is relaxed to allow non-OpenAI models.
  * Example: OPENAI_TTS_BASE_URL=http://localhost:8880/v1
  */
-const OPENAI_TTS_BASE_URL = (
-  process.env.OPENAI_TTS_BASE_URL?.trim() || "https://api.openai.com/v1"
-).replace(/\/+$/, "");
+const OPENAI_TTS_BASE_URL = OPENAI_TTS_BASE;
 const isCustomOpenAIEndpoint = OPENAI_TTS_BASE_URL !== "https://api.openai.com/v1";
 export const OPENAI_TTS_VOICES = [
   "alloy",

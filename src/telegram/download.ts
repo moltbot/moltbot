@@ -1,3 +1,4 @@
+import { TELEGRAM_API_BASE } from "../config/api-endpoints.js";
 import { detectMime } from "../media/mime.js";
 import { type SavedMedia, saveMediaBuffer } from "../media/store.js";
 
@@ -10,7 +11,7 @@ export type TelegramFileInfo = {
 
 export async function getTelegramFile(token: string, fileId: string): Promise<TelegramFileInfo> {
   const res = await fetch(
-    `https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(fileId)}`,
+    `${TELEGRAM_API_BASE}/bot${token}/getFile?file_id=${encodeURIComponent(fileId)}`,
   );
   if (!res.ok) {
     throw new Error(`getFile failed: ${res.status} ${res.statusText}`);
@@ -28,7 +29,7 @@ export async function downloadTelegramFile(
   maxBytes?: number,
 ): Promise<SavedMedia> {
   if (!info.file_path) throw new Error("file_path missing");
-  const url = `https://api.telegram.org/file/bot${token}/${info.file_path}`;
+  const url = `${TELEGRAM_API_BASE}/file/bot${token}/${info.file_path}`;
   const res = await fetch(url);
   if (!res.ok || !res.body) {
     throw new Error(`Failed to download telegram file: HTTP ${res.status}`);

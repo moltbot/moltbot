@@ -1,4 +1,5 @@
 import { requireApiKey, resolveApiKeyForProvider } from "../agents/model-auth.js";
+import { OPENAI_API_BASE } from "../config/api-endpoints.js";
 import type { EmbeddingProvider, EmbeddingProviderOptions } from "./embeddings.js";
 
 export type OpenAiEmbeddingClient = {
@@ -8,7 +9,7 @@ export type OpenAiEmbeddingClient = {
 };
 
 export const DEFAULT_OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
-const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
+const DEFAULT_OPENAI_BASE_URL = OPENAI_API_BASE;
 
 export function normalizeOpenAiModel(model: string): string {
   const trimmed = model.trim();

@@ -1,3 +1,4 @@
+import { TELEGRAM_API_BASE } from "../../../config/api-endpoints.js";
 import type { ClawdbotConfig } from "../../../config/config.js";
 import type { DmPolicy } from "../../../config/types.js";
 import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../../../routing/session-key.js";
@@ -48,7 +49,7 @@ async function noteTelegramUserIdHelp(prompter: WizardPrompter): Promise<void> {
   await prompter.note(
     [
       `1) DM your bot, then read from.id in \`${formatCliCommand("clawdbot logs --follow")}\` (safest)`,
-      "2) Or call https://api.telegram.org/bot<bot_token>/getUpdates and read message.from.id",
+      `2) Or call ${TELEGRAM_API_BASE}/bot<bot_token>/getUpdates and read message.from.id`,
       "3) Third-party: DM @userinfobot or @getidsbot",
       `Docs: ${formatDocsLink("/telegram")}`,
       "Website: https://clawd.bot",
@@ -79,7 +80,7 @@ async function promptTelegramAllowFrom(params: {
     if (/^\d+$/.test(stripped)) return stripped;
     if (!token) return null;
     const username = stripped.startsWith("@") ? stripped : `@${stripped}`;
-    const url = `https://api.telegram.org/bot${token}/getChat?chat_id=${encodeURIComponent(username)}`;
+    const url = `${TELEGRAM_API_BASE}/bot${token}/getChat?chat_id=${encodeURIComponent(username)}`;
     try {
       const res = await fetch(url);
       if (!res.ok) return null;

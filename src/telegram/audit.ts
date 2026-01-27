@@ -1,7 +1,6 @@
+import { TELEGRAM_API_BASE } from "../config/api-endpoints.js";
 import type { TelegramGroupConfig } from "../config/types.js";
 import { makeProxyFetch } from "./proxy.js";
-
-const TELEGRAM_API_BASE = "https://api.telegram.org";
 
 export type TelegramGroupMembershipAuditEntry = {
   chatId: string;
