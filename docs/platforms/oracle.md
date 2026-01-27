@@ -22,7 +22,8 @@ Oracle’s free tier can be a great fit for Clawdbot (especially if you already 
 | Provider | Plan | Specs | Price/mo | Notes |
 |----------|------|-------|----------|-------|
 | Oracle Cloud | Always Free ARM | up to 4 OCPU, 24GB RAM | $0 | ARM, limited capacity |
-| Hetzner | CX22 | 2 vCPU, 4GB RAM | ~ $4 | Cheapest paid option |
+| Hetzner | CX22 | 2 vCPU, 4GB RAM | ~$4 | Cheapest paid option |
+| Hostinger | KVM 1 | 1 vCPU, 4GB RAM | ~$5 | UI-based, Docker catalog |
 | DigitalOcean | Basic | 1 vCPU, 1GB RAM | $6 | Easy UI, good docs |
 | Vultr | Cloud Compute | 1 vCPU, 1GB RAM | $6 | Many locations |
 | Linode | Nanode | 1 vCPU, 1GB RAM | $5 | Now part of Akamai |
@@ -287,5 +288,6 @@ tar -czvf clawdbot-backup.tar.gz ~/.clawdbot ~/clawd
 - [Gateway remote access](/gateway/remote) — other remote access patterns
 - [Tailscale integration](/gateway/tailscale) — full Tailscale docs
 - [Gateway configuration](/gateway/configuration) — all config options
+- [Hostinger guide](/platforms/hostinger) — simplest UI-based setup
 - [DigitalOcean guide](/platforms/digitalocean) — if you want paid + easier signup
 - [Hetzner guide](/platforms/hetzner) — Docker-based alternative

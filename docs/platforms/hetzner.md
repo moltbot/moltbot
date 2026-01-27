@@ -323,3 +323,13 @@ All long-lived state must survive restarts, rebuilds, and reboots.
 | Node runtime | Container filesystem | Docker image | Rebuilt every image build |
 | OS packages | Container filesystem | Docker image | Do not install at runtime |
 | Docker container | Ephemeral | Restartable | Safe to destroy |
+
+---
+
+## See Also
+
+- [DigitalOcean guide](/platforms/digitalocean) — CLI-based alternative
+- [Oracle guide](/platforms/oracle) — free tier option
+- [Hostinger guide](/platforms/hostinger) — simplest UI-based setup
+- [Docker install](/install/docker) — generic Docker setup
+- [Gateway configuration](/gateway/configuration) — all config options

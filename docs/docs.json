@@ -1084,6 +1084,7 @@
           "platforms/linux",
           "platforms/fly",
           "platforms/hetzner",
+          "platforms/hostinger",
           "platforms/gcp",
           "platforms/exe-dev"
         ]

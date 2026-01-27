@@ -19,12 +19,14 @@ If you want a $0/month option and don’t mind ARM + provider-specific setup, se
 |----------|------|-------|----------|-------|
 | Oracle Cloud | Always Free ARM | up to 4 OCPU, 24GB RAM | $0 | ARM, limited capacity / signup quirks |
 | Hetzner | CX22 | 2 vCPU, 4GB RAM | €3.79 (~$4) | Cheapest paid option |
+| Hostinger | KVM 1 | 1 vCPU, 4GB RAM | ~$5 | UI-based, Docker catalog |
 | DigitalOcean | Basic | 1 vCPU, 1GB RAM | $6 | Easy UI, good docs |
 | Vultr | Cloud Compute | 1 vCPU, 1GB RAM | $6 | Many locations |
 | Linode | Nanode | 1 vCPU, 1GB RAM | $5 | Now part of Akamai |
 
 **Picking a provider:**
-- DigitalOcean: simplest UX + predictable setup (this guide)
+- Hostinger: simplest setup with UI-based Docker catalog (see [Hostinger guide](/platforms/hostinger))
+- DigitalOcean: easy UX + predictable setup (this guide)
 - Hetzner: good price/perf (see [Hetzner guide](/platforms/hetzner))
 - Oracle Cloud: can be $0/month, but is more finicky and ARM-only (see [Oracle guide](/platforms/oracle))
 
@@ -237,7 +239,9 @@ free -h
 
 ## See Also
 
+- [Hostinger guide](/platforms/hostinger) — simplest UI-based setup
 - [Hetzner guide](/platforms/hetzner) — cheaper, more powerful
+- [Oracle guide](/platforms/oracle) — free tier option
 - [Docker install](/install/docker) — containerized setup
 - [Tailscale](/gateway/tailscale) — secure remote access
 - [Configuration](/gateway/configuration) — full config reference

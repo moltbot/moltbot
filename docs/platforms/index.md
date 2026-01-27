@@ -26,6 +26,7 @@ Native companion apps for Windows are also planned; the Gateway is recommended v
 - VPS hub: [VPS hosting](/vps)
 - Fly.io: [Fly.io](/platforms/fly)
 - Hetzner (Docker): [Hetzner](/platforms/hetzner)
+- Hostinger (Docker, UI-based): [Hostinger](/platforms/hostinger)
 - GCP (Compute Engine): [GCP](/platforms/gcp)
 - exe.dev (VM + HTTPS proxy): [exe.dev](/platforms/exe-dev)
 
