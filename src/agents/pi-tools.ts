@@ -19,6 +19,7 @@ import { listChannelAgentTools } from "./channel-tools.js";
 import { createMoltbotTools } from "./moltbot-tools.js";
 import type { ModelAuthMode } from "./model-auth.js";
 import { wrapToolWithAbortSignal } from "./pi-tools.abort.js";
+import { runWithExecEventContext } from "../infra/exec-events-context.js";
 import {
   filterToolsByPolicy,
   isToolAllowedByPolicies,
@@ -93,6 +94,28 @@ function resolveExecConfig(cfg: MoltbotConfig | undefined) {
     cleanupMs: globalExec?.cleanupMs,
     notifyOnExit: globalExec?.notifyOnExit,
     applyPatch: globalExec?.applyPatch,
+  };
+}
+
+function wrapToolWithExecEventContext(
+  tool: AnyAgentTool,
+  context: { runId?: string; sessionKey?: string },
+): AnyAgentTool {
+  const execute = tool.execute;
+  if (!execute) return tool;
+  const runId = context.runId?.trim() || undefined;
+  const sessionKey = context.sessionKey?.trim() || undefined;
+  return {
+    ...tool,
+    execute: (toolCallId, params, signal, onUpdate) =>
+      runWithExecEventContext(
+        {
+          runId,
+          toolCallId,
+          sessionKey,
+        },
+        () => execute(toolCallId, params, signal, onUpdate),
+      ),
   };
 }
 
@@ -411,9 +434,15 @@ export function createMoltbotCodingTools(options?: {
   // Always normalize tool JSON Schemas before handing them to pi-agent/pi-ai.
   // Without this, some providers (notably OpenAI) will reject root-level union schemas.
   const normalized = subagentFiltered.map(normalizeToolParameters);
+  const withExecContext = normalized.map((tool) =>
+    wrapToolWithExecEventContext(tool, {
+      runId: options?.runId,
+      sessionKey: options?.sessionKey,
+    }),
+  );
   const withAbort = options?.abortSignal
-    ? normalized.map((tool) => wrapToolWithAbortSignal(tool, options.abortSignal))
-    : normalized;
+    ? withExecContext.map((tool) => wrapToolWithAbortSignal(tool, options.abortSignal))
+    : withExecContext;
 
   // NOTE: Keep canonical (lowercase) tool names here.
   // pi-ai's Anthropic OAuth transport remaps tool names to Claude Code-style names
