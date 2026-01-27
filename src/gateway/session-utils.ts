@@ -1,26 +1,25 @@
-import fs from "node:fs";
-import path from "node:path";
+/**
+ * Session utilities for the gateway.
+ *
+ * This module orchestrates session management by delegating to focused submodules:
+ * - session-utils.avatar.ts: Avatar resolution (data URIs, file paths, HTTP URLs)
+ * - session-utils.agents.ts: Agent listing and discovery
+ * - session-utils.store.ts: Store resolution and loading
+ * - session-utils.fs.ts: File system operations (transcript reading)
+ * - session-utils.types.ts: Type definitions
+ */
 
-import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { lookupContextTokens } from "../agents/context.js";
 import { DEFAULT_CONTEXT_TOKENS, DEFAULT_MODEL, DEFAULT_PROVIDER } from "../agents/defaults.js";
 import { resolveConfiguredModelRef } from "../agents/model-selection.js";
 import { type MoltbotConfig, loadConfig } from "../config/config.js";
-import { resolveStateDir } from "../config/paths.js";
 import {
   buildGroupDisplayName,
-  canonicalizeMainSessionAlias,
   loadSessionStore,
-  resolveMainSessionKey,
   resolveStorePath,
   type SessionEntry,
-  type SessionScope,
 } from "../config/sessions.js";
-import {
-  normalizeAgentId,
-  normalizeMainKey,
-  parseAgentSessionKey,
-} from "../routing/session-key.js";
+import { normalizeAgentId, parseAgentSessionKey } from "../routing/session-key.js";
 import { normalizeSessionDeliveryFields } from "../utils/delivery-context.js";
 import {
   readFirstUserMessageFromTranscript,
@@ -33,6 +32,31 @@ import type {
   SessionsListResult,
 } from "./session-utils.types.js";
 
+// Re-export from submodules for backwards compatibility
+export {
+  resolveAvatarMime,
+  isWorkspaceRelativePath,
+  resolveIdentityAvatarUrl,
+} from "./session-utils.avatar.js";
+
+export {
+  isStorePathTemplate,
+  listExistingAgentIdsFromDisk,
+  listConfiguredAgentIds,
+  listAgentsForGateway,
+} from "./session-utils.agents.js";
+
+export {
+  canonicalizeSessionKeyForAgent,
+  resolveDefaultStoreAgentId,
+  resolveSessionStoreKey,
+  resolveSessionStoreAgentId,
+  canonicalizeSpawnedByForAgent,
+  resolveGatewaySessionStoreTarget,
+  mergeSessionEntryIntoCombined,
+  loadCombinedSessionStoreForGateway,
+} from "./session-utils.store.js";
+
 export {
   archiveFileOnDisk,
   capArrayByJsonBytes,
@@ -42,6 +66,7 @@ export {
   readSessionMessages,
   resolveSessionTranscriptCandidates,
 } from "./session-utils.fs.js";
+
 export type {
   GatewayAgentRow,
   GatewaySessionRow,
@@ -52,63 +77,10 @@ export type {
   SessionsPreviewResult,
 } from "./session-utils.types.js";
 
+// Import from store module for internal use
+import { resolveSessionStoreKey, resolveSessionStoreAgentId } from "./session-utils.store.js";
+
 const DERIVED_TITLE_MAX_LEN = 60;
-const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
-
-const AVATAR_DATA_RE = /^data:/i;
-const AVATAR_HTTP_RE = /^https?:\/\//i;
-const AVATAR_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
-const WINDOWS_ABS_RE = /^[a-zA-Z]:[\\/]/;
-
-const AVATAR_MIME_BY_EXT: Record<string, string> = {
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".webp": "image/webp",
-  ".gif": "image/gif",
-  ".svg": "image/svg+xml",
-  ".bmp": "image/bmp",
-  ".tif": "image/tiff",
-  ".tiff": "image/tiff",
-};
-
-function resolveAvatarMime(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase();
-  return AVATAR_MIME_BY_EXT[ext] ?? "application/octet-stream";
-}
-
-function isWorkspaceRelativePath(value: string): boolean {
-  if (!value) return false;
-  if (value.startsWith("~")) return false;
-  if (AVATAR_SCHEME_RE.test(value) && !WINDOWS_ABS_RE.test(value)) return false;
-  return true;
-}
-
-function resolveIdentityAvatarUrl(
-  cfg: MoltbotConfig,
-  agentId: string,
-  avatar: string | undefined,
-): string | undefined {
-  if (!avatar) return undefined;
-  const trimmed = avatar.trim();
-  if (!trimmed) return undefined;
-  if (AVATAR_DATA_RE.test(trimmed) || AVATAR_HTTP_RE.test(trimmed)) return trimmed;
-  if (!isWorkspaceRelativePath(trimmed)) return undefined;
-  const workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
-  const workspaceRoot = path.resolve(workspaceDir);
-  const resolved = path.resolve(workspaceRoot, trimmed);
-  const relative = path.relative(workspaceRoot, resolved);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) return undefined;
-  try {
-    const stat = fs.statSync(resolved);
-    if (!stat.isFile() || stat.size > AVATAR_MAX_BYTES) return undefined;
-    const buffer = fs.readFileSync(resolved);
-    const mime = resolveAvatarMime(resolved);
-    return `data:${mime};base64,${buffer.toString("base64")}`;
-  } catch {
-    return undefined;
-  }
-}
 
 function formatSessionIdPrefix(sessionId: string, updatedAt?: number | null): string {
   const prefix = sessionId.slice(0, 8);
@@ -128,6 +100,9 @@ function truncateTitle(text: string, maxLen: number): string {
   return cut + "…";
 }
 
+/**
+ * Derive a display title for a session from its metadata or first message.
+ */
 export function deriveSessionTitle(
   entry: SessionEntry | undefined,
   firstUserMessage?: string | null,
@@ -154,6 +129,9 @@ export function deriveSessionTitle(
   return undefined;
 }
 
+/**
+ * Load a session entry by key, resolving store paths automatically.
+ */
 export function loadSessionEntry(sessionKey: string) {
   const cfg = loadConfig();
   const sessionCfg = cfg.session;
@@ -165,6 +143,9 @@ export function loadSessionEntry(sessionKey: string) {
   return { cfg, storePath, store, entry, canonicalKey };
 }
 
+/**
+ * Classify a session key into its kind (global, unknown, group, direct).
+ */
 export function classifySessionKey(key: string, entry?: SessionEntry): GatewaySessionRow["kind"] {
   if (key === "global") return "global";
   if (key === "unknown") return "unknown";
@@ -177,6 +158,9 @@ export function classifySessionKey(key: string, entry?: SessionEntry): GatewaySe
   return "direct";
 }
 
+/**
+ * Parse a group session key into its components.
+ */
 export function parseGroupKey(
   key: string,
 ): { channel?: string; kind?: "group" | "channel"; id?: string } | null {
@@ -193,259 +177,9 @@ export function parseGroupKey(
   return null;
 }
 
-function isStorePathTemplate(store?: string): boolean {
-  return typeof store === "string" && store.includes("{agentId}");
-}
-
-function listExistingAgentIdsFromDisk(): string[] {
-  const root = resolveStateDir();
-  const agentsDir = path.join(root, "agents");
-  try {
-    const entries = fs.readdirSync(agentsDir, { withFileTypes: true });
-    return entries
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => normalizeAgentId(entry.name))
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
-}
-
-function listConfiguredAgentIds(cfg: MoltbotConfig): string[] {
-  const agents = cfg.agents?.list ?? [];
-  if (agents.length > 0) {
-    const ids = new Set<string>();
-    for (const entry of agents) {
-      if (entry?.id) ids.add(normalizeAgentId(entry.id));
-    }
-    const defaultId = normalizeAgentId(resolveDefaultAgentId(cfg));
-    ids.add(defaultId);
-    const sorted = Array.from(ids).filter(Boolean);
-    sorted.sort((a, b) => a.localeCompare(b));
-    return sorted.includes(defaultId)
-      ? [defaultId, ...sorted.filter((id) => id !== defaultId)]
-      : sorted;
-  }
-
-  const ids = new Set<string>();
-  const defaultId = normalizeAgentId(resolveDefaultAgentId(cfg));
-  ids.add(defaultId);
-  for (const id of listExistingAgentIdsFromDisk()) ids.add(id);
-  const sorted = Array.from(ids).filter(Boolean);
-  sorted.sort((a, b) => a.localeCompare(b));
-  if (sorted.includes(defaultId)) {
-    return [defaultId, ...sorted.filter((id) => id !== defaultId)];
-  }
-  return sorted;
-}
-
-export function listAgentsForGateway(cfg: MoltbotConfig): {
-  defaultId: string;
-  mainKey: string;
-  scope: SessionScope;
-  agents: GatewayAgentRow[];
-} {
-  const defaultId = normalizeAgentId(resolveDefaultAgentId(cfg));
-  const mainKey = normalizeMainKey(cfg.session?.mainKey);
-  const scope = cfg.session?.scope ?? "per-sender";
-  const configuredById = new Map<
-    string,
-    { name?: string; identity?: GatewayAgentRow["identity"] }
-  >();
-  for (const entry of cfg.agents?.list ?? []) {
-    if (!entry?.id) continue;
-    const identity = entry.identity
-      ? {
-          name: entry.identity.name?.trim() || undefined,
-          theme: entry.identity.theme?.trim() || undefined,
-          emoji: entry.identity.emoji?.trim() || undefined,
-          avatar: entry.identity.avatar?.trim() || undefined,
-          avatarUrl: resolveIdentityAvatarUrl(
-            cfg,
-            normalizeAgentId(entry.id),
-            entry.identity.avatar?.trim(),
-          ),
-        }
-      : undefined;
-    configuredById.set(normalizeAgentId(entry.id), {
-      name: typeof entry.name === "string" && entry.name.trim() ? entry.name.trim() : undefined,
-      identity,
-    });
-  }
-  const explicitIds = new Set(
-    (cfg.agents?.list ?? [])
-      .map((entry) => (entry?.id ? normalizeAgentId(entry.id) : ""))
-      .filter(Boolean),
-  );
-  const allowedIds = explicitIds.size > 0 ? new Set([...explicitIds, defaultId]) : null;
-  let agentIds = listConfiguredAgentIds(cfg).filter((id) =>
-    allowedIds ? allowedIds.has(id) : true,
-  );
-  if (mainKey && !agentIds.includes(mainKey)) {
-    agentIds = [...agentIds, mainKey];
-  }
-  const agents = agentIds.map((id) => {
-    const meta = configuredById.get(id);
-    return {
-      id,
-      name: meta?.name,
-      identity: meta?.identity,
-    };
-  });
-  return { defaultId, mainKey, scope, agents };
-}
-
-function canonicalizeSessionKeyForAgent(agentId: string, key: string): string {
-  if (key === "global" || key === "unknown") return key;
-  if (key.startsWith("agent:")) return key;
-  return `agent:${normalizeAgentId(agentId)}:${key}`;
-}
-
-function resolveDefaultStoreAgentId(cfg: MoltbotConfig): string {
-  return normalizeAgentId(resolveDefaultAgentId(cfg));
-}
-
-export function resolveSessionStoreKey(params: { cfg: MoltbotConfig; sessionKey: string }): string {
-  const raw = params.sessionKey.trim();
-  if (!raw) return raw;
-  if (raw === "global" || raw === "unknown") return raw;
-
-  const parsed = parseAgentSessionKey(raw);
-  if (parsed) {
-    const agentId = normalizeAgentId(parsed.agentId);
-    const canonical = canonicalizeMainSessionAlias({
-      cfg: params.cfg,
-      agentId,
-      sessionKey: raw,
-    });
-    if (canonical !== raw) return canonical;
-    return raw;
-  }
-
-  const rawMainKey = normalizeMainKey(params.cfg.session?.mainKey);
-  if (raw === "main" || raw === rawMainKey) {
-    return resolveMainSessionKey(params.cfg);
-  }
-  const agentId = resolveDefaultStoreAgentId(params.cfg);
-  return canonicalizeSessionKeyForAgent(agentId, raw);
-}
-
-function resolveSessionStoreAgentId(cfg: MoltbotConfig, canonicalKey: string): string {
-  if (canonicalKey === "global" || canonicalKey === "unknown") {
-    return resolveDefaultStoreAgentId(cfg);
-  }
-  const parsed = parseAgentSessionKey(canonicalKey);
-  if (parsed?.agentId) return normalizeAgentId(parsed.agentId);
-  return resolveDefaultStoreAgentId(cfg);
-}
-
-function canonicalizeSpawnedByForAgent(agentId: string, spawnedBy?: string): string | undefined {
-  const raw = spawnedBy?.trim();
-  if (!raw) return undefined;
-  if (raw === "global" || raw === "unknown") return raw;
-  if (raw.startsWith("agent:")) return raw;
-  return `agent:${normalizeAgentId(agentId)}:${raw}`;
-}
-
-export function resolveGatewaySessionStoreTarget(params: { cfg: MoltbotConfig; key: string }): {
-  agentId: string;
-  storePath: string;
-  canonicalKey: string;
-  storeKeys: string[];
-} {
-  const key = params.key.trim();
-  const canonicalKey = resolveSessionStoreKey({
-    cfg: params.cfg,
-    sessionKey: key,
-  });
-  const agentId = resolveSessionStoreAgentId(params.cfg, canonicalKey);
-  const storeConfig = params.cfg.session?.store;
-  const storePath = resolveStorePath(storeConfig, { agentId });
-
-  if (canonicalKey === "global" || canonicalKey === "unknown") {
-    const storeKeys = key && key !== canonicalKey ? [canonicalKey, key] : [key];
-    return { agentId, storePath, canonicalKey, storeKeys };
-  }
-
-  const storeKeys = new Set<string>();
-  storeKeys.add(canonicalKey);
-  if (key && key !== canonicalKey) storeKeys.add(key);
-  return {
-    agentId,
-    storePath,
-    canonicalKey,
-    storeKeys: Array.from(storeKeys),
-  };
-}
-
-// Merge with existing entry based on latest timestamp to ensure data consistency and avoid overwriting with less complete data.
-function mergeSessionEntryIntoCombined(params: {
-  combined: Record<string, SessionEntry>;
-  entry: SessionEntry;
-  agentId: string;
-  canonicalKey: string;
-}) {
-  const { combined, entry, agentId, canonicalKey } = params;
-  const existing = combined[canonicalKey];
-
-  if (existing && (existing.updatedAt ?? 0) > (entry.updatedAt ?? 0)) {
-    combined[canonicalKey] = {
-      ...entry,
-      ...existing,
-      spawnedBy: canonicalizeSpawnedByForAgent(agentId, existing.spawnedBy ?? entry.spawnedBy),
-    };
-  } else {
-    combined[canonicalKey] = {
-      ...existing,
-      ...entry,
-      spawnedBy: canonicalizeSpawnedByForAgent(agentId, entry.spawnedBy ?? existing?.spawnedBy),
-    };
-  }
-}
-
-export function loadCombinedSessionStoreForGateway(cfg: MoltbotConfig): {
-  storePath: string;
-  store: Record<string, SessionEntry>;
-} {
-  const storeConfig = cfg.session?.store;
-  if (storeConfig && !isStorePathTemplate(storeConfig)) {
-    const storePath = resolveStorePath(storeConfig);
-    const defaultAgentId = normalizeAgentId(resolveDefaultAgentId(cfg));
-    const store = loadSessionStore(storePath);
-    const combined: Record<string, SessionEntry> = {};
-    for (const [key, entry] of Object.entries(store)) {
-      const canonicalKey = canonicalizeSessionKeyForAgent(defaultAgentId, key);
-      mergeSessionEntryIntoCombined({
-        combined,
-        entry,
-        agentId: defaultAgentId,
-        canonicalKey,
-      });
-    }
-    return { storePath, store: combined };
-  }
-
-  const agentIds = listConfiguredAgentIds(cfg);
-  const combined: Record<string, SessionEntry> = {};
-  for (const agentId of agentIds) {
-    const storePath = resolveStorePath(storeConfig, { agentId });
-    const store = loadSessionStore(storePath);
-    for (const [key, entry] of Object.entries(store)) {
-      const canonicalKey = canonicalizeSessionKeyForAgent(agentId, key);
-      mergeSessionEntryIntoCombined({
-        combined,
-        entry,
-        agentId,
-        canonicalKey,
-      });
-    }
-  }
-
-  const storePath =
-    typeof storeConfig === "string" && storeConfig.trim() ? storeConfig.trim() : "(multiple)";
-  return { storePath, store: combined };
-}
-
+/**
+ * Get the default model configuration for sessions.
+ */
 export function getSessionDefaults(cfg: MoltbotConfig): GatewaySessionsDefaults {
   const resolved = resolveConfiguredModelRef({
     cfg,
@@ -463,6 +197,9 @@ export function getSessionDefaults(cfg: MoltbotConfig): GatewaySessionsDefaults 
   };
 }
 
+/**
+ * Resolve the model reference for a session, considering overrides.
+ */
 export function resolveSessionModelRef(
   cfg: MoltbotConfig,
   entry?: SessionEntry,
@@ -482,6 +219,9 @@ export function resolveSessionModelRef(
   return { provider, model };
 }
 
+/**
+ * List sessions from a store with filtering and derived titles.
+ */
 export function listSessionsFromStore(params: {
   cfg: MoltbotConfig;
   storePath: string;
