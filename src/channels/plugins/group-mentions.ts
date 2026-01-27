@@ -5,7 +5,10 @@ import {
   resolveToolsBySender,
 } from "../../config/group-policy.js";
 import type { DiscordConfig } from "../../config/types.js";
-import type { GroupToolPolicyConfig } from "../../config/types.tools.js";
+import type {
+  GroupToolPolicyBySenderConfig,
+  GroupToolPolicyConfig,
+} from "../../config/types.tools.js";
 import { resolveSlackAccount } from "../../slack/accounts.js";
 
 type GroupMentionParams = {
@@ -331,7 +334,9 @@ export function resolveSlackGroupToolPolicy(
     channelName ?? "",
     normalizedName,
   ].filter(Boolean);
-  let matched: { tools?: GroupToolPolicyConfig } | undefined;
+  let matched:
+    | { tools?: GroupToolPolicyConfig; toolsBySender?: GroupToolPolicyBySenderConfig }
+    | undefined;
   for (const candidate of candidates) {
     if (candidate && channels[candidate]) {
       matched = channels[candidate];

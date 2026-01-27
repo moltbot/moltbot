@@ -14,7 +14,13 @@ function enhanceBrowserFetchError(url: string, err: unknown, timeoutMs: number):
     ? "If this is a sandboxed session, ensure the sandbox browser is running and try again."
     : `Start (or restart) the Clawdbot gateway (Clawdbot.app menubar, or \`${formatCliCommand("clawdbot gateway")}\`) and try again.`;
   const msg = String(err);
-  if (msg.toLowerCase().includes("timed out") || msg.toLowerCase().includes("timeout")) {
+  const lower = msg.toLowerCase();
+  if (
+    lower.includes("timed out") ||
+    lower.includes("timeout") ||
+    lower.includes("aborted") ||
+    lower.includes("aborterror")
+  ) {
     return new Error(
       `Can't reach the clawd browser control service (timed out after ${timeoutMs}ms). ${hint}`,
     );

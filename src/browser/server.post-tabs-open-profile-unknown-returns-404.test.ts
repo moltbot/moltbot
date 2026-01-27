@@ -286,6 +286,9 @@ describe("profile CRUD endpoints", () => {
     testPort = await getFreePort();
     _cdpBaseUrl = `http://127.0.0.1:${testPort + 1}`;
 
+    prevGatewayPort = process.env.CLAWDBOT_GATEWAY_PORT;
+    process.env.CLAWDBOT_GATEWAY_PORT = String(testPort - 2);
+
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
@@ -299,6 +302,11 @@ describe("profile CRUD endpoints", () => {
   afterEach(async () => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    if (prevGatewayPort === undefined) {
+      delete process.env.CLAWDBOT_GATEWAY_PORT;
+    } else {
+      process.env.CLAWDBOT_GATEWAY_PORT = prevGatewayPort;
+    }
     const { stopBrowserControlServer } = await import("./server.js");
     await stopBrowserControlServer();
   });
