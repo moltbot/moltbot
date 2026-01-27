@@ -276,6 +276,13 @@ export async function dispatchReplyFromConfig(params: {
       ctx,
       {
         ...params.replyOptions,
+        onToolResult: (payload: ReplyPayload) => {
+          if (shouldRouteToOriginating) {
+            void sendPayloadAsync(payload, undefined, false);
+          } else {
+            dispatcher.sendToolResult(payload);
+          }
+        },
         onBlockReply: (payload: ReplyPayload, context) => {
           const run = async () => {
             // Accumulate block text for TTS generation after streaming
