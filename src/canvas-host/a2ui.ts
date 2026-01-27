@@ -12,6 +12,12 @@ export const CANVAS_WS_PATH = "/__clawdbot/ws";
 let cachedA2uiRootReal: string | null | undefined;
 let resolvingA2uiRoot: Promise<string | null> | null = null;
 
+/** Reset the A2UI root cache (for testing). */
+export function resetA2uiCache(): void {
+  cachedA2uiRootReal = undefined;
+  resolvingA2uiRoot = null;
+}
+
 async function resolveA2uiRoot(): Promise<string | null> {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [
