@@ -21,6 +21,11 @@
         "type": "object",
         "description": "Policy engine configuration for pre-action gating",
         "properties": {
+          "preset": {
+            "type": "string",
+            "enum": ["permissive", "safety", "strict", "audit-only"],
+            "description": "Named preset to use as base config. Rules become optional when preset is set."
+          },
           "defaultPolicy": {
             "type": "string",
             "enum": ["allow", "deny", "warn"],

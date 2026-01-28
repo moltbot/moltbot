@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { PolicyEngine } from "./policy.js";
 import type { PolicyConfig, PolicyRule } from "./policy-types.js";
+import { RateLimiter } from "./rate-limiter.js";
 
 function rule(overrides: Partial<PolicyRule> & Pick<PolicyRule, "id" | "match">): PolicyRule {
   return {
@@ -266,6 +267,131 @@ describe("PolicyEngine", () => {
     it("should allow normal file writes", () => {
       const { blocked } = engine.shouldBlock("Write", "file_write", "/project/src/index.ts");
       expect(blocked).toBe(false);
+    });
+  });
+
+  describe("rate limiting", () => {
+    it("should allow when under rate limit", () => {
+      const limiter = new RateLimiter();
+      const engine = new PolicyEngine(
+        {
+          rules: [
+            rule({
+              id: "bash-rate",
+              decision: "deny",
+              reason: "Rate limit exceeded",
+              match: {
+                tools: ["Bash"],
+                rateLimit: { maxCount: 3, windowMs: 60_000 },
+              },
+            }),
+          ],
+        },
+        limiter,
+      );
+
+      // Under limit — rule should NOT match, default allow applies
+      const result = engine.evaluate("Bash", "command", "ls");
+      expect(result.decision).toBe("allow");
+    });
+
+    it("should deny when rate limit exceeded", () => {
+      const limiter = new RateLimiter();
+      const key = "ratelimit:bash-rate:tool:Bash";
+      // Fill up the limiter
+      for (let i = 0; i < 3; i++) limiter.record(key);
+
+      const engine = new PolicyEngine(
+        {
+          rules: [
+            rule({
+              id: "bash-rate",
+              decision: "deny",
+              reason: "Rate limit exceeded",
+              match: {
+                tools: ["Bash"],
+                rateLimit: { maxCount: 3, windowMs: 60_000 },
+              },
+            }),
+          ],
+        },
+        limiter,
+      );
+
+      const result = engine.evaluate("Bash", "command", "ls");
+      expect(result.decision).toBe("deny");
+      expect(result.reason).toBe("Rate limit exceeded");
+    });
+
+    it("should skip rate limit rules when no limiter provided", () => {
+      const engine = new PolicyEngine({
+        rules: [
+          rule({
+            id: "rate-no-limiter",
+            decision: "deny",
+            match: {
+              tools: ["Bash"],
+              rateLimit: { maxCount: 1, windowMs: 60_000 },
+            },
+          }),
+        ],
+      });
+
+      // No limiter — rate limit rule is skipped
+      const result = engine.evaluate("Bash", "command", "ls");
+      expect(result.decision).toBe("allow");
+    });
+
+    it("should use category key for category-based rate limits", () => {
+      const limiter = new RateLimiter();
+      const key = "ratelimit:net-rate:category:network";
+      for (let i = 0; i < 2; i++) limiter.record(key);
+
+      const engine = new PolicyEngine(
+        {
+          rules: [
+            rule({
+              id: "net-rate",
+              decision: "warn",
+              match: {
+                categories: ["network"],
+                rateLimit: { maxCount: 2, windowMs: 60_000 },
+              },
+            }),
+          ],
+        },
+        limiter,
+      );
+
+      const result = engine.evaluate("WebFetch", "network", "https://example.com");
+      expect(result.decision).toBe("warn");
+      expect(result.matchedRule?.id).toBe("net-rate");
+    });
+
+    it("should not match rate limit rule when tool does not match", () => {
+      const limiter = new RateLimiter();
+      const key = "ratelimit:bash-rate:tool:Bash";
+      for (let i = 0; i < 5; i++) limiter.record(key);
+
+      const engine = new PolicyEngine(
+        {
+          rules: [
+            rule({
+              id: "bash-rate",
+              decision: "deny",
+              match: {
+                tools: ["Bash"],
+                rateLimit: { maxCount: 3, windowMs: 60_000 },
+              },
+            }),
+          ],
+        },
+        limiter,
+      );
+
+      // Read doesn't match the tool criterion
+      const result = engine.evaluate("Read", "file_read", "/foo");
+      expect(result.decision).toBe("allow");
     });
   });
 });

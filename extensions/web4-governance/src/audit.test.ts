@@ -111,4 +111,101 @@ describe("AuditChain", () => {
     const chain = new AuditChain(TEST_DIR, "nope");
     expect(chain.getLast(10)).toEqual([]);
   });
+
+  describe("filter", () => {
+    function populateChain() {
+      cleanup();
+      const chain = new AuditChain(TEST_DIR, "filter-test");
+      // Record a mix of tools and statuses
+      chain.record(makeR6(0, "Read"), { status: "success", durationMs: 10 });
+      chain.record(makeR6(1, "Bash"), { status: "success", durationMs: 50 });
+      chain.record(makeR6(2, "Bash"), { status: "error", errorMessage: "exit 1", durationMs: 20 });
+      chain.record(makeR6(3, "WebFetch"), { status: "blocked" });
+      chain.record(makeR6(4, "Read"), { status: "success", durationMs: 5 });
+      return chain;
+    }
+
+    it("should filter by tool", () => {
+      const chain = populateChain();
+      const results = chain.filter({ tool: "Bash" });
+      expect(results).toHaveLength(2);
+      expect(results.every((r) => r.tool === "Bash")).toBe(true);
+    });
+
+    it("should filter by status", () => {
+      const chain = populateChain();
+      const results = chain.filter({ status: "error" });
+      expect(results).toHaveLength(1);
+      expect(results[0]!.result.status).toBe("error");
+    });
+
+    it("should filter by status blocked", () => {
+      const chain = populateChain();
+      const results = chain.filter({ status: "blocked" });
+      expect(results).toHaveLength(1);
+      expect(results[0]!.tool).toBe("WebFetch");
+    });
+
+    it("should filter by category", () => {
+      const chain = populateChain();
+      const results = chain.filter({ category: "file_read" });
+      expect(results).toHaveLength(2);
+    });
+
+    it("should filter by target pattern", () => {
+      const chain = populateChain();
+      // All records in this test have target "/foo"
+      const results = chain.filter({ targetPattern: "/foo" });
+      expect(results).toHaveLength(5);
+      const noResults = chain.filter({ targetPattern: "/bar" });
+      expect(noResults).toHaveLength(0);
+    });
+
+    it("should combine multiple filters", () => {
+      const chain = populateChain();
+      const results = chain.filter({ tool: "Bash", status: "success" });
+      expect(results).toHaveLength(1);
+    });
+
+    it("should respect limit", () => {
+      const chain = populateChain();
+      const results = chain.filter({ limit: 2 });
+      expect(results).toHaveLength(2);
+    });
+
+    it("should default limit to 50", () => {
+      const chain = populateChain();
+      const results = chain.filter({});
+      expect(results).toHaveLength(5);
+    });
+
+    it("should return empty for no matches", () => {
+      const chain = populateChain();
+      const results = chain.filter({ tool: "NonexistentTool" });
+      expect(results).toHaveLength(0);
+    });
+
+    it("should return empty for nonexistent chain", () => {
+      cleanup();
+      const chain = new AuditChain(TEST_DIR, "nope");
+      expect(chain.filter({ tool: "Bash" })).toEqual([]);
+    });
+  });
+
+  describe("getAll", () => {
+    it("should return all records", () => {
+      cleanup();
+      const chain = new AuditChain(TEST_DIR, "all-test");
+      for (let i = 0; i < 5; i++) {
+        chain.record(makeR6(i), { status: "success" });
+      }
+      expect(chain.getAll()).toHaveLength(5);
+    });
+
+    it("should return empty for nonexistent file", () => {
+      cleanup();
+      const chain = new AuditChain(TEST_DIR, "nope");
+      expect(chain.getAll()).toEqual([]);
+    });
+  });
 });

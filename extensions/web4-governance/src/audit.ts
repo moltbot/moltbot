@@ -9,6 +9,7 @@ import { createHash } from "node:crypto";
 import { appendFileSync, mkdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { R6Request } from "./r6.js";
+import { globToRegex } from "./matchers.js";
 
 export type AuditRecord = {
   recordId: string;
@@ -29,6 +30,33 @@ export type AuditRecord = {
     prevRecordHash: string;
   };
 };
+
+export type AuditFilter = {
+  tool?: string;
+  category?: string;
+  status?: "success" | "error" | "blocked";
+  targetPattern?: string;
+  since?: string;
+  limit?: number;
+};
+
+/**
+ * Parse a "since" value: ISO date string or relative duration (e.g. "1h", "30m", "2d").
+ * Returns a Date or undefined if unparseable.
+ */
+function parseSince(since: string): Date | undefined {
+  // Try relative durations first
+  const relMatch = since.match(/^(\d+)\s*(s|m|h|d)$/);
+  if (relMatch) {
+    const amount = parseInt(relMatch[1]!, 10);
+    const unit = relMatch[2]!;
+    const ms = { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 }[unit]!;
+    return new Date(Date.now() - amount * ms);
+  }
+  // Try ISO date
+  const d = new Date(since);
+  return isNaN(d.getTime()) ? undefined : d;
+}
 
 export class AuditChain {
   private storagePath: string;
@@ -133,5 +161,58 @@ export class AuditChain {
         }
       })
       .filter((r): r is AuditRecord => r !== null);
+  }
+
+  /** Load all records from the JSONL file. */
+  getAll(): AuditRecord[] {
+    if (!existsSync(this.filePath)) return [];
+    const content = readFileSync(this.filePath, "utf-8").trim();
+    if (!content) return [];
+    return content
+      .split("\n")
+      .map((line) => {
+        try {
+          return JSON.parse(line) as AuditRecord;
+        } catch {
+          return null;
+        }
+      })
+      .filter((r): r is AuditRecord => r !== null);
+  }
+
+  /** Filter audit records by criteria. */
+  filter(criteria: AuditFilter): AuditRecord[] {
+    let records = this.getAll();
+    const limit = criteria.limit ?? 50;
+
+    if (criteria.tool) {
+      const tool = criteria.tool;
+      records = records.filter((r) => r.tool === tool);
+    }
+
+    if (criteria.category) {
+      const cat = criteria.category;
+      records = records.filter((r) => r.category === cat);
+    }
+
+    if (criteria.status) {
+      const status = criteria.status;
+      records = records.filter((r) => r.result.status === status);
+    }
+
+    if (criteria.targetPattern) {
+      const re = globToRegex(criteria.targetPattern);
+      records = records.filter((r) => r.target && re.test(r.target));
+    }
+
+    if (criteria.since) {
+      const sinceDate = parseSince(criteria.since);
+      if (sinceDate) {
+        const sinceMs = sinceDate.getTime();
+        records = records.filter((r) => new Date(r.timestamp).getTime() >= sinceMs);
+      }
+    }
+
+    return records.slice(-limit);
   }
 }

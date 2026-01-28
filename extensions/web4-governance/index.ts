@@ -16,12 +16,15 @@ import { AuditChain } from "./src/audit.js";
 import { SessionStore, type SessionState } from "./src/session-state.js";
 import { PolicyEngine } from "./src/policy.js";
 import type { PolicyConfig, PolicyEvaluation } from "./src/policy-types.js";
+import { RateLimiter } from "./src/rate-limiter.js";
+import { resolvePreset, listPresets, isPresetName } from "./src/presets.js";
+import { AuditReporter } from "./src/reporter.js";
 
 type PluginConfig = {
   auditLevel?: string;
   showR6Status?: boolean;
   storagePath?: string;
-  policy?: Partial<PolicyConfig>;
+  policy?: Partial<PolicyConfig> & { preset?: string };
 };
 
 const plugin = {
@@ -48,8 +51,26 @@ const plugin = {
     const sessions = new Map<string, { state: SessionState; audit: AuditChain }>();
     const sessionStore = new SessionStore(storagePath);
 
-    // Policy engine
-    const policyEngine = new PolicyEngine(config.policy);
+    // Rate limiter (memory-only, shared across all sessions)
+    const rateLimiter = new RateLimiter();
+
+    // Resolve policy config: preset → merge with overrides
+    let resolvedPolicyConfig: Partial<PolicyConfig> = {};
+    if (config.policy) {
+      const { preset, ...overrides } = config.policy;
+      if (preset && isPresetName(preset)) {
+        resolvedPolicyConfig = resolvePreset(preset, overrides);
+        logger.info(`[web4] Policy preset "${preset}" loaded`);
+      } else if (preset) {
+        logger.warn(`[web4] Unknown policy preset "${preset}", using inline config`);
+        resolvedPolicyConfig = overrides;
+      } else {
+        resolvedPolicyConfig = overrides;
+      }
+    }
+
+    // Policy engine with rate limiter
+    const policyEngine = new PolicyEngine(resolvedPolicyConfig, rateLimiter);
     if (policyEngine.ruleCount > 0) {
       logger.info(
         `[web4] Policy engine: ${policyEngine.ruleCount} rules, enforce=${policyEngine.isEnforcing}`,
@@ -216,6 +237,21 @@ const plugin = {
       entry.audit.record(r6, result);
       sessionStore.incrementAction(entry.state, event.toolName, classifyTool(event.toolName), r6.id);
 
+      // Record rate limit action after successful tool execution
+      if (policyEngine.ruleCount > 0) {
+        const category = classifyTool(event.toolName);
+        for (const rule of policyEngine.sortedRules) {
+          if (rule.match.rateLimit) {
+            const key = rule.match.tools?.length
+              ? `ratelimit:${rule.id}:tool:${event.toolName}`
+              : rule.match.categories?.length
+                ? `ratelimit:${rule.id}:category:${category}`
+                : `ratelimit:${rule.id}:global`;
+            rateLimiter.record(key);
+          }
+        }
+      }
+
       if (auditLevel === "verbose") {
         logger.info(`[web4] R6 ${r6.id}: ${event.toolName} [${classifyTool(event.toolName)}] (${event.durationMs ?? 0}ms)`);
       }
@@ -280,6 +316,67 @@ const plugin = {
               }
             }
           });
+
+        // --- Audit Query CLI ---
+        audit
+          .command("query")
+          .description("Query and filter audit records")
+          .option("--tool <tool>", "Filter by tool name")
+          .option("--category <category>", "Filter by category")
+          .option("--status <status>", "Filter by status (success|error|blocked)")
+          .option("--target <pattern>", "Filter by target (glob pattern)")
+          .option("--since <duration>", "Filter by time (ISO date or relative: 1h, 30m, 2d)")
+          .option("--limit <n>", "Max results (default 50)")
+          .action((opts: Record<string, string>) => {
+            let hasResults = false;
+            for (const [, entry] of sessions) {
+              const results = entry.audit.filter({
+                tool: opts.tool,
+                category: opts.category,
+                status: opts.status as "success" | "error" | "blocked" | undefined,
+                targetPattern: opts.target,
+                since: opts.since,
+                limit: opts.limit ? parseInt(opts.limit, 10) : undefined,
+              });
+
+              if (results.length > 0) {
+                hasResults = true;
+                console.log(`Session: ${entry.state.sessionId} (${results.length} results)`);
+                for (const r of results) {
+                  const dur = r.result.durationMs !== undefined ? ` ${r.result.durationMs}ms` : "";
+                  const err = r.result.errorMessage ? ` — ${r.result.errorMessage}` : "";
+                  console.log(`  ${r.timestamp} ${r.tool} [${r.category}] → ${r.target ?? "?"} [${r.result.status}]${dur}${err}`);
+                }
+              }
+            }
+            if (!hasResults) {
+              console.log("No matching audit records found.");
+            }
+          });
+
+        // --- Audit Report CLI ---
+        audit
+          .command("report")
+          .description("Generate aggregated audit report")
+          .option("--json", "Output as JSON")
+          .action((opts: Record<string, boolean>) => {
+            const allRecords = [];
+            for (const [, entry] of sessions) {
+              allRecords.push(...entry.audit.getAll());
+            }
+
+            if (allRecords.length === 0) {
+              console.log("No audit records to report on.");
+              return;
+            }
+
+            const reporter = new AuditReporter(allRecords);
+            if (opts.json) {
+              console.log(JSON.stringify(reporter.generate(), null, 2));
+            } else {
+              console.log(reporter.formatText());
+            }
+          });
       },
       { commands: ["audit"] },
     );
@@ -298,6 +395,9 @@ const plugin = {
             console.log(`  Rules:    ${policyEngine.ruleCount}`);
             console.log(`  Default:  ${policyEngine.defaultDecision}`);
             console.log(`  Enforce:  ${policyEngine.isEnforcing}`);
+            if (config.policy?.preset) {
+              console.log(`  Preset:   ${config.policy.preset}`);
+            }
           });
 
         policy
@@ -318,6 +418,9 @@ const plugin = {
               if (match.targetPatterns) {
                 const kind = match.targetPatternsAreRegex ? "regex" : "glob";
                 criteria.push(`targets(${kind})=[${match.targetPatterns.join(", ")}]`);
+              }
+              if (match.rateLimit) {
+                criteria.push(`rateLimit(max=${match.rateLimit.maxCount}, window=${match.rateLimit.windowMs}ms)`);
               }
               console.log(`  [${rule.priority}] ${rule.id} → ${rule.decision}`);
               console.log(`       ${rule.name}`);
@@ -346,6 +449,23 @@ const plugin = {
               console.log(`Rule:       ${evaluation.matchedRule.id} (priority ${evaluation.matchedRule.priority})`);
             }
             console.log(`Constraints: ${evaluation.constraints.join(", ")}`);
+          });
+
+        // --- Policy Presets CLI ---
+        policy
+          .command("presets")
+          .description("List available policy presets")
+          .action(() => {
+            const presets = listPresets();
+            console.log(`${presets.length} available presets:\n`);
+            for (const p of presets) {
+              const ruleCount = p.config.rules.length;
+              console.log(`  ${p.name}`);
+              console.log(`    ${p.description}`);
+              console.log(`    default: ${p.config.defaultPolicy} | enforce: ${p.config.enforce} | rules: ${ruleCount}`);
+              console.log();
+            }
+            console.log(`Usage: { "policy": { "preset": "<name>" } }`);
           });
       },
       { commands: ["policy"] },

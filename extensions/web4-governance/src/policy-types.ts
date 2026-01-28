@@ -9,6 +9,13 @@ import type { ToolCategory } from "./r6.js";
 
 export type PolicyDecision = "allow" | "deny" | "warn";
 
+export type RateLimitSpec = {
+  /** Maximum number of actions allowed within the window */
+  maxCount: number;
+  /** Window duration in milliseconds */
+  windowMs: number;
+};
+
 export type PolicyMatch = {
   /** Tool names to match (e.g. ["Bash", "Write"]) */
   tools?: string[];
@@ -18,6 +25,8 @@ export type PolicyMatch = {
   targetPatterns?: string[];
   /** Treat targetPatterns as regex instead of glob */
   targetPatternsAreRegex?: boolean;
+  /** Rate limit: match when action count exceeds threshold within window */
+  rateLimit?: RateLimitSpec;
 };
 
 export type PolicyRule = {
@@ -37,6 +46,8 @@ export type PolicyConfig = {
   /** When false, deny decisions are logged as warnings but not enforced (dry-run) */
   enforce: boolean;
   rules: PolicyRule[];
+  /** Named preset to use as base config (rules become optional) */
+  preset?: string;
 };
 
 export type PolicyEvaluation = {
