@@ -12,8 +12,19 @@ import {
   summarizeInStages,
 } from "../compaction.js";
 import { getCompactionSafeguardRuntime } from "./compaction-safeguard-runtime.js";
-const FALLBACK_SUMMARY =
-  "Summary unavailable due to context limits. Older messages were truncated.";
+const FALLBACK_SUMMARY = [
+  "Summary unavailable due to context limits. Older messages were truncated.",
+  "",
+  "⚠️ CRITICAL: You have NO context from previous messages.",
+  "Before responding, you MUST:",
+  "1. Read CURRENT_WORK.md if it exists - this contains your active task",
+  "2. Read memory/YYYY-MM-DD.md for today's context",
+  "3. ASK the user what they need if context is still unclear",
+  "4. DO NOT assume or hallucinate previous conversation content",
+  "",
+  "If you proceed without checking these files, you risk responding to",
+  "conversations that never happened.",
+].join("\n");
 const TURN_PREFIX_INSTRUCTIONS =
   "This summary covers the prefix of a split turn. Focus on the original request," +
   " early progress, and any details needed to understand the retained suffix.";
