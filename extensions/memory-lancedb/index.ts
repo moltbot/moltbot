@@ -7,11 +7,11 @@
  */
 
 import { Type } from "@sinclair/typebox";
-import * as lancedb from "@lancedb/lancedb";
 import OpenAI from "openai";
 import { randomUUID } from "node:crypto";
 import type { MoltbotPluginApi } from "clawdbot/plugin-sdk";
 import { stringEnum } from "clawdbot/plugin-sdk";
+import type { Connection, Table } from "@lancedb/lancedb";
 
 import {
   MEMORY_CATEGORIES,
@@ -44,9 +44,25 @@ type MemorySearchResult = {
 
 const TABLE_NAME = "memories";
 
+type LanceDbModule = typeof import("@lancedb/lancedb");
+
+let lancedbModulePromise: Promise<LanceDbModule> | null = null;
+
+async function loadLanceDb(): Promise<LanceDbModule> {
+  if (!lancedbModulePromise) {
+    // Lazily load LanceDB so the plugin module can be imported in environments where
+    // the platform-native optional dependency isn't available (e.g. CI, unsupported arch).
+    lancedbModulePromise = import("@lancedb/lancedb").catch((err) => {
+      lancedbModulePromise = null;
+      throw err;
+    });
+  }
+  return await lancedbModulePromise;
+}
+
 class MemoryDB {
-  private db: lancedb.Connection | null = null;
-  private table: lancedb.Table | null = null;
+  private db: Connection | null = null;
+  private table: Table | null = null;
   private initPromise: Promise<void> | null = null;
 
   constructor(
@@ -63,6 +79,7 @@ class MemoryDB {
   }
 
   private async doInitialize(): Promise<void> {
+    const lancedb = await loadLanceDb();
     this.db = await lancedb.connect(this.dbPath);
     const tables = await this.db.tableNames();
 
