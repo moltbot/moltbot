@@ -11,7 +11,7 @@ export type ReplyReferencePlanner = {
 
 export function createReplyReferencePlanner(options: {
   replyToMode: ReplyToMode;
-  /** Existing thread/reference id (used when present, unless replyToMode is "off"). */
+  /** Existing thread/reference id (always used when present). */
   existingId?: string;
   /** Id to start a new thread/reference when allowed (e.g., parent message id). */
   startId?: string;
@@ -27,12 +27,12 @@ export function createReplyReferencePlanner(options: {
 
   const use = (): string | undefined => {
     if (!allowReference) return undefined;
-    if (options.replyToMode === "off") return undefined;
     if (existingId) {
       hasReplied = true;
       return existingId;
     }
     if (!startId) return undefined;
+    if (options.replyToMode === "off") return undefined;
     if (options.replyToMode === "all") {
       hasReplied = true;
       return startId;
