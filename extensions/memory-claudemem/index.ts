@@ -157,7 +157,38 @@ const claudeMemPlugin = {
       { name: "memory_observations" },
     );
 
-    // TODO: Phase 6 - CLI registration
+    // Phase 6: CLI registration
+    api.registerCli(
+      ({ program }) => {
+        const claudeMem = program
+          .command("claude-mem")
+          .description("Claude-mem memory plugin commands");
+
+        claudeMem
+          .command("status")
+          .description("Check if the claude-mem worker is responding")
+          .action(async () => {
+            const isHealthy = await client.ping();
+            if (isHealthy) {
+              console.log(`✓ Worker running at ${cfg.workerUrl}`);
+            } else {
+              console.log(`✗ Worker not responding at ${cfg.workerUrl}`);
+              process.exitCode = 1;
+            }
+          });
+
+        claudeMem
+          .command("search")
+          .description("Search memories")
+          .argument("<query>", "Search query")
+          .option("--limit <n>", "Max results", "10")
+          .action(async (query, opts) => {
+            const results = await client.search(query, parseInt(opts.limit));
+            console.log(JSON.stringify(results, null, 2));
+          });
+      },
+      { commands: ["claude-mem"] },
+    );
   },
 };
 
