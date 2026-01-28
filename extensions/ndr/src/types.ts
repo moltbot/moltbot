@@ -1,5 +1,4 @@
 import type { ClawdbotConfig } from "clawdbot/plugin-sdk";
-import { getPublicKey } from "nostr-tools";
 import { homedir } from "os";
 import { join } from "path";
 import { DEFAULT_RELAYS, type NdrConfig } from "./config-schema.js";
@@ -19,8 +18,6 @@ export interface ResolvedNdrAccount {
   name: string;
   enabled: boolean;
   configured: boolean;
-  privateKey: string;
-  publicKey: string | null;
   ownerPubkey: string | null;
   relays: string[];
   ndrPath: string;
@@ -60,21 +57,7 @@ export function resolveNdrAccount(opts: {
   const channels = (cfg.channels ?? {}) as Record<string, unknown>;
   const ndrConfig = (channels.ndr ?? {}) as NdrConfig;
 
-  const privateKey = ndrConfig.privateKey ?? "";
-  let publicKey: string | null = null;
-
-  if (privateKey) {
-    try {
-      // Handle hex format
-      const keyBytes = hexToBytes(privateKey);
-      publicKey = getPublicKey(keyBytes);
-    } catch {
-      // Invalid key format
-    }
-  }
-
-  // ndr auto-generates identity if not provided, so we're always "configured"
-  // The actual identity will be created/loaded by ndr on first use
+  // ndr manages its own identity in its config.json (auto-generates on first use)
   const configured = true;
   const relays = ndrConfig.relays ?? DEFAULT_RELAYS;
 
@@ -89,8 +72,6 @@ export function resolveNdrAccount(opts: {
     name: ndrConfig.name ?? "NDR",
     enabled: ndrConfig.enabled !== false,
     configured,
-    privateKey,
-    publicKey,
     ownerPubkey,
     relays,
     ndrPath: ndrConfig.ndrPath ?? "ndr",
@@ -98,18 +79,6 @@ export function resolveNdrAccount(opts: {
     dataDir: expandTilde(ndrConfig.dataDir ?? "~/.clawdbot/ndr-data"),
     config: ndrConfig,
   };
-}
-
-/**
- * Convert hex string to Uint8Array
- */
-function hexToBytes(hex: string): Uint8Array {
-  const cleaned = hex.replace(/^0x/, "");
-  const bytes = new Uint8Array(cleaned.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(cleaned.substr(i * 2, 2), 16);
-  }
-  return bytes;
 }
 
 /**

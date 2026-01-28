@@ -9,7 +9,6 @@ export interface NdrMessageMedia {
 
 export interface NdrBusOptions {
   accountId: string;
-  privateKey: string;
   relays: string[];
   ndrPath: string;
   dataDir: string | null;
@@ -38,7 +37,6 @@ export interface NdrBusHandle {
  */
 export async function startNdrBus(options: NdrBusOptions): Promise<NdrBusHandle> {
   const {
-    privateKey,
     relays,
     ndrPath,
     dataDir,
@@ -58,31 +56,7 @@ export async function startNdrBus(options: NdrBusOptions): Promise<NdrBusHandle>
     baseArgs.push("--data-dir", dataDir);
   }
 
-  // Initialize: login with provided key, or let ndr auto-generate on first use
-  if (privateKey) {
-    await runNdrCommand(ndrPath, [...baseArgs, "login", privateKey]);
-  }
-  // If no privateKey, ndr will auto-generate identity when needed (invite/listen/send)
-
-  // Update relay config if needed (preserve existing config like private_key)
-  if (dataDir && relays.length > 0) {
-    const configPath = `${dataDir}/config.json`;
-    const fs = await import("fs/promises");
-    try {
-      let existingConfig: Record<string, unknown> = {};
-      try {
-        const content = await fs.readFile(configPath, "utf-8");
-        existingConfig = JSON.parse(content);
-      } catch {
-        // Config doesn't exist yet, start fresh
-      }
-      // Merge relays into existing config, preserving other fields like private_key
-      const mergedConfig = { ...existingConfig, relays };
-      await fs.writeFile(configPath, JSON.stringify(mergedConfig, null, 2));
-    } catch {
-      // Config dir may not exist yet, ndr will create it
-    }
-  }
+  // ndr manages its own identity in its config.json (auto-generates on first use)
 
   // Start listening for messages and invite responses (both handled by `ndr listen`)
   const startListening = () => {

@@ -4,9 +4,6 @@ import { z } from "zod";
  * NDR channel configuration schema
  */
 export const NdrConfigSchema = z.object({
-  /** Private key for signing (hex or nsec format). If not provided, ndr auto-generates one. */
-  privateKey: z.string().optional(),
-
   /** Owner's pubkey (npub or hex). Only messages from this pubkey are handled as commands. */
   ownerPubkey: z.string().optional(),
 

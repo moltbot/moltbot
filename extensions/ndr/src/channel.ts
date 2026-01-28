@@ -157,7 +157,6 @@ export const ndrPlugin: ChannelPlugin<ResolvedNdrAccount> = {
       }),
     buildChannelSummary: ({ snapshot }) => ({
       configured: snapshot.configured ?? false,
-      publicKey: snapshot.publicKey ?? null,
       running: snapshot.running ?? false,
       lastStartAt: snapshot.lastStartAt ?? null,
       lastStopAt: snapshot.lastStopAt ?? null,
@@ -168,7 +167,6 @@ export const ndrPlugin: ChannelPlugin<ResolvedNdrAccount> = {
       name: account.name,
       enabled: account.enabled,
       configured: account.configured,
-      publicKey: account.publicKey,
       running: runtime?.running ?? false,
       lastStartAt: runtime?.lastStartAt ?? null,
       lastStopAt: runtime?.lastStopAt ?? null,
@@ -183,17 +181,13 @@ export const ndrPlugin: ChannelPlugin<ResolvedNdrAccount> = {
       const account = ctx.account;
       ctx.setStatus({
         accountId: account.accountId,
-        publicKey: account.publicKey,
       });
-      ctx.log?.info(`[${account.accountId}] starting NDR provider (pubkey: ${account.publicKey})`);
-
-      // Note: account.configured is always true since ndr auto-generates identity
+      ctx.log?.info(`[${account.accountId}] starting NDR provider`);
 
       const runtime = getNdrRuntime();
 
       const bus = await startNdrBus({
         accountId: account.accountId,
-        privateKey: account.privateKey,
         relays: account.relays,
         ndrPath: account.ndrPath,
         dataDir: account.dataDir,
