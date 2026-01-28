@@ -78,6 +78,7 @@ import {
 } from "./app-channels";
 import type { NostrProfileFormState } from "./views/channels.nostr-profile-form";
 import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity";
+import { i18n, en, ptBR, I18nController } from "../i18n";
 
 declare global {
   interface Window {
@@ -111,6 +112,7 @@ export class MoltbotApp extends LitElement {
   private eventLogBuffer: EventLogEntry[] = [];
   private toolStreamSyncTimer: number | null = null;
   private sidebarCloseTimer: number | null = null;
+  private i18n = new I18nController(this);
 
   @state() assistantName = injectedAssistantIdentity.name;
   @state() assistantAvatar = injectedAssistantIdentity.avatar;
@@ -272,6 +274,9 @@ export class MoltbotApp extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    i18n.setResources('en', en);
+    i18n.setResources('pt-BR', ptBR);
+    i18n.setLocale(this.settings.locale || 'en');
     handleConnected(this as unknown as Parameters<typeof handleConnected>[0]);
   }
 
@@ -332,6 +337,9 @@ export class MoltbotApp extends LitElement {
   }
 
   applySettings(next: UiSettings) {
+    if (next.locale !== this.settings.locale) {
+      i18n.setLocale(next.locale);
+    }
     applySettingsInternal(
       this as unknown as Parameters<typeof applySettingsInternal>[0],
       next,

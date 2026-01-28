@@ -127,9 +127,9 @@ export function renderOverview(props: OverviewProps) {
             <input
               .value=${props.settings.gatewayUrl}
               @input=${(e: Event) => {
-                const v = (e.target as HTMLInputElement).value;
-                props.onSettingsChange({ ...props.settings, gatewayUrl: v });
-              }}
+      const v = (e.target as HTMLInputElement).value;
+      props.onSettingsChange({ ...props.settings, gatewayUrl: v });
+    }}
               placeholder="ws://100.x.y.z:18789"
             />
           </label>
@@ -138,9 +138,9 @@ export function renderOverview(props: OverviewProps) {
             <input
               .value=${props.settings.token}
               @input=${(e: Event) => {
-                const v = (e.target as HTMLInputElement).value;
-                props.onSettingsChange({ ...props.settings, token: v });
-              }}
+      const v = (e.target as HTMLInputElement).value;
+      props.onSettingsChange({ ...props.settings, token: v });
+    }}
               placeholder="CLAWDBOT_GATEWAY_TOKEN"
             />
           </label>
@@ -150,21 +150,34 @@ export function renderOverview(props: OverviewProps) {
               type="password"
               .value=${props.password}
               @input=${(e: Event) => {
-                const v = (e.target as HTMLInputElement).value;
-                props.onPasswordChange(v);
-              }}
+      const v = (e.target as HTMLInputElement).value;
+      props.onPasswordChange(v);
+    }}
               placeholder="system or shared password"
             />
           </label>
           <label class="field">
-            <span>Default Session Key</span>
             <input
               .value=${props.settings.sessionKey}
               @input=${(e: Event) => {
-                const v = (e.target as HTMLInputElement).value;
-                props.onSessionKeyChange(v);
-              }}
+      const v = (e.target as HTMLInputElement).value;
+      props.onSessionKeyChange(v);
+    }}
             />
+          </label>
+          <label class="field">
+            <span>Language</span>
+            <select
+              style="padding: 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-main);"
+              .value=${props.settings.locale}
+              @change=${(e: Event) => {
+      const v = (e.target as HTMLSelectElement).value;
+      props.onSettingsChange({ ...props.settings, locale: v });
+    }}
+            >
+              <option value="en">English</option>
+              <option value="pt-BR">Português (Brasil)</option>
+            </select>
           </label>
         </div>
         <div class="row" style="margin-top: 14px;">
@@ -196,18 +209,18 @@ export function renderOverview(props: OverviewProps) {
             <div class="stat-label">Last Channels Refresh</div>
             <div class="stat-value">
               ${props.lastChannelsRefresh
-                ? formatAgo(props.lastChannelsRefresh)
-                : "n/a"}
+      ? formatAgo(props.lastChannelsRefresh)
+      : "n/a"}
             </div>
           </div>
         </div>
         ${props.lastError
-          ? html`<div class="callout danger" style="margin-top: 14px;">
+      ? html`<div class="callout danger" style="margin-top: 14px;">
               <div>${props.lastError}</div>
               ${authHint ?? ""}
               ${insecureContextHint ?? ""}
             </div>`
-          : html`<div class="callout" style="margin-top: 14px;">
+      : html`<div class="callout" style="margin-top: 14px;">
               Use Channels to link WhatsApp, Telegram, Discord, Signal, or iMessage.
             </div>`}
       </div>
@@ -228,10 +241,10 @@ export function renderOverview(props: OverviewProps) {
         <div class="stat-label">Cron</div>
         <div class="stat-value">
           ${props.cronEnabled == null
-            ? "n/a"
-            : props.cronEnabled
-              ? "Enabled"
-              : "Disabled"}
+      ? "n/a"
+      : props.cronEnabled
+        ? "Enabled"
+        : "Disabled"}
         </div>
         <div class="muted">Next wake ${formatNextRun(props.cronNext)}</div>
       </div>
