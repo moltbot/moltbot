@@ -4,7 +4,6 @@ import {
   DEFAULT_ACCOUNT_ID,
   deleteAccountFromConfigSection,
   formatPairingApproveHint,
-  getChatChannelMeta,
   migrateBaseNameToDefaultAccount,
   missingTargetError,
   normalizeAccountId,
@@ -37,10 +36,8 @@ import {
 } from "./targets.js";
 import type { RingCentralConfig } from "./types.js";
 
-const meta = getChatChannelMeta("ringcentral");
-
 const formatAllowFromEntry = (entry: string) =>
-  entry
+  (entry ?? "")
     .trim()
     .replace(/^(ringcentral|rc):/i, "")
     .replace(/^user:/i, "")
@@ -87,9 +84,11 @@ export const ringcentralDock: ChannelDock = {
 export const ringcentralPlugin: ChannelPlugin<ResolvedRingCentralAccount> = {
   id: "ringcentral",
   meta: {
-    ...meta,
+    id: "ringcentral",
     label: "RingCentral",
     selectionLabel: "RingCentral Team Messaging",
+    docsPath: "/channels/ringcentral",
+    docsLabel: "ringcentral",
     blurb: "RingCentral Team Messaging via REST API and WebSocket.",
     order: 56,
   },
