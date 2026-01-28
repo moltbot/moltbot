@@ -11,6 +11,24 @@ NanoGPT exposes OpenAI-compatible endpoints. Moltbot registers it as the
 
 ## Quick setup
 
+### Option 1: Browser login (recommended)
+
+Use the device flow to authenticate via your browser:
+
+```bash
+moltbot models auth login-nanogpt
+```
+
+This opens your browser, you approve access, and Moltbot receives your API key automatically.
+
+Add `--set-default` to also set NanoGPT as your default model:
+
+```bash
+moltbot models auth login-nanogpt --set-default
+```
+
+### Option 2: API key
+
 1) Set `NANOGPT_API_KEY` (or run the wizard below).
 2) Run onboarding:
 
