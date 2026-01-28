@@ -264,16 +264,16 @@ fun RootScreen(viewModel: MainViewModel) {
     }
   }
 
-  if (talkEnabled) {
-    Popup(alignment = Alignment.Center, properties = PopupProperties(focusable = false)) {
-      TalkOrbOverlay(
-        seamColor = seamColor,
-        statusText = talkStatusText,
-        isListening = talkIsListening,
-        isSpeaking = talkIsSpeaking,
-        onDismiss = { viewModel.setTalkEnabled(false) },
-      )
-    }
+  // Always show the orb as a PTT button - pulses when active, static when inactive
+  Popup(alignment = Alignment.Center, properties = PopupProperties(focusable = false)) {
+    TalkOrbOverlay(
+      seamColor = seamColor,
+      statusText = talkStatusText,
+      isListening = talkIsListening,
+      isSpeaking = talkIsSpeaking,
+      isActive = talkEnabled,
+      onTap = { viewModel.setTalkEnabled(!talkEnabled) },
+    )
   }
 
   val currentSheet = sheet

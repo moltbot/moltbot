@@ -37,12 +37,13 @@ fun TalkOrbOverlay(
   statusText: String,
   isListening: Boolean,
   isSpeaking: Boolean,
+  isActive: Boolean = true,
   modifier: Modifier = Modifier,
-  onDismiss: (() -> Unit)? = null,
+  onTap: (() -> Unit)? = null,
 ) {
   val haptic = LocalHapticFeedback.current
   val transition = rememberInfiniteTransition(label = "talk-orb")
-  val t by
+  val animatedT by
     transition.animateFloat(
       initialValue = 0f,
       targetValue = 1f,
@@ -53,15 +54,22 @@ fun TalkOrbOverlay(
         ),
       label = "pulse",
     )
+  
+  // Only pulse when active, otherwise static
+  val t = if (isActive) animatedT else 0f
 
   val trimmed = statusText.trim()
-  val showStatus = trimmed.isNotEmpty() && trimmed != "Off"
+  val showStatus = isActive && trimmed.isNotEmpty() && trimmed != "Off"
   val phase =
     when {
+      !isActive -> "Tap to talk"
       isSpeaking -> "Speaking"
       isListening -> "Listening"
       else -> "Thinking"
     }
+  
+  // Dim the orb when inactive
+  val orbAlpha = if (isActive) 1f else 0.5f
 
   Column(
     modifier = modifier.padding(24.dp),
@@ -75,10 +83,10 @@ fun TalkOrbOverlay(
           .clickable(
             interactionSource = remember { MutableInteractionSource() },
             indication = null, // No ripple - the orb itself is the feedback
-            enabled = onDismiss != null,
+            enabled = onTap != null,
             onClick = {
               haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-              onDismiss?.invoke()
+              onTap?.invoke()
             }
           )
       ) {
@@ -87,30 +95,33 @@ fun TalkOrbOverlay(
 
         val ring1 = 1.05f + (t * 0.25f)
         val ring2 = 1.20f + (t * 0.55f)
-        val ringAlpha1 = (1f - t) * 0.34f
-        val ringAlpha2 = (1f - t) * 0.22f
+        val ringAlpha1 = (1f - t) * 0.34f * orbAlpha
+        val ringAlpha2 = (1f - t) * 0.22f * orbAlpha
 
-        drawCircle(
-          color = seamColor.copy(alpha = ringAlpha1),
-          radius = baseRadius * ring1,
-          center = center,
-          style = Stroke(width = 3.dp.toPx()),
-        )
-        drawCircle(
-          color = seamColor.copy(alpha = ringAlpha2),
-          radius = baseRadius * ring2,
-          center = center,
-          style = Stroke(width = 3.dp.toPx()),
-        )
+        // Only draw pulsing rings when active
+        if (isActive) {
+          drawCircle(
+            color = seamColor.copy(alpha = ringAlpha1),
+            radius = baseRadius * ring1,
+            center = center,
+            style = Stroke(width = 3.dp.toPx()),
+          )
+          drawCircle(
+            color = seamColor.copy(alpha = ringAlpha2),
+            radius = baseRadius * ring2,
+            center = center,
+            style = Stroke(width = 3.dp.toPx()),
+          )
+        }
 
         drawCircle(
           brush =
             Brush.radialGradient(
               colors =
                 listOf(
-                  seamColor.copy(alpha = 0.92f),
-                  seamColor.copy(alpha = 0.40f),
-                  Color.Black.copy(alpha = 0.56f),
+                  seamColor.copy(alpha = 0.92f * orbAlpha),
+                  seamColor.copy(alpha = 0.40f * orbAlpha),
+                  Color.Black.copy(alpha = 0.56f * orbAlpha),
                 ),
               center = center,
               radius = baseRadius * 1.35f,
@@ -120,7 +131,7 @@ fun TalkOrbOverlay(
         )
 
         drawCircle(
-          color = seamColor.copy(alpha = 0.34f),
+          color = seamColor.copy(alpha = 0.34f * orbAlpha),
           radius = baseRadius,
           center = center,
           style = Stroke(width = 1.dp.toPx()),
