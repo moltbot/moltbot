@@ -22,9 +22,14 @@ export type LitellmModelEntry = {
 };
 
 export function buildLitellmModelDefinition(entry: LitellmModelEntry): ModelDefinitionConfig {
+  // Detect Claude models and use Anthropic Messages API for proper cache control support
+  const isClaude = entry.id.toLowerCase().startsWith("claude-");
+
   return {
     id: entry.id,
     name: entry.name,
+    // Claude models through LiteLLM should use anthropic-messages API for cache control
+    ...(isClaude ? { api: "anthropic-messages" as const } : {}),
     reasoning: entry.reasoning ?? false,
     input: entry.input ? [...entry.input] : ["text"],
     cost: LITELLM_DEFAULT_COST,
