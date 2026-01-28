@@ -1,6 +1,6 @@
 {
   "name": "@moltbot/agentmail",
-  "version": "2026.1.26",
+  "version": "2026.1.27-beta.1",
   "type": "module",
   "description": "Moltbot AgentMail email channel plugin",
   "moltbot": {
