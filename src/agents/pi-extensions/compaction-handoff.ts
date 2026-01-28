@@ -2,14 +2,6 @@ import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { ExtensionAPI, FileOperations } from "@mariozechner/pi-coding-agent";
 import { completeSimple } from "@mariozechner/pi-ai";
 
-import {
-  computeAdaptiveChunkRatio,
-  estimateMessagesTokens,
-  pruneHistoryForContextShare,
-  resolveContextWindowTokens,
-  summarizeInStages,
-} from "../compaction.js";
-
 import { log } from "../pi-embedded-runner/logger.js";
 
 type ModelSnapshotEntry = {
@@ -39,8 +31,6 @@ const SYSTEM_PROMPT =
 const DEFAULT_INSTRUCTIONS =
   "Summarize the conversation for continuity. Preserve exact file paths, commands, and errors." +
   " Keep it concise.";
-const MAX_TOOL_FAILURES = 8;
-const MAX_TOOL_FAILURE_CHARS = 240;
 
 function computeFileLists(fileOps: FileOperations): {
   readFiles: string[];
@@ -50,110 +40,6 @@ function computeFileLists(fileOps: FileOperations): {
   const readFiles = [...fileOps.read].filter((f) => !modified.has(f)).sort();
   const modifiedFiles = [...modified].sort();
   return { readFiles, modifiedFiles };
-}
-
-function formatFileOperations(readFiles: string[], modifiedFiles: string[]): string {
-  const sections: string[] = [];
-  if (readFiles.length > 0) {
-    sections.push(`<read-files>\n${readFiles.join("\n")}\n</read-files>`);
-  }
-  if (modifiedFiles.length > 0) {
-    sections.push(`<modified-files>\n${modifiedFiles.join("\n")}\n</modified-files>`);
-  }
-  if (sections.length === 0) return "";
-  return `\n\n${sections.join("\n\n")}`;
-}
-
-type ToolFailure = {
-  toolCallId: string;
-  toolName: string;
-  summary: string;
-  meta?: string;
-};
-
-function normalizeFailureText(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
-}
-
-function truncateFailureText(text: string, maxChars: number): string {
-  if (text.length <= maxChars) return text;
-  return `${text.slice(0, Math.max(0, maxChars - 3))}...`;
-}
-
-function formatToolFailureMeta(details: unknown): string | undefined {
-  if (!details || typeof details !== "object") return undefined;
-  const record = details as Record<string, unknown>;
-  const status = typeof record.status === "string" ? record.status : undefined;
-  const exitCode =
-    typeof record.exitCode === "number" && Number.isFinite(record.exitCode)
-      ? record.exitCode
-      : undefined;
-  const parts: string[] = [];
-  if (status) parts.push(`status=${status}`);
-  if (exitCode !== undefined) parts.push(`exitCode=${exitCode}`);
-  return parts.length > 0 ? parts.join(" ") : undefined;
-}
-
-function extractToolResultText(content: unknown): string {
-  if (!Array.isArray(content)) return "";
-  const parts: string[] = [];
-  for (const block of content) {
-    if (!block || typeof block !== "object") continue;
-    const rec = block as { type?: unknown; text?: unknown };
-    if (rec.type === "text" && typeof rec.text === "string") {
-      parts.push(rec.text);
-    }
-  }
-  return parts.join("\n");
-}
-
-function collectToolFailures(messages: AgentMessage[]): ToolFailure[] {
-  const failures: ToolFailure[] = [];
-  const seen = new Set<string>();
-
-  for (const message of messages) {
-    if (!message || typeof message !== "object") continue;
-    const role = (message as { role?: unknown }).role;
-    if (role !== "toolResult") continue;
-    const toolResult = message as {
-      toolCallId?: unknown;
-      toolName?: unknown;
-      content?: unknown;
-      details?: unknown;
-      isError?: unknown;
-    };
-    if (toolResult.isError !== true) continue;
-    const toolCallId = typeof toolResult.toolCallId === "string" ? toolResult.toolCallId : "";
-    if (!toolCallId || seen.has(toolCallId)) continue;
-    seen.add(toolCallId);
-
-    const toolName =
-      typeof toolResult.toolName === "string" && toolResult.toolName.trim()
-        ? toolResult.toolName
-        : "tool";
-    const rawText = extractToolResultText(toolResult.content);
-    const meta = formatToolFailureMeta(toolResult.details);
-    const normalized = normalizeFailureText(rawText);
-    const summary = truncateFailureText(
-      normalized || (meta ? "failed" : "failed (no output)"),
-      MAX_TOOL_FAILURE_CHARS,
-    );
-    failures.push({ toolCallId, toolName, summary, meta });
-  }
-
-  return failures;
-}
-
-function formatToolFailuresSection(failures: ToolFailure[]): string {
-  if (failures.length === 0) return "";
-  const lines = failures.slice(0, MAX_TOOL_FAILURES).map((failure) => {
-    const meta = failure.meta ? ` (${failure.meta})` : "";
-    return `- ${failure.toolName}${meta}: ${failure.summary}`;
-  });
-  if (failures.length > MAX_TOOL_FAILURES) {
-    lines.push(`- ...and ${failures.length - MAX_TOOL_FAILURES} more`);
-  }
-  return `\n\n## Tool Failures\n${lines.join("\n")}`;
 }
 
 function extractTextFromBlocks(content: unknown): string {
@@ -306,79 +192,6 @@ function buildSplitTurnMessages(
   return [...messagesToSummarize, marker, ...turnPrefixMessages];
 }
 
-async function summarizeSafeguard(params: {
-  preparation: CompactionPreparationLike;
-  model: NonNullable<import("@mariozechner/pi-coding-agent").ExtensionContext["model"]>;
-  apiKey: string;
-  signal: AbortSignal;
-  customInstructions?: string;
-}): Promise<string> {
-  const { preparation, model, apiKey, signal, customInstructions } = params;
-  const { readFiles, modifiedFiles } = computeFileLists(preparation.fileOps);
-  const fileOpsSummary = formatFileOperations(readFiles, modifiedFiles);
-  const toolFailures = collectToolFailures([
-    ...preparation.messagesToSummarize,
-    ...preparation.turnPrefixMessages,
-  ]);
-  const toolFailureSection = formatToolFailuresSection(toolFailures);
-
-  const contextWindowTokens = resolveContextWindowTokens(model);
-  const turnPrefixMessages = preparation.turnPrefixMessages ?? [];
-  let messagesToSummarize = preparation.messagesToSummarize;
-
-  const tokensBefore =
-    typeof preparation.tokensBefore === "number" && Number.isFinite(preparation.tokensBefore)
-      ? preparation.tokensBefore
-      : undefined;
-  if (tokensBefore !== undefined) {
-    const summarizableTokens =
-      estimateMessagesTokens(messagesToSummarize) + estimateMessagesTokens(turnPrefixMessages);
-    const newContentTokens = Math.max(0, Math.floor(tokensBefore - summarizableTokens));
-    const maxHistoryTokens = Math.floor(contextWindowTokens * 0.5);
-
-    if (newContentTokens > maxHistoryTokens) {
-      const pruned = pruneHistoryForContextShare({
-        messages: messagesToSummarize,
-        maxContextTokens: contextWindowTokens,
-        maxHistoryShare: 0.5,
-        parts: 2,
-      });
-      if (pruned.droppedChunks > 0) {
-        const newContentRatio = (newContentTokens / contextWindowTokens) * 100;
-        console.warn(
-          `Compaction safeguard: new content uses ${newContentRatio.toFixed(
-            1,
-          )}% of context; dropped ${pruned.droppedChunks} older chunk(s) ` +
-            `(${pruned.droppedMessages} messages) to fit history budget.`,
-        );
-        messagesToSummarize = pruned.messages;
-      }
-    }
-  }
-
-  const allMessages = buildSplitTurnMessages(messagesToSummarize, turnPrefixMessages);
-  const adaptiveRatio = computeAdaptiveChunkRatio(allMessages, contextWindowTokens);
-  const maxChunkTokens = Math.max(1, Math.floor(contextWindowTokens * adaptiveRatio));
-  const reserveTokens = Math.max(1, Math.floor(preparation.settings.reserveTokens));
-
-  const historySummary = await summarizeInStages({
-    messages: allMessages,
-    model,
-    apiKey,
-    signal,
-    reserveTokens,
-    maxChunkTokens,
-    contextWindow: contextWindowTokens,
-    customInstructions,
-    previousSummary: preparation.previousSummary,
-  });
-
-  let summary = historySummary;
-  summary += toolFailureSection;
-  summary += fileOpsSummary;
-  return summary;
-}
-
 export default function compactionFreeformExtension(api: ExtensionAPI): void {
   api.on("session_before_compact", async (event, ctx) => {
     const { preparation, customInstructions, signal } = event;
@@ -454,36 +267,10 @@ export default function compactionFreeformExtension(api: ExtensionAPI): void {
       };
     } catch (error) {
       console.warn(
-        `Freeform compaction failed; trying safeguard: ${
+        `Handoff compaction failed; falling back to default compaction: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );
-    }
-
-    try {
-      const safeSummary = await summarizeSafeguard({
-        preparation,
-        model,
-        apiKey,
-        signal,
-        customInstructions,
-      });
-      log.info("compaction handoff: used safeguard fallback");
-      return {
-        compaction: {
-          summary: safeSummary,
-          firstKeptEntryId: preparation.firstKeptEntryId,
-          tokensBefore: preparation.tokensBefore,
-          details: { readFiles, modifiedFiles },
-        },
-      };
-    } catch (error) {
-      console.warn(
-        `Safeguard compaction failed; falling back to default compaction: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-      log.info("compaction handoff: falling back to default");
       return;
     }
   });

@@ -79,6 +79,10 @@ export type CompactEmbeddedPiSessionParams = {
   authProfileId?: string;
   /** Optional override for compaction keep-recent tokens (manual /compact). */
   compactionKeepRecentTokensOverride?: number;
+  /** Override compaction mode for this run (used for fallback attempts). */
+  compactionModeOverride?: "default" | "safeguard" | "handoff";
+  /** Allow a fallback compaction pass (handoff -> safeguard). */
+  compactionAllowFallback?: boolean;
   /** Group id for channel-level tool policy resolution. */
   groupId?: string | null;
   /** Group channel label (e.g. #general) for channel-level tool policy resolution. */
@@ -367,12 +371,28 @@ export async function compactEmbeddedPiSessionDirect(
         allowSyntheticToolResults: transcriptPolicy.allowSyntheticToolResults,
       });
       trackSessionManagerAccess(params.sessionFile);
+      const compactionCfg =
+        params.compactionModeOverride && params.config
+          ? {
+              ...params.config,
+              agents: {
+                ...params.config.agents,
+                defaults: {
+                  ...params.config.agents?.defaults,
+                  compaction: {
+                    ...params.config.agents?.defaults?.compaction,
+                    mode: params.compactionModeOverride,
+                  },
+                },
+              },
+            }
+          : params.config;
       const settingsManager = SettingsManager.create(effectiveWorkspace, agentDir);
       ensurePiCompactionReserveTokens({
         settingsManager,
-        minReserveTokens: resolveCompactionReserveTokensFloor(params.config),
+        minReserveTokens: resolveCompactionReserveTokensFloor(compactionCfg),
       });
-      const isHandoffMode = params.config?.agents?.defaults?.compaction?.mode === "handoff";
+      const isHandoffMode = compactionCfg?.agents?.defaults?.compaction?.mode === "handoff";
       if (typeof params.compactionKeepRecentTokensOverride === "number") {
         settingsManager.applyOverrides({
           compaction: {
@@ -381,7 +401,7 @@ export async function compactEmbeddedPiSessionDirect(
         });
       }
       const additionalExtensionPaths = buildEmbeddedExtensionPaths({
-        cfg: params.config,
+        cfg: compactionCfg,
         sessionManager,
         provider,
         modelId,
@@ -443,7 +463,25 @@ export async function compactEmbeddedPiSessionDirect(
         const customInstructions = isHandoffMode
           ? params.customInstructions?.trim()
           : params.customInstructions;
-        const result = await session.compact(customInstructions || undefined);
+        let result;
+        try {
+          result = await session.compact(customInstructions || undefined);
+        } catch (err) {
+          const allowFallback = params.compactionAllowFallback !== false;
+          if (isHandoffMode && allowFallback) {
+            log.warn(
+              `handoff compaction failed; retrying with safeguard: ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+            );
+            return compactEmbeddedPiSessionDirect({
+              ...params,
+              compactionModeOverride: "safeguard",
+              compactionAllowFallback: false,
+            });
+          }
+          throw err;
+        }
         // Estimate tokens after compaction by summing token estimates for remaining messages
         let tokensAfter: number | undefined;
         try {
