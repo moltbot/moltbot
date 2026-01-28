@@ -351,6 +351,15 @@ export class MoltbotApp extends LitElement {
     );
   }
 
+  setColorTheme(colorTheme: string) {
+    import("./theme").then(({ applyColorTheme, saveColorTheme }) => {
+      applyColorTheme(colorTheme as any);
+      saveColorTheme(colorTheme as any);
+      this.settings = { ...this.settings, colorTheme: colorTheme as any };
+      this.requestUpdate();
+    });
+  }
+
   async loadOverview() {
     await loadOverviewInternal(
       this as unknown as Parameters<typeof loadOverviewInternal>[0],

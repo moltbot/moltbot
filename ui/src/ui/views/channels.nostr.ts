@@ -50,6 +50,7 @@ export function renderNostrCard(params: {
   const summaryLastError = nostr?.lastError ?? primaryAccount?.lastError ?? null;
   const hasMultipleAccounts = nostrAccounts.length > 1;
   const showingForm = profileFormState !== null && profileFormState !== undefined;
+  const configDisabled = props.configSaving || props.configSchemaLoading;
 
   const renderAccountCard = (account: ChannelAccountSnapshot) => {
     const publicKey = (account as { publicKey?: string }).publicKey;
@@ -120,13 +121,12 @@ export function renderNostrCard(params: {
           <div style="font-weight: 500;">Profile</div>
           ${summaryConfigured
             ? html`
-                <button
-                  class="btn btn-sm"
+                <ui-button
+                  size="sm"
                   @click=${onEditProfile}
-                  style="font-size: 12px; padding: 4px 8px;"
                 >
                   Edit Profile
-                </button>
+                </ui-button>
               `
             : nothing}
         </div>
@@ -167,50 +167,69 @@ export function renderNostrCard(params: {
   };
 
   return html`
-    <div class="card">
-      <div class="card-title">Nostr</div>
-      <div class="card-sub">Decentralized DMs via Nostr relays (NIP-04).</div>
-      ${accountCountLabel}
+    <div class="card card--channel">
+      <div class="card-content">
+        <div class="card-title">Nostr</div>
+        <div class="card-sub">Decentralized DMs via Nostr relays (NIP-04).</div>
+        ${accountCountLabel}
 
-      ${hasMultipleAccounts
-        ? html`
-            <div class="account-card-list">
-              ${nostrAccounts.map((account) => renderAccountCard(account))}
-            </div>
-          `
-        : html`
-            <div class="status-list" style="margin-top: 16px;">
-              <div>
-                <span class="label">Configured</span>
-                <span>${summaryConfigured ? "Yes" : "No"}</span>
+        ${hasMultipleAccounts
+          ? html`
+              <div class="account-card-list">
+                ${nostrAccounts.map((account) => renderAccountCard(account))}
               </div>
-              <div>
-                <span class="label">Running</span>
-                <span>${summaryRunning ? "Yes" : "No"}</span>
+            `
+          : html`
+              <div class="status-list" style="margin-top: 16px;">
+                <div>
+                  <span class="label">Configured</span>
+                  <span>${summaryConfigured ? "Yes" : "No"}</span>
+                </div>
+                <div>
+                  <span class="label">Running</span>
+                  <span>${summaryRunning ? "Yes" : "No"}</span>
+                </div>
+                <div>
+                  <span class="label">Public Key</span>
+                  <span class="monospace" title="${summaryPublicKey ?? ""}"
+                    >${truncatePubkey(summaryPublicKey)}</span
+                  >
+                </div>
+                <div>
+                  <span class="label">Last start</span>
+                  <span>${summaryLastStartAt ? formatAgo(summaryLastStartAt) : "n/a"}</span>
+                </div>
               </div>
-              <div>
-                <span class="label">Public Key</span>
-                <span class="monospace" title="${summaryPublicKey ?? ""}"
-                  >${truncatePubkey(summaryPublicKey)}</span
-                >
-              </div>
-              <div>
-                <span class="label">Last start</span>
-                <span>${summaryLastStartAt ? formatAgo(summaryLastStartAt) : "n/a"}</span>
-              </div>
-            </div>
-          `}
+            `}
 
-      ${summaryLastError
-        ? html`<div class="callout danger" style="margin-top: 12px;">${summaryLastError}</div>`
-        : nothing}
+        ${renderProfileSection()}
 
-      ${renderProfileSection()}
+        ${renderChannelConfigSection({ channelId: "nostr", props })}
+      </div>
 
-      ${renderChannelConfigSection({ channelId: "nostr", props })}
+      <div class="card-footer">
+        ${summaryLastError
+          ? html`<div class="callout danger" style="margin-bottom: 12px;">${summaryLastError}</div>`
+          : nothing}
 
-      <div class="row" style="margin-top: 12px;">
-        <button class="btn" @click=${() => props.onRefresh(false)}>Refresh</button>
+        <div class="row" style="gap: 8px; align-items: center; flex-wrap: wrap;">
+          <ui-button @click=${() => props.onRefresh(false)}>Refresh</ui-button>
+          <div style="margin-left: auto; display: flex; gap: 8px;">
+            <ui-button
+              variant="primary"
+              ?disabled=${configDisabled || !props.configFormDirty}
+              @click=${() => props.onConfigSave()}
+            >
+              ${props.configSaving ? "Saving…" : "Save Config"}
+            </ui-button>
+            <ui-button
+              ?disabled=${configDisabled}
+              @click=${() => props.onConfigReload()}
+            >
+              Reload
+            </ui-button>
+          </div>
+        </div>
       </div>
     </div>
   `;

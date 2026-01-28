@@ -66,10 +66,6 @@ export async function patchSession(
 export async function deleteSession(state: SessionsState, key: string) {
   if (!state.client || !state.connected) return;
   if (state.sessionsLoading) return;
-  const confirmed = window.confirm(
-    `Delete session "${key}"?\n\nDeletes the session entry and archives its transcript.`,
-  );
-  if (!confirmed) return;
   state.sessionsLoading = true;
   state.sessionsError = null;
   try {

@@ -1,6 +1,9 @@
 import { html, nothing } from "lit";
 
 import type { LogEntry, LogLevel } from "../types";
+import "../components/button";
+import "../components/input";
+import "../components/checkbox";
 
 const LEVELS: LogLevel[] = ["trace", "debug", "info", "warn", "error", "fatal"];
 
@@ -54,73 +57,70 @@ export function renderLogs(props: LogsProps) {
           <div class="card-sub">Gateway file logs (JSONL).</div>
         </div>
         <div class="row" style="gap: 8px;">
-          <button class="btn" ?disabled=${props.loading} @click=${props.onRefresh}>
+          <ui-button ?disabled=${props.loading} @click=${props.onRefresh}>
             ${props.loading ? "Loading…" : "Refresh"}
-          </button>
-          <button
-            class="btn"
+          </ui-button>
+          <ui-button
             ?disabled=${filtered.length === 0}
             @click=${() => props.onExport(filtered.map((entry) => entry.raw), exportLabel)}
           >
             Export ${exportLabel}
-          </button>
+          </ui-button>
         </div>
       </div>
 
-      <div class="filters" style="margin-top: 14px;">
-        <label class="field" style="min-width: 220px;">
-          <span>Filter</span>
-          <input
-            .value=${props.filterText}
-            @input=${(e: Event) =>
-              props.onFilterTextChange((e.target as HTMLInputElement).value)}
-            placeholder="Search logs"
-          />
-        </label>
-        <label class="field checkbox">
-          <span>Auto-follow</span>
-          <input
-            type="checkbox"
+      <div style="margin-top: 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+        <ui-input
+          label="Filter"
+          .value=${props.filterText}
+          @input=${(e: CustomEvent) => props.onFilterTextChange(e.detail.value)}
+          placeholder="Search logs"
+          style="width: 240px;"
+        ></ui-input>
+        <div style="margin-top: 19px;">
+          <ui-checkbox
+            label="Auto-follow"
             .checked=${props.autoFollow}
-            @change=${(e: Event) =>
-              props.onToggleAutoFollow((e.target as HTMLInputElement).checked)}
-          />
-        </label>
+            @change=${(e: CustomEvent) => props.onToggleAutoFollow(e.detail.checked)}
+          ></ui-checkbox>
+        </div>
       </div>
 
-      <div class="chip-row" style="margin-top: 12px;">
+      <div style="margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
         ${LEVELS.map(
-          (level) => html`
-            <label class="chip log-chip ${level}">
+        (level) => html`
+            <label class="log-level-filter log-level-filter--${level}" style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
               <input
                 type="checkbox"
                 .checked=${props.levelFilters[level]}
                 @change=${(e: Event) =>
-                  props.onLevelToggle(level, (e.target as HTMLInputElement).checked)}
+            props.onLevelToggle(level, (e.target as HTMLInputElement).checked)}
+                style="display: none;"
               />
-              <span>${level}</span>
+              <span class="log-level-filter__checkbox"></span>
+              <span class="log-level-filter__label">${level}</span>
             </label>
           `,
-        )}
+      )}
       </div>
 
       ${props.file
-        ? html`<div class="muted" style="margin-top: 10px;">File: ${props.file}</div>`
-        : nothing}
+      ? html`<div class="muted" style="margin-top: 12px;">File: ${props.file}</div>`
+      : nothing}
       ${props.truncated
-        ? html`<div class="callout" style="margin-top: 10px;">
+      ? html`<div class="callout" style="margin-top: 12px;">
             Log output truncated; showing latest chunk.
           </div>`
-        : nothing}
+      : nothing}
       ${props.error
-        ? html`<div class="callout danger" style="margin-top: 10px;">${props.error}</div>`
-        : nothing}
+      ? html`<div class="callout danger" style="margin-top: 12px;">${props.error}</div>`
+      : nothing}
 
-      <div class="log-stream" style="margin-top: 12px;" @scroll=${props.onScroll}>
+      <div class="log-stream" style="margin-top: 16px;" @scroll=${props.onScroll}>
         ${filtered.length === 0
-          ? html`<div class="muted" style="padding: 12px;">No log entries.</div>`
-          : filtered.map(
-              (entry) => html`
+      ? html`<div class="muted" style="padding: 12px;">No log entries.</div>`
+      : filtered.map(
+        (entry) => html`
                 <div class="log-row">
                   <div class="log-time mono">${formatTime(entry.time)}</div>
                   <div class="log-level ${entry.level ?? ""}">${entry.level ?? ""}</div>
@@ -128,7 +128,7 @@ export function renderLogs(props: LogsProps) {
                   <div class="log-message mono">${entry.message ?? entry.raw}</div>
                 </div>
               `,
-            )}
+      )}
       </div>
     </section>
   `;

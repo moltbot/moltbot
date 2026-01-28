@@ -75,8 +75,6 @@ export async function approveDevicePairing(state: DevicesState, requestId: strin
 
 export async function rejectDevicePairing(state: DevicesState, requestId: string) {
   if (!state.client || !state.connected) return;
-  const confirmed = window.confirm("Reject this device pairing request?");
-  if (!confirmed) return;
   try {
     await state.client.request("device.pair.reject", { requestId });
     await loadDevices(state);
@@ -118,10 +116,6 @@ export async function revokeDeviceToken(
   params: { deviceId: string; role: string },
 ) {
   if (!state.client || !state.connected) return;
-  const confirmed = window.confirm(
-    `Revoke token for ${params.deviceId} (${params.role})?`,
-  );
-  if (!confirmed) return;
   try {
     await state.client.request("device.token.revoke", params);
     const identity = await loadOrCreateDeviceIdentity();

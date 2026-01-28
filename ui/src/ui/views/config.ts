@@ -7,6 +7,10 @@ import {
   schemaType,
   type JsonSchema,
 } from "./config-form.shared";
+import "../components/button";
+import "../components/badge";
+import "../components/input";
+import "../components/textarea";
 
 export type ConfigProps = {
   raw: string;
@@ -261,17 +265,12 @@ export function renderConfig(props: ConfigProps) {
 
         <!-- Search -->
         <div class="config-search">
-          <svg class="config-search__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="11" cy="11" r="8"></circle>
-            <path d="M21 21l-4.35-4.35"></path>
-          </svg>
-          <input
-            type="text"
-            class="config-search__input"
+          <ui-input
             placeholder="Search settings..."
             .value=${props.searchQuery}
-            @input=${(e: Event) => props.onSearchChange((e.target as HTMLInputElement).value)}
-          />
+            icon="search"
+            @input=${(e: CustomEvent) => props.onSearchChange(e.detail.value)}
+          ></ui-input>
           ${props.searchQuery ? html`
             <button
               class="config-search__clear"
@@ -305,7 +304,6 @@ export function renderConfig(props: ConfigProps) {
           <div class="config-mode-toggle">
             <button
               class="config-mode-toggle__btn ${props.formMode === "form" ? "active" : ""}"
-              ?disabled=${props.schemaLoading || !props.schema}
               @click=${() => props.onFormModeChange("form")}
             >
               Form
@@ -332,30 +330,31 @@ export function renderConfig(props: ConfigProps) {
             `}
           </div>
           <div class="config-actions__right">
-            <button class="btn btn--sm" ?disabled=${props.loading} @click=${props.onReload}>
+            <ui-button size="sm" ?disabled=${props.loading} @click=${props.onReload}>
               ${props.loading ? "Loading…" : "Reload"}
-            </button>
-            <button
-              class="btn btn--sm primary"
+            </ui-button>
+            <ui-button
+              variant="primary"
+              size="sm"
               ?disabled=${!canSave}
               @click=${props.onSave}
             >
               ${props.saving ? "Saving…" : "Save"}
-            </button>
-            <button
-              class="btn btn--sm"
+            </ui-button>
+            <ui-button
+              size="sm"
               ?disabled=${!canApply}
               @click=${props.onApply}
             >
               ${props.applying ? "Applying…" : "Apply"}
-            </button>
-            <button
-              class="btn btn--sm"
+            </ui-button>
+            <ui-button
+              size="sm"
               ?disabled=${!canUpdate}
               @click=${props.onUpdate}
             >
               ${props.updating ? "Updating…" : "Update"}
-            </button>
+            </ui-button>
           </div>
         </div>
 
@@ -451,14 +450,15 @@ export function renderConfig(props: ConfigProps) {
                   : nothing}
               `
             : html`
-                <label class="field config-raw-field">
-                  <span>Raw JSON5</span>
-                  <textarea
+                <div class="config-raw-wrap">
+                  <ui-textarea
+                    label="Raw JSON5"
                     .value=${props.raw}
-                    @input=${(e: Event) =>
-                      props.onRawChange((e.target as HTMLTextAreaElement).value)}
-                  ></textarea>
-                </label>
+                    .rows=${25}
+                    @input=${(e: CustomEvent) =>
+                      props.onRawChange(e.detail.value)}
+                  ></ui-textarea>
+                </div>
               `}
         </div>
 

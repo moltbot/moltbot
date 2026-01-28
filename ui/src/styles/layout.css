@@ -164,6 +164,33 @@
   box-sizing: border-box;
 }
 
+/* Health badge - matches theme toggle size */
+.health-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--secondary);
+  height: 32px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.health-badge__status {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.topbar-status ui-badge {
+  font-size: 12px;
+}
+
+.topbar-status ui-badge .statusDot {
+  margin-right: 2px;
+}
+
 .topbar-status .pill .mono {
   display: flex;
   align-items: center;
@@ -197,6 +224,7 @@
   overflow-x: hidden;
   padding: 16px 12px;
   background: var(--bg);
+  border-right: 1px solid var(--border);
   scrollbar-width: none; /* Firefox */
   transition:
     width var(--shell-focus-duration) var(--shell-focus-ease),
@@ -206,7 +234,8 @@
 }
 
 .nav::-webkit-scrollbar {
-  display: none; /* Chrome/Safari */
+  display: none;
+  /* Chrome/Safari */
 }
 
 .shell--chat-focus .nav {
@@ -277,12 +306,16 @@
 /* Nav groups */
 .nav-group {
   margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
   display: grid;
   gap: 2px;
 }
 
 .nav-group:last-child {
   margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
 }
 
 .nav-group__items {
@@ -417,7 +450,7 @@
 
 .content {
   grid-area: content;
-  padding: 12px 16px 32px;
+  padding: 32px 16px 32px;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -442,14 +475,15 @@
   justify-content: space-between;
   gap: 16px;
   padding: 4px 8px;
-  overflow: hidden;
+  margin-bottom: 24px;
+  overflow: visible;
   transform-origin: top center;
   transition:
     opacity var(--shell-focus-duration) var(--shell-focus-ease),
     transform var(--shell-focus-duration) var(--shell-focus-ease),
     max-height var(--shell-focus-duration) var(--shell-focus-ease),
     padding var(--shell-focus-duration) var(--shell-focus-ease);
-  max-height: 80px;
+  min-height: 80px;
 }
 
 .shell--chat-focus .content-header {
@@ -489,7 +523,7 @@
   gap: 16px;
 }
 
-.content--chat .content-header > div:first-child {
+.content--chat .content-header>div:first-child {
   text-align: left;
 }
 

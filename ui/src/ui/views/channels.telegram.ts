@@ -13,6 +13,7 @@ export function renderTelegramCard(params: {
 }) {
   const { props, telegram, telegramAccounts, accountCountLabel } = params;
   const hasMultipleAccounts = telegramAccounts.length > 1;
+  const configDisabled = props.configSaving || props.configSchemaLoading;
 
   const renderAccountCard = (account: ChannelAccountSnapshot) => {
     const probe = account.probe as { bot?: { username?: string } } | undefined;
@@ -52,61 +53,80 @@ export function renderTelegramCard(params: {
   };
 
   return html`
-    <div class="card">
-      <div class="card-title">Telegram</div>
-      <div class="card-sub">Bot status and channel configuration.</div>
-      ${accountCountLabel}
+    <div class="card card--channel">
+      <div class="card-content">
+        <div class="card-title">Telegram</div>
+        <div class="card-sub">Bot status and channel configuration.</div>
+        ${accountCountLabel}
 
-      ${hasMultipleAccounts
-        ? html`
-            <div class="account-card-list">
-              ${telegramAccounts.map((account) => renderAccountCard(account))}
-            </div>
-          `
-        : html`
-            <div class="status-list" style="margin-top: 16px;">
-              <div>
-                <span class="label">Configured</span>
-                <span>${telegram?.configured ? "Yes" : "No"}</span>
+        ${hasMultipleAccounts
+          ? html`
+              <div class="account-card-list">
+                ${telegramAccounts.map((account) => renderAccountCard(account))}
               </div>
-              <div>
-                <span class="label">Running</span>
-                <span>${telegram?.running ? "Yes" : "No"}</span>
+            `
+          : html`
+              <div class="status-list" style="margin-top: 16px;">
+                <div>
+                  <span class="label">Configured</span>
+                  <span>${telegram?.configured ? "Yes" : "No"}</span>
+                </div>
+                <div>
+                  <span class="label">Running</span>
+                  <span>${telegram?.running ? "Yes" : "No"}</span>
+                </div>
+                <div>
+                  <span class="label">Mode</span>
+                  <span>${telegram?.mode ?? "n/a"}</span>
+                </div>
+                <div>
+                  <span class="label">Last start</span>
+                  <span>${telegram?.lastStartAt ? formatAgo(telegram.lastStartAt) : "n/a"}</span>
+                </div>
+                <div>
+                  <span class="label">Last probe</span>
+                  <span>${telegram?.lastProbeAt ? formatAgo(telegram.lastProbeAt) : "n/a"}</span>
+                </div>
               </div>
-              <div>
-                <span class="label">Mode</span>
-                <span>${telegram?.mode ?? "n/a"}</span>
-              </div>
-              <div>
-                <span class="label">Last start</span>
-                <span>${telegram?.lastStartAt ? formatAgo(telegram.lastStartAt) : "n/a"}</span>
-              </div>
-              <div>
-                <span class="label">Last probe</span>
-                <span>${telegram?.lastProbeAt ? formatAgo(telegram.lastProbeAt) : "n/a"}</span>
-              </div>
-            </div>
-          `}
+            `}
 
-      ${telegram?.lastError
-        ? html`<div class="callout danger" style="margin-top: 12px;">
-            ${telegram.lastError}
-          </div>`
-        : nothing}
+        ${telegram?.probe
+          ? html`<div class="callout" style="margin-top: 12px;">
+              Probe ${telegram.probe.ok ? "ok" : "failed"} ·
+              ${telegram.probe.status ?? ""} ${telegram.probe.error ?? ""}
+            </div>`
+          : nothing}
 
-      ${telegram?.probe
-        ? html`<div class="callout" style="margin-top: 12px;">
-            Probe ${telegram.probe.ok ? "ok" : "failed"} ·
-            ${telegram.probe.status ?? ""} ${telegram.probe.error ?? ""}
-          </div>`
-        : nothing}
+        ${renderChannelConfigSection({ channelId: "telegram", props })}
+      </div>
 
-      ${renderChannelConfigSection({ channelId: "telegram", props })}
+      <div class="card-footer">
+        ${telegram?.lastError
+          ? html`<div class="callout danger" style="margin-bottom: 12px;">
+              ${telegram.lastError}
+            </div>`
+          : nothing}
 
-      <div class="row" style="margin-top: 12px;">
-        <button class="btn" @click=${() => props.onRefresh(true)}>
-          Probe
-        </button>
+        <div class="row" style="gap: 8px; align-items: center; flex-wrap: wrap;">
+          <ui-button @click=${() => props.onRefresh(true)}>
+            Probe
+          </ui-button>
+          <div style="margin-left: auto; display: flex; gap: 8px;">
+            <ui-button
+              variant="primary"
+              ?disabled=${configDisabled || !props.configFormDirty}
+              @click=${() => props.onConfigSave()}
+            >
+              ${props.configSaving ? "Saving…" : "Save Config"}
+            </ui-button>
+            <ui-button
+              ?disabled=${configDisabled}
+              @click=${() => props.onConfigReload()}
+            >
+              Reload
+            </ui-button>
+          </div>
+        </div>
       </div>
     </div>
   `;

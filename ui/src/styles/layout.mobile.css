@@ -61,6 +61,11 @@
     align-items: center;
   }
 
+  /* Hide nav toggle button on mobile (sidebar is always visible/stacked) */
+  .nav-collapse-toggle {
+    display: none;
+  }
+
   .brand {
     flex: 1;
     min-width: 0;
@@ -78,6 +83,43 @@
     gap: 6px;
     width: auto;
     flex-wrap: nowrap;
+  }
+
+  /* Health badge - compact for mobile */
+  .health-badge {
+    padding: 3px 8px;
+    height: 28px;
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .health-badge span:nth-child(2) {
+    display: none; /* Hide "Health" text on mobile */
+  }
+
+  .health-badge__status {
+    font-size: 10px;
+  }
+
+  .health-badge .statusDot {
+    width: 6px;
+    height: 6px;
+  }
+
+  /* Theme controls - compact */
+  .theme-toggle {
+    --theme-item: 24px;
+    --theme-gap: 2px;
+    --theme-pad: 3px;
+  }
+
+  .theme-icon {
+    width: 12px;
+    height: 12px;
+  }
+
+  theme-selector {
+    display: inline-block;
   }
 
   .topbar-status .pill {
@@ -214,9 +256,13 @@
     width: 100%;
   }
 
+  /* Chat thread - ensure proper scrolling on mobile */
   .chat-thread {
     margin-top: 8px;
-    padding: 12px 8px;
+    padding: 12px 8px 80px 8px; /* Extra bottom padding for compose area */
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .chat-msg {
@@ -228,15 +274,47 @@
     border-radius: var(--radius-md);
   }
 
+  /* Chat compose - fixed at bottom on mobile */
   .chat-compose {
+    position: fixed !important;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    margin: 0;
+    padding: 12px 8px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    background: var(--bg);
+    border-top: 1px solid var(--border);
     gap: 8px;
+    z-index: 50;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  :root[data-theme="light"] .chat-compose {
+    background: var(--bg-content);
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
+  }
+
+  .shell--chat .chat-compose {
+    position: fixed !important;
   }
 
   .chat-compose__field textarea {
-    min-height: 60px;
+    min-height: 44px;
+    max-height: 120px;
     padding: 8px 10px;
     border-radius: var(--radius-md);
-    font-size: 14px;
+    font-size: 16px; /* Prevents zoom on iOS */
+    resize: none;
+  }
+
+  .chat-compose__actions {
+    margin-top: 0;
+  }
+
+  /* Ensure content area accounts for fixed compose */
+  .shell--chat .content {
+    padding-bottom: 0;
   }
 
   /* Log stream */
@@ -315,6 +393,35 @@
     font-size: 13px;
   }
 
+  /* Health badge - ultra compact */
+  .health-badge {
+    padding: 2px 6px;
+    height: 26px;
+    font-size: 10px;
+    gap: 3px;
+  }
+
+  .health-badge__status {
+    font-size: 9px;
+  }
+
+  .health-badge .statusDot {
+    width: 5px;
+    height: 5px;
+  }
+
+  /* Theme controls - ultra compact */
+  .theme-toggle {
+    --theme-item: 22px;
+    --theme-gap: 2px;
+    --theme-pad: 2px;
+  }
+
+  .theme-icon {
+    width: 11px;
+    height: 11px;
+  }
+
   .nav {
     padding: 6px 8px;
   }
@@ -345,10 +452,16 @@
     padding: 8px 10px;
   }
 
+  .chat-compose {
+    padding: 10px 6px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+
   .chat-compose__field textarea {
-    min-height: 52px;
+    min-height: 40px;
+    max-height: 100px;
     padding: 8px 10px;
-    font-size: 13px;
+    font-size: 16px; /* Prevents zoom on iOS */
   }
 
   .btn {
@@ -370,5 +483,12 @@
   .theme-icon {
     width: 11px;
     height: 11px;
+  }
+}
+
+/* Ensure chat content has proper spacing for fixed compose */
+@media (max-width: 600px) {
+  .shell--chat .content {
+    padding-bottom: 80px; /* Space for fixed compose area */
   }
 }

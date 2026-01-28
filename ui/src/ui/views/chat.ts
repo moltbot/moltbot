@@ -16,6 +16,7 @@ import {
 } from "../chat/grouped-render";
 import { renderMarkdownSidebar } from "./markdown-sidebar";
 import "../components/resizable-divider";
+import "../components/button";
 
 export type CompactionIndicatorStatus = {
   active: boolean;

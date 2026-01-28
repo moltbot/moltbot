@@ -41,6 +41,19 @@ export class ResizableDivider extends LitElement {
     :host(.dragging) {
       background: var(--accent, #007bff);
     }
+
+    /* Light mode styles */
+    :host-context([data-theme="light"]) {
+      background: var(--border, #e4e4e7);
+    }
+
+    :host-context([data-theme="light"]):hover {
+      background: var(--accent, #FF8C42);
+    }
+
+    :host-context([data-theme="light"]).dragging {
+      background: var(--accent, #FF8C42);
+    }
   `;
 
   render() {

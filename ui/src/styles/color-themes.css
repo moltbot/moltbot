@@ -1,0 +1,134 @@
+/* ===========================================
+   COLOR THEMES
+   Each theme has dark and light variants
+   =========================================== */
+
+/* Default: Tangerine (already in base.css) */
+:root[data-color-theme="tangerine"] {
+  /* Already defined in base.css */
+}
+
+/* Ocean Theme - Blue tones */
+:root[data-color-theme="ocean"] {
+  --color-accent-primary: #0EA5E9;
+  --color-accent-primary-hover: #0284C7;
+  --color-accent-primary-active: #0369A1;
+  
+  --accent: var(--color-accent-primary);
+  --accent-hover: var(--color-accent-primary-hover);
+  --accent-subtle: rgba(14, 165, 233, 0.15);
+  --accent-glow: rgba(14, 165, 233, 0.25);
+  --primary: var(--color-accent-primary);
+  --ring: var(--color-accent-primary);
+}
+
+:root[data-color-theme="ocean"][data-theme="light"] {
+  --color-accent-primary: #0284C7;
+  --color-accent-primary-hover: #0369A1;
+  --color-accent-primary-active: #075985;
+  
+  --accent: var(--color-accent-primary);
+  --accent-hover: var(--color-accent-primary-hover);
+  --accent-subtle: rgba(2, 132, 199, 0.12);
+  --accent-glow: rgba(2, 132, 199, 0.15);
+}
+
+/* Forest Theme - Green tones */
+:root[data-color-theme="forest"] {
+  --color-accent-primary: #10B981;
+  --color-accent-primary-hover: #059669;
+  --color-accent-primary-active: #047857;
+  
+  --accent: var(--color-accent-primary);
+  --accent-hover: var(--color-accent-primary-hover);
+  --accent-subtle: rgba(16, 185, 129, 0.15);
+  --accent-glow: rgba(16, 185, 129, 0.25);
+  --primary: var(--color-accent-primary);
+  --ring: var(--color-accent-primary);
+}
+
+:root[data-color-theme="forest"][data-theme="light"] {
+  --color-accent-primary: #059669;
+  --color-accent-primary-hover: #047857;
+  --color-accent-primary-active: #065F46;
+  
+  --accent: var(--color-accent-primary);
+  --accent-hover: var(--color-accent-primary-hover);
+  --accent-subtle: rgba(5, 150, 105, 0.12);
+  --accent-glow: rgba(5, 150, 105, 0.15);
+}
+
+/* Sunset Theme - Pink/Rose tones */
+:root[data-color-theme="sunset"] {
+  --color-accent-primary: #F43F5E;
+  --color-accent-primary-hover: #E11D48;
+  --color-accent-primary-active: #BE123C;
+  
+  --accent: var(--color-accent-primary);
+  --accent-hover: var(--color-accent-primary-hover);
+  --accent-subtle: rgba(244, 63, 94, 0.15);
+  --accent-glow: rgba(244, 63, 94, 0.25);
+  --primary: var(--color-accent-primary);
+  --ring: var(--color-accent-primary);
+}
+
+:root[data-color-theme="sunset"][data-theme="light"] {
+  --color-accent-primary: #E11D48;
+  --color-accent-primary-hover: #BE123C;
+  --color-accent-primary-active: #9F1239;
+  
+  --accent: var(--color-accent-primary);
+  --accent-hover: var(--color-accent-primary-hover);
+  --accent-subtle: rgba(225, 29, 72, 0.12);
+  --accent-glow: rgba(225, 29, 72, 0.15);
+}
+
+/* Lavender Theme - Purple tones */
+:root[data-color-theme="lavender"] {
+  --color-accent-primary: #A78BFA;
+  --color-accent-primary-hover: #8B5CF6;
+  --color-accent-primary-active: #7C3AED;
+  
+  --accent: var(--color-accent-primary);
+  --accent-hover: var(--color-accent-primary-hover);
+  --accent-subtle: rgba(167, 139, 250, 0.15);
+  --accent-glow: rgba(167, 139, 250, 0.25);
+  --primary: var(--color-accent-primary);
+  --ring: var(--color-accent-primary);
+}
+
+:root[data-color-theme="lavender"][data-theme="light"] {
+  --color-accent-primary: #8B5CF6;
+  --color-accent-primary-hover: #7C3AED;
+  --color-accent-primary-active: #6D28D9;
+  
+  --accent: var(--color-accent-primary);
+  --accent-hover: var(--color-accent-primary-hover);
+  --accent-subtle: rgba(139, 92, 246, 0.12);
+  --accent-glow: rgba(139, 92, 246, 0.15);
+}
+
+/* Slate Theme - Gray/Neutral tones */
+:root[data-color-theme="slate"] {
+  --color-accent-primary: #64748B;
+  --color-accent-primary-hover: #475569;
+  --color-accent-primary-active: #334155;
+  
+  --accent: var(--color-accent-primary);
+  --accent-hover: var(--color-accent-primary-hover);
+  --accent-subtle: rgba(100, 116, 139, 0.15);
+  --accent-glow: rgba(100, 116, 139, 0.25);
+  --primary: var(--color-accent-primary);
+  --ring: var(--color-accent-primary);
+}
+
+:root[data-color-theme="slate"][data-theme="light"] {
+  --color-accent-primary: #475569;
+  --color-accent-primary-hover: #334155;
+  --color-accent-primary-active: #1E293B;
+  
+  --accent: var(--color-accent-primary);
+  --accent-hover: var(--color-accent-primary-hover);
+  --accent-subtle: rgba(71, 85, 105, 0.12);
+  --accent-glow: rgba(71, 85, 105, 0.15);
+}

@@ -71,3 +71,9 @@ USER.md
 
 # local tooling
 .serena/
+
+# AI Powers (external project resources)
+.ai-powers/
+
+# UI Redesign workspace
+.redesign/

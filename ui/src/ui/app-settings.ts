@@ -200,6 +200,16 @@ export function applyResolvedTheme(host: SettingsHost, resolved: ResolvedTheme) 
   const root = document.documentElement;
   root.dataset.theme = resolved;
   root.style.colorScheme = resolved;
+  
+  // Update meta theme-color for mobile browsers (muted backgrounds)
+  let metaThemeColor = document.querySelector('meta[name="theme-color"]');
+  if (!metaThemeColor) {
+    metaThemeColor = document.createElement("meta");
+    metaThemeColor.setAttribute("name", "theme-color");
+    document.head.appendChild(metaThemeColor);
+  }
+  const color = resolved === "light" ? "#FAFAF9" : "#1A1816";
+  metaThemeColor.setAttribute("content", color);
 }
 
 export function attachThemeListener(host: SettingsHost) {

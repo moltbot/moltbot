@@ -1,6 +1,6 @@
 const KEY = "moltbot.control.settings.v1";
 
-import type { ThemeMode } from "./theme";
+import type { ThemeMode, ColorTheme } from "./theme";
 
 export type UiSettings = {
   gatewayUrl: string;
@@ -8,6 +8,7 @@ export type UiSettings = {
   sessionKey: string;
   lastActiveSessionKey: string;
   theme: ThemeMode;
+  colorTheme: ColorTheme;
   chatFocusMode: boolean;
   chatShowThinking: boolean;
   splitRatio: number; // Sidebar split ratio (0.4 to 0.7, default 0.6)
@@ -27,6 +28,7 @@ export function loadSettings(): UiSettings {
     sessionKey: "main",
     lastActiveSessionKey: "main",
     theme: "system",
+    colorTheme: "tangerine",
     chatFocusMode: false,
     chatShowThinking: true,
     splitRatio: 0.6,
@@ -61,6 +63,15 @@ export function loadSettings(): UiSettings {
         parsed.theme === "system"
           ? parsed.theme
           : defaults.theme,
+      colorTheme:
+        parsed.colorTheme === "tangerine" ||
+        parsed.colorTheme === "ocean" ||
+        parsed.colorTheme === "forest" ||
+        parsed.colorTheme === "sunset" ||
+        parsed.colorTheme === "lavender" ||
+        parsed.colorTheme === "slate"
+          ? parsed.colorTheme
+          : defaults.colorTheme,
       chatFocusMode:
         typeof parsed.chatFocusMode === "boolean"
           ? parsed.chatFocusMode

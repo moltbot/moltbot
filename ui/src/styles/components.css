@@ -36,6 +36,41 @@
   line-height: 1.5;
 }
 
+/* Channel card layout - content grows, buttons at bottom */
+.card--channel {
+  display: flex;
+  flex-direction: column;
+  min-height: 400px;
+}
+
+.card--channel .card-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card--channel .card-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.card--channel .card-errors {
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.card--channel .card-actions {
+  margin-top: 12px;
+}
+
+/* Config section spacing within channel cards */
+.card--channel .channel-config-section {
+  margin-top: auto;
+  padding-top: 20px;
+}
+
 /* ===========================================
    Stats - Bold values, subtle labels
    =========================================== */
@@ -775,6 +810,120 @@
 }
 
 /* ===========================================
+   Log Level Filters - Custom styled checkboxes
+   =========================================== */
+
+.log-level-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--secondary);
+  transition: all 0.2s ease;
+}
+
+.log-level-filter:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+
+.log-level-filter__checkbox {
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--input-border, #3E3B38);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--input-bg, #1A1816);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.log-level-filter__checkbox::after {
+  content: "✓";
+  font-size: 14px;
+  font-weight: 700;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: all 0.2s ease;
+}
+
+.log-level-filter input:checked ~ .log-level-filter__checkbox::after {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.log-level-filter__label {
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+/* Log level specific colors */
+.log-level-filter--trace .log-level-filter__checkbox,
+.log-level-filter--debug .log-level-filter__checkbox {
+  border-color: #71717A;
+}
+
+.log-level-filter--trace input:checked ~ .log-level-filter__checkbox,
+.log-level-filter--debug input:checked ~ .log-level-filter__checkbox {
+  background: #71717A;
+  border-color: #71717A;
+}
+
+.log-level-filter--trace input:checked ~ .log-level-filter__checkbox::after,
+.log-level-filter--debug input:checked ~ .log-level-filter__checkbox::after {
+  color: white;
+}
+
+.log-level-filter--info .log-level-filter__checkbox {
+  border-color: #3B82F6;
+}
+
+.log-level-filter--info input:checked ~ .log-level-filter__checkbox {
+  background: #3B82F6;
+  border-color: #3B82F6;
+}
+
+.log-level-filter--info input:checked ~ .log-level-filter__checkbox::after {
+  color: white;
+}
+
+.log-level-filter--warn .log-level-filter__checkbox {
+  border-color: #F59E0B;
+}
+
+.log-level-filter--warn input:checked ~ .log-level-filter__checkbox {
+  background: #F59E0B;
+  border-color: #F59E0B;
+}
+
+.log-level-filter--warn input:checked ~ .log-level-filter__checkbox::after {
+  color: white;
+}
+
+.log-level-filter--error .log-level-filter__checkbox,
+.log-level-filter--fatal .log-level-filter__checkbox {
+  border-color: #EF4444;
+}
+
+.log-level-filter--error input:checked ~ .log-level-filter__checkbox,
+.log-level-filter--fatal input:checked ~ .log-level-filter__checkbox {
+  background: #EF4444;
+  border-color: #EF4444;
+}
+
+.log-level-filter--error input:checked ~ .log-level-filter__checkbox::after,
+.log-level-filter--fatal input:checked ~ .log-level-filter__checkbox::after {
+  color: white;
+}
+
+/* ===========================================
    Log Stream
    =========================================== */
 
@@ -1035,8 +1184,8 @@
 }
 
 :root[data-theme="light"] .chat-line.user .chat-bubble {
-  border-color: rgba(234, 88, 12, 0.2);
-  background: rgba(251, 146, 60, 0.12);
+  border-color: rgba(255, 140, 66, 0.25);
+  background: rgba(255, 140, 66, 0.12);
 }
 
 .chat-line.assistant .chat-bubble {
@@ -1289,6 +1438,95 @@
 
 :root[data-theme="light"] .chat-tool-card__output {
   background: var(--bg);
+}
+
+/* ===========================================
+   Light Mode - Custom Components
+   =========================================== */
+
+/* Log level filters */
+:root[data-theme="light"] .log-level-filter {
+  background: white;
+  border-color: var(--border);
+}
+
+:root[data-theme="light"] .log-level-filter:hover {
+  background: var(--bg-hover);
+}
+
+:root[data-theme="light"] .log-level-filter__checkbox {
+  background: white;
+  border-color: var(--input-border);
+}
+
+/* Dropdown menu */
+:root[data-theme="light"] .dropdown-menu {
+  background: white;
+  border-color: var(--border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+:root[data-theme="light"] .dropdown-menu__item:hover {
+  background: var(--bg-hover);
+}
+
+/* UI Components */
+:root[data-theme="light"] ui-input input,
+:root[data-theme="light"] ui-textarea textarea {
+  background: white;
+  border-color: var(--input-border);
+}
+
+:root[data-theme="light"] ui-input input:focus,
+:root[data-theme="light"] ui-textarea textarea:focus {
+  background: white;
+  border-color: var(--accent);
+}
+
+:root[data-theme="light"] ui-checkbox .checkbox {
+  background: white;
+  border-color: var(--input-border);
+}
+
+:root[data-theme="light"] ui-button.variant-secondary {
+  background: white;
+  border-color: var(--border);
+}
+
+:root[data-theme="light"] ui-button.variant-secondary:hover {
+  background: var(--bg-hover);
+}
+
+:root[data-theme="light"] ui-button.variant-outline {
+  background: transparent;
+  border-color: var(--border);
+}
+
+:root[data-theme="light"] ui-button.variant-outline:hover {
+  background: var(--bg-hover);
+}
+
+:root[data-theme="light"] ui-button.variant-ghost:hover {
+  background: var(--bg-hover);
+}
+
+/* Card components */
+:root[data-theme="light"] ui-card .card {
+  background: white;
+  border-color: var(--border);
+}
+
+:root[data-theme="light"] ui-card .card:hover {
+  border-color: var(--border-strong);
+}
+
+:root[data-theme="light"] ui-card .card-header {
+  border-color: var(--border);
+}
+
+:root[data-theme="light"] ui-card .card-footer {
+  background: var(--bg-hover);
+  border-color: var(--border);
 }
 
 .chat-stamp {

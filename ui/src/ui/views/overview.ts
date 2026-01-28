@@ -4,6 +4,10 @@ import type { GatewayHelloOk } from "../gateway";
 import { formatAgo, formatDurationMs } from "../format";
 import { formatNextRun } from "../presenter";
 import type { UiSettings } from "../storage";
+import "../components/button";
+import "../components/input";
+import "../components/card";
+import "../components/badge";
 
 export type OverviewProps = {
   connected: boolean;
@@ -118,70 +122,64 @@ export function renderOverview(props: OverviewProps) {
 
   return html`
     <section class="grid grid-cols-2">
-      <div class="card">
-        <div class="card-title">Gateway Access</div>
-        <div class="card-sub">Where the dashboard connects and how it authenticates.</div>
-        <div class="form-grid" style="margin-top: 16px;">
-          <label class="field">
-            <span>WebSocket URL</span>
-            <input
-              .value=${props.settings.gatewayUrl}
-              @input=${(e: Event) => {
-                const v = (e.target as HTMLInputElement).value;
-                props.onSettingsChange({ ...props.settings, gatewayUrl: v });
-              }}
-              placeholder="ws://100.x.y.z:18789"
-            />
-          </label>
-          <label class="field">
-            <span>Gateway Token</span>
-            <input
-              .value=${props.settings.token}
-              @input=${(e: Event) => {
-                const v = (e.target as HTMLInputElement).value;
-                props.onSettingsChange({ ...props.settings, token: v });
-              }}
-              placeholder="CLAWDBOT_GATEWAY_TOKEN"
-            />
-          </label>
-          <label class="field">
-            <span>Password (not stored)</span>
-            <input
-              type="password"
-              .value=${props.password}
-              @input=${(e: Event) => {
-                const v = (e.target as HTMLInputElement).value;
-                props.onPasswordChange(v);
-              }}
-              placeholder="system or shared password"
-            />
-          </label>
-          <label class="field">
-            <span>Default Session Key</span>
-            <input
-              .value=${props.settings.sessionKey}
-              @input=${(e: Event) => {
-                const v = (e.target as HTMLInputElement).value;
-                props.onSessionKeyChange(v);
-              }}
-            />
-          </label>
+      <ui-card>
+        <div slot="header">
+          <div class="card-title">Gateway Access</div>
+          <div class="card-desc">Where the dashboard connects and how it authenticates.</div>
+        </div>
+        <div class="form-grid">
+          <ui-input
+            label="WebSocket URL"
+            .value=${props.settings.gatewayUrl}
+            placeholder="ws://100.x.y.z:18789"
+            @input=${(e: CustomEvent) => {
+              props.onSettingsChange({ ...props.settings, gatewayUrl: e.detail.value });
+            }}
+          ></ui-input>
+          <ui-input
+            label="Gateway Token"
+            .value=${props.settings.token}
+            placeholder="CLAWDBOT_GATEWAY_TOKEN"
+            @input=${(e: CustomEvent) => {
+              props.onSettingsChange({ ...props.settings, token: e.detail.value });
+            }}
+          ></ui-input>
+          <ui-input
+            label="Password (not stored)"
+            type="password"
+            .value=${props.password}
+            placeholder="system or shared password"
+            @input=${(e: CustomEvent) => {
+              props.onPasswordChange(e.detail.value);
+            }}
+          ></ui-input>
+          <ui-input
+            label="Default Session Key"
+            .value=${props.settings.sessionKey}
+            @input=${(e: CustomEvent) => {
+              props.onSessionKeyChange(e.detail.value);
+            }}
+          ></ui-input>
         </div>
         <div class="row" style="margin-top: 14px;">
-          <button class="btn" @click=${() => props.onConnect()}>Connect</button>
-          <button class="btn" @click=${() => props.onRefresh()}>Refresh</button>
+          <ui-button variant="primary" @click=${() => props.onConnect()}>Connect</ui-button>
+          <ui-button variant="secondary" @click=${() => props.onRefresh()}>Refresh</ui-button>
           <span class="muted">Click Connect to apply connection changes.</span>
         </div>
-      </div>
+      </ui-card>
 
-      <div class="card">
-        <div class="card-title">Snapshot</div>
-        <div class="card-sub">Latest gateway handshake information.</div>
-        <div class="stat-grid" style="margin-top: 16px;">
+      <ui-card>
+        <div slot="header">
+          <div class="card-title">Snapshot</div>
+          <div class="card-desc">Latest gateway handshake information.</div>
+        </div>
+        <div class="stat-grid">
           <div class="stat">
             <div class="stat-label">Status</div>
-            <div class="stat-value ${props.connected ? "ok" : "warn"}">
-              ${props.connected ? "Connected" : "Disconnected"}
+            <div class="stat-value">
+              <ui-badge variant=${props.connected ? "success" : "secondary"}>
+                ${props.connected ? "Connected" : "Disconnected"}
+              </ui-badge>
             </div>
           </div>
           <div class="stat">
@@ -210,21 +208,21 @@ export function renderOverview(props: OverviewProps) {
           : html`<div class="callout" style="margin-top: 14px;">
               Use Channels to link WhatsApp, Telegram, Discord, Signal, or iMessage.
             </div>`}
-      </div>
+      </ui-card>
     </section>
 
     <section class="grid grid-cols-3" style="margin-top: 18px;">
-      <div class="card stat-card">
+      <ui-card class="stat-card">
         <div class="stat-label">Instances</div>
         <div class="stat-value">${props.presenceCount}</div>
         <div class="muted">Presence beacons in the last 5 minutes.</div>
-      </div>
-      <div class="card stat-card">
+      </ui-card>
+      <ui-card class="stat-card">
         <div class="stat-label">Sessions</div>
         <div class="stat-value">${props.sessionsCount ?? "n/a"}</div>
         <div class="muted">Recent session keys tracked by the gateway.</div>
-      </div>
-      <div class="card stat-card">
+      </ui-card>
+      <ui-card class="stat-card">
         <div class="stat-label">Cron</div>
         <div class="stat-value">
           ${props.cronEnabled == null
@@ -234,13 +232,15 @@ export function renderOverview(props: OverviewProps) {
               : "Disabled"}
         </div>
         <div class="muted">Next wake ${formatNextRun(props.cronNext)}</div>
-      </div>
+      </ui-card>
     </section>
 
-    <section class="card" style="margin-top: 18px;">
-      <div class="card-title">Notes</div>
-      <div class="card-sub">Quick reminders for remote control setups.</div>
-      <div class="note-grid" style="margin-top: 14px;">
+    <ui-card style="margin-top: 18px;">
+      <div slot="header">
+        <div class="card-title">Notes</div>
+        <div class="card-desc">Quick reminders for remote control setups.</div>
+      </div>
+      <div class="note-grid">
         <div>
           <div class="note-title">Tailscale serve</div>
           <div class="muted">
@@ -256,6 +256,6 @@ export function renderOverview(props: OverviewProps) {
           <div class="muted">Use isolated sessions for recurring runs.</div>
         </div>
       </div>
-    </section>
+    </ui-card>
   `;
 }

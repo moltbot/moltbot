@@ -102,7 +102,10 @@ export function renderChannelConfigSection(params: {
   const { channelId, props } = params;
   const disabled = props.configSaving || props.configSchemaLoading;
   return html`
-    <div style="margin-top: 16px;">
+    <div class="channel-config-section">
+      <div style="font-weight: 500; font-size: 13px; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.04em;">
+        Configuration
+      </div>
       ${props.configSchemaLoading
         ? html`<div class="muted">Loading config schema…</div>`
         : renderChannelConfigForm({
@@ -113,22 +116,6 @@ export function renderChannelConfigSection(params: {
             disabled,
             onPatch: props.onConfigPatch,
           })}
-      <div class="row" style="margin-top: 12px;">
-        <button
-          class="btn primary"
-          ?disabled=${disabled || !props.configFormDirty}
-          @click=${() => props.onConfigSave()}
-        >
-          ${props.configSaving ? "Saving…" : "Save"}
-        </button>
-        <button
-          class="btn"
-          ?disabled=${disabled}
-          @click=${() => props.onConfigReload()}
-        >
-          Reload
-        </button>
-      </div>
     </div>
   `;
 }

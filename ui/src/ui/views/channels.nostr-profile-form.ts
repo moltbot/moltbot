@@ -235,36 +235,33 @@ export function renderNostrProfileForm(params: {
         : nothing}
 
       <div style="display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap;">
-        <button
-          class="btn primary"
+        <ui-button
+          variant="primary"
           @click=${callbacks.onSave}
           ?disabled=${state.saving || !isDirty}
         >
           ${state.saving ? "Saving..." : "Save & Publish"}
-        </button>
+        </ui-button>
 
-        <button
-          class="btn"
+        <ui-button
           @click=${callbacks.onImport}
           ?disabled=${state.importing || state.saving}
         >
           ${state.importing ? "Importing..." : "Import from Relays"}
-        </button>
+        </ui-button>
 
-        <button
-          class="btn"
+        <ui-button
           @click=${callbacks.onToggleAdvanced}
         >
           ${state.showAdvanced ? "Hide Advanced" : "Show Advanced"}
-        </button>
+        </ui-button>
 
-        <button
-          class="btn"
+        <ui-button
           @click=${callbacks.onCancel}
           ?disabled=${state.saving}
         >
           Cancel
-        </button>
+        </ui-button>
       </div>
 
       ${isDirty

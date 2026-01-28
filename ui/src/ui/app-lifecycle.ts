@@ -8,6 +8,7 @@ import {
   syncTabWithLocation,
   syncThemeWithSettings,
 } from "./app-settings";
+import { applyColorTheme } from "./theme";
 import { observeTopbar, scheduleChatScroll, scheduleLogsScroll } from "./app-scroll";
 import {
   startLogsPolling,
@@ -31,6 +32,7 @@ type LifecycleHost = {
   logsEntries: unknown[];
   popStateHandler: () => void;
   topbarObserver: ResizeObserver | null;
+  settings: { colorTheme: string };
 };
 
 export function handleConnected(host: LifecycleHost) {
@@ -42,6 +44,10 @@ export function handleConnected(host: LifecycleHost) {
   syncThemeWithSettings(
     host as unknown as Parameters<typeof syncThemeWithSettings>[0],
   );
+  // Apply saved color theme
+  if (host.settings?.colorTheme) {
+    applyColorTheme(host.settings.colorTheme as any);
+  }
   attachThemeListener(
     host as unknown as Parameters<typeof attachThemeListener>[0],
   );

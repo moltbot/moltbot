@@ -2,6 +2,8 @@ import { html, nothing } from "lit";
 
 import { formatEventPayload } from "../presenter";
 import type { EventLogEntry } from "../app-events";
+import "../components/button";
+import "../components/input";
 
 export type DebugProps = {
   loading: boolean;
@@ -45,9 +47,9 @@ export function renderDebug(props: DebugProps) {
             <div class="card-title">Snapshots</div>
             <div class="card-sub">Status, health, and heartbeat data.</div>
           </div>
-          <button class="btn" ?disabled=${props.loading} @click=${props.onRefresh}>
+          <ui-button ?disabled=${props.loading} @click=${props.onRefresh}>
             ${props.loading ? "Refreshing…" : "Refresh"}
-          </button>
+          </ui-button>
         </div>
         <div class="stack" style="margin-top: 12px;">
           <div>
@@ -74,28 +76,26 @@ export function renderDebug(props: DebugProps) {
       <div class="card">
         <div class="card-title">Manual RPC</div>
         <div class="card-sub">Send a raw gateway method with JSON params.</div>
-        <div class="form-grid" style="margin-top: 16px;">
-          <label class="field">
-            <span>Method</span>
-            <input
-              .value=${props.callMethod}
-              @input=${(e: Event) =>
-                props.onCallMethodChange((e.target as HTMLInputElement).value)}
-              placeholder="system-presence"
-            />
-          </label>
+        <div style="margin-top: 16px; display: grid; gap: 16px;">
+          <ui-input
+            label="Method"
+            .value=${props.callMethod}
+            placeholder="system-presence"
+            @input=${(e: CustomEvent) => props.onCallMethodChange(e.detail.value)}
+          ></ui-input>
           <label class="field">
             <span>Params (JSON)</span>
             <textarea
               .value=${props.callParams}
               @input=${(e: Event) =>
                 props.onCallParamsChange((e.target as HTMLTextAreaElement).value)}
+              placeholder="{}"
               rows="6"
             ></textarea>
           </label>
         </div>
-        <div class="row" style="margin-top: 12px;">
-          <button class="btn primary" @click=${props.onCall}>Call</button>
+        <div style="margin-top: 16px;">
+          <ui-button variant="primary" @click=${props.onCall}>Call</ui-button>
         </div>
         ${props.callError
           ? html`<div class="callout danger" style="margin-top: 12px;">
