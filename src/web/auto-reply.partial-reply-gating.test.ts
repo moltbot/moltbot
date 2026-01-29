@@ -242,7 +242,7 @@ describe("partial reply gating", () => {
   });
   it("updates last-route for group chats with account id", async () => {
     const now = Date.now();
-    const groupSessionKey = "agent:main:whatsapp:group:123@g.us";
+    const groupSessionKey = "agent:main:whatsapp:group:123@g.us:work";
     const store = await makeSessionStore({
       [groupSessionKey]: { sessionId: "sid", updatedAt: now - 1 },
     });

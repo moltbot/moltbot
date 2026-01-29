@@ -1260,7 +1260,7 @@ describe("createTelegramBot", () => {
     expect(replySpy).toHaveBeenCalledTimes(1);
     const payload = replySpy.mock.calls[0][0];
     expect(payload.AccountId).toBe("opie");
-    expect(payload.SessionKey).toBe("agent:opie:main");
+    expect(payload.SessionKey).toBe("agent:opie:main:opie");
   });
 
   it("allows per-group requireMention override", async () => {
