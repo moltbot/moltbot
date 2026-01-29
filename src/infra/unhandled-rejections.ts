@@ -84,7 +84,10 @@ export function isTransientNetworkError(err: unknown): boolean {
   // "fetch failed" TypeError from undici (Node's native fetch)
   if (err instanceof TypeError && err.message === "fetch failed") {
     const cause = getErrorCause(err);
-    if (cause) return isTransientNetworkError(cause);
+    // Check cause for recognized network codes if available
+    if (cause && isTransientNetworkError(cause)) return true;
+    // Fallback: "fetch failed" is inherently a network error,
+    // even if cause lacks standard error codes (#3974)
     return true;
   }
 
