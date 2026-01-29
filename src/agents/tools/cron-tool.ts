@@ -5,6 +5,7 @@ import { truncateUtf16Safe } from "../../utils.js";
 import { optionalStringEnum, stringEnum } from "../schema/typebox.js";
 import { resolveSessionAgentId } from "../agent-scope.js";
 import { type AnyAgentTool, jsonResult, readStringParam } from "./common.js";
+import { getCronServiceInstance } from "../../cron/service-registry.js";
 import { callGatewayTool, type GatewayCallOptions } from "./gateway.js";
 import { resolveInternalSessionKey, resolveMainSessionAlias } from "./sessions-helpers.js";
 
@@ -42,6 +43,15 @@ const CronToolSchema = Type.Object({
 
 type CronToolOptions = {
   agentSessionKey?: string;
+  cronService?: {
+    status: () => Promise<unknown>;
+    list: (opts?: { includeDisabled?: boolean }) => Promise<unknown>;
+    add: (input: unknown) => Promise<unknown>;
+    update: (id: string, patch: unknown) => Promise<unknown>;
+    remove: (id: string) => Promise<unknown>;
+    run: (id: string, mode?: string) => Promise<unknown>;
+    wake: (opts: { mode: string; text: string }) => unknown;
+  };
 };
 
 type ChatMessage = {
@@ -187,14 +197,20 @@ Use jobId as the canonical identifier; id is accepted for compatibility. Use con
         timeoutMs: typeof params.timeoutMs === "number" ? params.timeoutMs : undefined,
       };
 
+      const cron = opts?.cronService ?? getCronServiceInstance();
+
       switch (action) {
         case "status":
-          return jsonResult(await callGatewayTool("cron.status", gatewayOpts, {}));
+          return jsonResult(
+            cron ? await cron.status() : await callGatewayTool("cron.status", gatewayOpts, {}),
+          );
         case "list":
           return jsonResult(
-            await callGatewayTool("cron.list", gatewayOpts, {
-              includeDisabled: Boolean(params.includeDisabled),
-            }),
+            cron
+              ? await cron.list({ includeDisabled: Boolean(params.includeDisabled) })
+              : await callGatewayTool("cron.list", gatewayOpts, {
+                  includeDisabled: Boolean(params.includeDisabled),
+                }),
           );
         case "add": {
           if (!params.job || typeof params.job !== "object") {
@@ -233,7 +249,11 @@ Use jobId as the canonical identifier; id is accepted for compatibility. Use con
               }
             }
           }
-          return jsonResult(await callGatewayTool("cron.add", gatewayOpts, job));
+          return jsonResult(
+            cron
+              ? await cron.add(job as never)
+              : await callGatewayTool("cron.add", gatewayOpts, job),
+          );
         }
         case "update": {
           const id = readStringParam(params, "jobId") ?? readStringParam(params, "id");
@@ -245,10 +265,9 @@ Use jobId as the canonical identifier; id is accepted for compatibility. Use con
           }
           const patch = normalizeCronJobPatch(params.patch) ?? params.patch;
           return jsonResult(
-            await callGatewayTool("cron.update", gatewayOpts, {
-              id,
-              patch,
-            }),
+            cron
+              ? await cron.update(id, patch as never)
+              : await callGatewayTool("cron.update", gatewayOpts, { id, patch }),
           );
         }
         case "remove": {
@@ -256,14 +275,20 @@ Use jobId as the canonical identifier; id is accepted for compatibility. Use con
           if (!id) {
             throw new Error("jobId required (id accepted for backward compatibility)");
           }
-          return jsonResult(await callGatewayTool("cron.remove", gatewayOpts, { id }));
+          return jsonResult(
+            cron
+              ? await cron.remove(id)
+              : await callGatewayTool("cron.remove", gatewayOpts, { id }),
+          );
         }
         case "run": {
           const id = readStringParam(params, "jobId") ?? readStringParam(params, "id");
           if (!id) {
             throw new Error("jobId required (id accepted for backward compatibility)");
           }
-          return jsonResult(await callGatewayTool("cron.run", gatewayOpts, { id }));
+          return jsonResult(
+            cron ? await cron.run(id) : await callGatewayTool("cron.run", gatewayOpts, { id }),
+          );
         }
         case "runs": {
           const id = readStringParam(params, "jobId") ?? readStringParam(params, "id");

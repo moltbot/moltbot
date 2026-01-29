@@ -53,6 +53,8 @@ export function createMoltbotTools(options?: {
   modelHasVision?: boolean;
   /** Explicit agent ID override for cron/hook sessions. */
   requesterAgentIdOverride?: string;
+  /** Direct cron service for in-process calls (avoids WebSocket self-deadlock). */
+  cronService?: Parameters<typeof createCronTool>[0] extends { cronService?: infer T } ? T : never;
 }): AnyAgentTool[] {
   const imageTool = options?.agentDir?.trim()
     ? createImageTool({
@@ -82,6 +84,7 @@ export function createMoltbotTools(options?: {
     }),
     createCronTool({
       agentSessionKey: options?.agentSessionKey,
+      cronService: options?.cronService,
     }),
     createMessageTool({
       agentAccountId: options?.agentAccountId,

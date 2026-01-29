@@ -50,6 +50,7 @@ import { createChannelManager } from "./server-channels.js";
 import { createAgentEventHandler } from "./server-chat.js";
 import { createGatewayCloseHandler } from "./server-close.js";
 import { buildGatewayCronService } from "./server-cron.js";
+import { setCronServiceInstance } from "../cron/service-registry.js";
 import { applyGatewayLaneConcurrency } from "./server-lanes.js";
 import { startGatewayMaintenanceTimers } from "./server-maintenance.js";
 import { coreGatewayHandlers } from "./server-methods.js";
@@ -334,6 +335,7 @@ export async function startGatewayServer(
     broadcast,
   });
   let { cron, storePath: cronStorePath } = cronState;
+  setCronServiceInstance(cron);
 
   const channelManager = createChannelManager({
     loadConfig,
@@ -519,6 +521,7 @@ export async function startGatewayServer(
       heartbeatRunner = nextState.heartbeatRunner;
       cronState = nextState.cronState;
       cron = cronState.cron;
+      setCronServiceInstance(cron);
       cronStorePath = cronState.storePath;
       browserControl = nextState.browserControl;
     },

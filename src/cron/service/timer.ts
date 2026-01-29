@@ -28,9 +28,17 @@ export async function onTimer(state: CronServiceState) {
   if (state.running) return;
   state.running = true;
   try {
-    await locked(state, async () => {
+    // Identify due jobs under the lock, then release the lock before executing
+    // them. This avoids a self-deadlock when an embedded agent calls the cron
+    // tool mid-run (the agent's cron.list() would block on locked() otherwise).
+    const dueJobs = await locked(state, async () => {
       await ensureLoaded(state);
-      await runDueJobs(state);
+      return collectDueJobs(state);
+    });
+    for (const job of dueJobs) {
+      await executeJob(state, job, state.deps.nowMs(), { forced: false });
+    }
+    await locked(state, async () => {
       await persist(state);
       armTimer(state);
     });
@@ -39,17 +47,21 @@ export async function onTimer(state: CronServiceState) {
   }
 }
 
-export async function runDueJobs(state: CronServiceState) {
-  if (!state.store) return;
+function collectDueJobs(state: CronServiceState): CronJob[] {
+  if (!state.store) return [];
   const now = state.deps.nowMs();
-  const due = state.store.jobs.filter((j) => {
+  return state.store.jobs.filter((j) => {
     if (!j.enabled) return false;
     if (typeof j.state.runningAtMs === "number") return false;
     const next = j.state.nextRunAtMs;
     return typeof next === "number" && now >= next;
   });
+}
+
+export async function runDueJobs(state: CronServiceState) {
+  const due = collectDueJobs(state);
   for (const job of due) {
-    await executeJob(state, job, now, { forced: false });
+    await executeJob(state, job, state.deps.nowMs(), { forced: false });
   }
 }
 
