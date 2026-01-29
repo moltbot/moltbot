@@ -205,6 +205,8 @@ export function buildAgentSystemPrompt(params: {
     sessions_spawn: "Spawn a sub-agent session",
     session_status:
       "Show a /status-equivalent status card (usage + time + Reasoning/Verbose/Elevated); use for model-use questions (📊 session_status); optional per-session model override",
+    session_compact:
+      "Compact the session context by summarizing conversation history; use when context is getting large or before complex tasks",
     image: "Analyze an image with the configured image model",
   };
 
@@ -231,6 +233,7 @@ export function buildAgentSystemPrompt(params: {
     "sessions_history",
     "sessions_send",
     "session_status",
+    "session_compact",
     "image",
   ];
 

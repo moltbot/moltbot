@@ -11,6 +11,7 @@ import { createGatewayTool } from "./tools/gateway-tool.js";
 import { createImageTool } from "./tools/image-tool.js";
 import { createMessageTool } from "./tools/message-tool.js";
 import { createNodesTool } from "./tools/nodes-tool.js";
+import { createSessionCompactTool } from "./tools/session-compact-tool.js";
 import { createSessionStatusTool } from "./tools/session-status-tool.js";
 import { createSessionsHistoryTool } from "./tools/sessions-history-tool.js";
 import { createSessionsListTool } from "./tools/sessions-list-tool.js";
@@ -131,6 +132,10 @@ export function createMoltbotTools(options?: {
       requesterAgentIdOverride: options?.requesterAgentIdOverride,
     }),
     createSessionStatusTool({
+      agentSessionKey: options?.agentSessionKey,
+      config: options?.config,
+    }),
+    createSessionCompactTool({
       agentSessionKey: options?.agentSessionKey,
       config: options?.config,
     }),
