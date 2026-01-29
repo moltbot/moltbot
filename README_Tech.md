@@ -265,6 +265,100 @@ pm2 restart moltbot-gateway
 
 ---
 
+## Gateway Stability Infrastructure (Jan 29, 2026)
+
+### Multi-Layer Stability Design
+
+**Layer 1: System Level**
+- Inotify watcher limit: 524288 (prevents file monitoring exhaustion)
+  - Config: `/etc/sysctl.d/99-moltbot-inotify.conf`
+  - Verify: `cat /proc/sys/fs/inotify/max_user_watches`
+
+**Layer 2: PM2 Process Management**
+- Automatic restart on crash
+- Memory limit: 500MB (auto-restart if exceeded)
+- Min uptime: 10 seconds (prevents restart storms)
+- Kill timeout: 5 seconds (graceful shutdown before force kill)
+- Config: `/root/moltbot/ecosystem.config.cjs`
+
+**Layer 3: Startup Hooks**
+- `scripts/gateway-start.sh`: Wrapper script that runs on every startup
+  - Automatically cleans stale lock files (`~/.clawdbot/*.lock`)
+  - Prevents "gateway already running" errors
+  - Runs before `node dist/entry.js gateway`
+
+**Layer 4: Health Monitoring**
+- `scripts/pm2-health-monitor.js`: Standalone health check app managed by PM2
+  - Runs every 5 minutes (configurable)
+  - Tests port 18789 connectivity (detects hung processes)
+  - Monitors inotify watcher usage (warns at 80% of limit)
+  - Force-restarts via `killall -9 moltbot` if unresponsive
+  - Logs to `/tmp/moltbot/pm2-health-monitor.log`
+  - Isolated from gateway in same PM2 daemon
+
+### Monitoring Commands
+
+```bash
+# View both gateway and health monitor status
+pm2 list
+
+# View gateway logs (real-time)
+pm2 logs moltbot-gateway
+
+# View health monitor logs
+pm2 logs moltbot-health-monitor
+
+# View last 50 lines of either
+pm2 logs moltbot-gateway -n 50
+pm2 logs moltbot-health-monitor -n 50
+
+# Monitor health checks in real-time
+tail -f /tmp/moltbot/pm2-health-monitor.log
+
+# Force restart gateway
+pm2 restart moltbot-gateway
+
+# Emergency restart (if stuck)
+killall -9 moltbot && pm2 restart moltbot-gateway
+```
+
+### Recovery Scenarios
+
+**Scenario 1: Gateway Becomes Unresponsive (Process Running but Port Hung)**
+- Symptom: `pm2 status` shows `online`, but `nc -zv 127.0.0.1 18789` fails
+- Response: Health monitor detects this within 5 minutes
+- Action: Auto-kills process, PM2 restarts it
+- Result: Bot responds to next Telegram message
+
+**Scenario 2: Lock File Left Behind**
+- Symptom: `Gateway failed to start: gateway already running`
+- Cause: Previous process crashed without cleaning locks
+- Response: `gateway-start.sh` cleans locks on startup
+- Result: Gateway starts cleanly
+
+**Scenario 3: Inotify Exhaustion**
+- Symptom: `Error: ENOSPC: System limit for number of file watchers reached`
+- Cause: Too many config/skill files being watched
+- Response: Health monitor logs warning at 80% threshold
+- Solution: Delete unused skills or increase limit further (requires code review)
+
+**Scenario 4: Memory Exhaustion**
+- Symptom: Process becomes slow/unresponsive, memory climbing
+- Response: PM2 auto-restart when hitting 500MB limit
+- Result: Clean restart, memory reset
+
+### What This Prevents
+
+✅ Telegram messages causing gateway hang
+✅ Stale lock files blocking restarts
+✅ Inotify limit exhaustion going unnoticed
+✅ Memory leaks causing slowness
+✅ Restart storms from `Restart=always`
+✅ Systemd conflicts with PM2
+✅ Lack of visibility into gateway health
+
+---
+
 ## Configuration Summary
 
 ### Model Fallback Chain
