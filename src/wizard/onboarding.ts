@@ -21,6 +21,7 @@ import { promptRemoteGatewayConfig } from "../commands/onboard-remote.js";
 import { setupSkills } from "../commands/onboard-skills.js";
 import { setupInternalHooks } from "../commands/onboard-hooks.js";
 import type {
+  AuthChoice,
   GatewayAuthChoice,
   OnboardMode,
   OnboardOptions,
@@ -354,26 +355,43 @@ export async function runOnboardingWizard(
     allowKeychainPrompt: false,
   });
   const authChoiceFromPrompt = opts.authChoice === undefined;
-  const authChoice =
-    opts.authChoice ??
-    (await promptAuthChoiceGrouped({
-      prompter,
-      store: authStore,
-      includeSkip: true,
-    }));
+  let authChoice: AuthChoice;
 
-  const authResult = await applyAuthChoice({
-    authChoice,
-    config: nextConfig,
-    prompter,
-    runtime,
-    setDefaultModel: true,
-    opts: {
-      tokenProvider: opts.tokenProvider,
-      token: opts.authChoice === "apiKey" && opts.token ? opts.token : undefined,
-    },
-  });
-  nextConfig = authResult.config;
+  // Loop to allow retrying auth choice if user cancels during configuration
+  while (true) {
+    authChoice =
+      opts.authChoice ??
+      (await promptAuthChoiceGrouped({
+        prompter,
+        store: authStore,
+        includeSkip: true,
+      }));
+
+    try {
+      const authResult = await applyAuthChoice({
+        authChoice,
+        config: nextConfig,
+        prompter,
+        runtime,
+        setDefaultModel: true,
+        opts: {
+          tokenProvider: opts.tokenProvider,
+          token: opts.authChoice === "apiKey" && opts.token ? opts.token : undefined,
+        },
+      });
+      nextConfig = authResult.config;
+      break; // Success - exit the loop
+    } catch (error) {
+      // If user cancelled to go back to auth selection, loop again
+      if (error instanceof Error && error.message === "AUTH_CHOICE_CANCELLED") {
+        // Clear opts.authChoice so we prompt again
+        opts.authChoice = undefined;
+        continue;
+      }
+      // Re-throw other errors
+      throw error;
+    }
+  }
 
   if (authChoiceFromPrompt) {
     const modelSelection = await promptDefaultModel({
