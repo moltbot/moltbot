@@ -96,8 +96,8 @@ function resolveOnboardingMode(): boolean {
   return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
 }
 
-@customElement("clawdbot-app")
-export class ClawdbotApp extends LitElement {
+@customElement("moltbot-app")
+export class MoltbotApp extends LitElement {
   @state() settings: UiSettings = loadSettings();
   @state() password = "";
   @state() tab: Tab = "chat";
@@ -152,6 +152,7 @@ export class ClawdbotApp extends LitElement {
   @state() execApprovalQueue: ExecApprovalRequest[] = [];
   @state() execApprovalBusy = false;
   @state() execApprovalError: string | null = null;
+  @state() pendingGatewayUrl: string | null = null;
 
   @state() configLoading = false;
   @state() configRaw = "{\n}\n";
@@ -446,6 +447,21 @@ export class ClawdbotApp extends LitElement {
     } finally {
       this.execApprovalBusy = false;
     }
+  }
+
+  handleGatewayUrlConfirm() {
+    const nextGatewayUrl = this.pendingGatewayUrl;
+    if (!nextGatewayUrl) return;
+    this.pendingGatewayUrl = null;
+    applySettingsInternal(
+      this as unknown as Parameters<typeof applySettingsInternal>[0],
+      { ...this.settings, gatewayUrl: nextGatewayUrl },
+    );
+    this.connect();
+  }
+
+  handleGatewayUrlCancel() {
+    this.pendingGatewayUrl = null;
   }
 
   // Sidebar handlers for tool output viewing
