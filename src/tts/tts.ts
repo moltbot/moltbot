@@ -13,6 +13,7 @@ import path from "node:path";
 
 import { completeSimple, type TextContent } from "@mariozechner/pi-ai";
 import { EdgeTTS } from "node-edge-tts";
+import WebSocket from "ws";
 
 import type { ReplyPayload } from "../auto-reply/types.js";
 import { normalizeChannelId } from "../channels/plugins/index.js";
@@ -51,6 +52,9 @@ const DEFAULT_OPENAI_VOICE = "alloy";
 const DEFAULT_EDGE_VOICE = "en-US-MichelleNeural";
 const DEFAULT_EDGE_LANG = "en-US";
 const DEFAULT_EDGE_OUTPUT_FORMAT = "audio-24khz-48kbitrate-mono-mp3";
+const DEFAULT_TELNYX_VOICE = "Telnyx.NaturalHD.astra";
+const DEFAULT_TELNYX_INACTIVITY_TIMEOUT = 20;
+const TELNYX_WS_URL = "wss://api.telnyx.com/v2/text-to-speech/speech";
 
 const DEFAULT_ELEVENLABS_VOICE_SETTINGS = {
   stability: 0.5,
@@ -65,6 +69,8 @@ const TELEGRAM_OUTPUT = {
   // ElevenLabs output formats use codec_sample_rate_bitrate naming.
   // Opus @ 48kHz/64kbps is a good voice-note tradeoff for Telegram.
   elevenlabs: "opus_48000_64",
+  // Telnyx outputs MP3 only (16kHz); not ideal for Telegram voice bubbles but works.
+  telnyx: "mp3_16000" as const,
   extension: ".opus",
   voiceCompatible: true,
 };
@@ -72,6 +78,7 @@ const TELEGRAM_OUTPUT = {
 const DEFAULT_OUTPUT = {
   openai: "mp3" as const,
   elevenlabs: "mp3_44100_128",
+  telnyx: "mp3_16000" as const,
   extension: ".mp3",
   voiceCompatible: false,
 };
@@ -123,6 +130,11 @@ export type ResolvedTtsConfig = {
     saveSubtitles: boolean;
     proxy?: string;
     timeoutMs?: number;
+  };
+  telnyx: {
+    apiKey?: string;
+    voice: string;
+    inactivityTimeout: number;
   };
   prefsPath?: string;
   maxTextLength: number;
@@ -296,6 +308,11 @@ export function resolveTtsConfig(cfg: MoltbotConfig): ResolvedTtsConfig {
       proxy: raw.edge?.proxy?.trim() || undefined,
       timeoutMs: raw.edge?.timeoutMs,
     },
+    telnyx: {
+      apiKey: raw.telnyx?.apiKey,
+      voice: raw.telnyx?.voice?.trim() || DEFAULT_TELNYX_VOICE,
+      inactivityTimeout: raw.telnyx?.inactivityTimeout ?? DEFAULT_TELNYX_INACTIVITY_TIMEOUT,
+    },
     prefsPath: raw.prefsPath,
     maxTextLength: raw.maxTextLength ?? DEFAULT_MAX_TEXT_LENGTH,
     timeoutMs: raw.timeoutMs ?? DEFAULT_TIMEOUT_MS,
@@ -412,6 +429,7 @@ export function getTtsProvider(config: ResolvedTtsConfig, prefsPath: string): Tt
 
   if (resolveTtsApiKey(config, "openai")) return "openai";
   if (resolveTtsApiKey(config, "elevenlabs")) return "elevenlabs";
+  if (resolveTtsApiKey(config, "telnyx")) return "telnyx";
   return "edge";
 }
 
@@ -474,10 +492,13 @@ export function resolveTtsApiKey(
   if (provider === "openai") {
     return config.openai.apiKey || process.env.OPENAI_API_KEY;
   }
+  if (provider === "telnyx") {
+    return config.telnyx.apiKey || process.env.TELNYX_API_KEY;
+  }
   return undefined;
 }
 
-export const TTS_PROVIDERS = ["openai", "elevenlabs", "edge"] as const;
+export const TTS_PROVIDERS = ["openai", "elevenlabs", "telnyx", "edge"] as const;
 
 export function resolveTtsProviderOrder(primary: TtsProvider): TtsProvider[] {
   return [primary, ...TTS_PROVIDERS.filter((provider) => provider !== primary)];
@@ -485,6 +506,7 @@ export function resolveTtsProviderOrder(primary: TtsProvider): TtsProvider[] {
 
 export function isTtsProviderConfigured(config: ResolvedTtsConfig, provider: TtsProvider): boolean {
   if (provider === "edge") return config.edge.enabled;
+  if (provider === "telnyx") return Boolean(resolveTtsApiKey(config, "telnyx"));
   return Boolean(resolveTtsApiKey(config, provider));
 }
 
@@ -587,7 +609,12 @@ function parseTtsDirectives(
         switch (key) {
           case "provider":
             if (!policy.allowProvider) break;
-            if (rawValue === "openai" || rawValue === "elevenlabs" || rawValue === "edge") {
+            if (
+              rawValue === "openai" ||
+              rawValue === "elevenlabs" ||
+              rawValue === "edge" ||
+              rawValue === "telnyx"
+            ) {
               overrides.provider = rawValue;
             } else {
               warnings.push(`unsupported provider "${rawValue}"`);
@@ -1068,6 +1095,79 @@ async function edgeTTS(params: {
   await tts.ttsPromise(text, outputPath);
 }
 
+async function telnyxTTS(params: {
+  text: string;
+  apiKey: string;
+  voice: string;
+  inactivityTimeout: number;
+  timeoutMs: number;
+}): Promise<Buffer> {
+  const { text, apiKey, voice, inactivityTimeout, timeoutMs } = params;
+
+  return new Promise((resolve, reject) => {
+    const url = new URL(TELNYX_WS_URL);
+    url.searchParams.set("voice", voice);
+    if (inactivityTimeout !== DEFAULT_TELNYX_INACTIVITY_TIMEOUT) {
+      url.searchParams.set("inactivity_timeout", String(inactivityTimeout));
+    }
+
+    const ws = new WebSocket(url.toString(), {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+
+    const audioChunks: Buffer[] = [];
+    let completed = false;
+
+    const timeout = setTimeout(() => {
+      if (!completed) {
+        completed = true;
+        ws.close();
+        reject(new Error("Telnyx TTS request timed out"));
+      }
+    }, timeoutMs);
+
+    ws.on("open", () => {
+      // Send initialization frame (required first)
+      ws.send(JSON.stringify({ text: " " }));
+      // Send text frame
+      ws.send(JSON.stringify({ text }));
+      // Send stop frame to signal completion
+      ws.send(JSON.stringify({ text: "" }));
+    });
+
+    ws.on("message", (data: Buffer | string) => {
+      try {
+        const message = JSON.parse(data.toString()) as { audio?: string };
+        if (message.audio) {
+          audioChunks.push(Buffer.from(message.audio, "base64"));
+        }
+      } catch {
+        // Ignore non-JSON messages
+      }
+    });
+
+    ws.on("close", () => {
+      clearTimeout(timeout);
+      if (!completed) {
+        completed = true;
+        if (audioChunks.length === 0) {
+          reject(new Error("Telnyx TTS returned no audio"));
+        } else {
+          resolve(Buffer.concat(audioChunks));
+        }
+      }
+    });
+
+    ws.on("error", (err) => {
+      clearTimeout(timeout);
+      if (!completed) {
+        completed = true;
+        reject(new Error(`Telnyx TTS WebSocket error: ${err.message}`));
+      }
+    });
+  });
+}
+
 export async function textToSpeech(params: {
   text: string;
   cfg: MoltbotConfig;
@@ -1195,6 +1295,14 @@ export async function textToSpeech(params: {
           voiceSettings,
           timeoutMs: config.timeoutMs,
         });
+      } else if (provider === "telnyx") {
+        audioBuffer = await telnyxTTS({
+          text: params.text,
+          apiKey,
+          voice: config.telnyx.voice,
+          inactivityTimeout: config.telnyx.inactivityTimeout,
+          timeoutMs: config.timeoutMs,
+        });
       } else {
         const openaiModelOverride = params.overrides?.openai?.model;
         const openaiVoiceOverride = params.overrides?.openai?.voice;
@@ -1220,7 +1328,12 @@ export async function textToSpeech(params: {
         audioPath,
         latencyMs,
         provider,
-        outputFormat: provider === "openai" ? output.openai : output.elevenlabs,
+        outputFormat:
+          provider === "openai"
+            ? output.openai
+            : provider === "telnyx"
+              ? output.telnyx
+              : output.elevenlabs,
         voiceCompatible: output.voiceCompatible,
       };
     } catch (err) {
@@ -1264,6 +1377,10 @@ export async function textToSpeechTelephony(params: {
     try {
       if (provider === "edge") {
         lastError = "edge: unsupported for telephony";
+        continue;
+      }
+      if (provider === "telnyx") {
+        lastError = "telnyx: unsupported for telephony (MP3 output only)";
         continue;
       }
 

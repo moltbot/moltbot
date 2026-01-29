@@ -202,6 +202,14 @@ describe("tts", () => {
       expect(result.overrides.provider).toBe("edge");
     });
 
+    it("accepts telnyx as provider override", () => {
+      const policy = resolveModelOverridePolicy({ enabled: true });
+      const input = "Hello [[tts:provider=telnyx]] world";
+      const result = parseTtsDirectives(input, policy);
+
+      expect(result.overrides.provider).toBe("telnyx");
+    });
+
     it("keeps text intact when overrides are disabled", () => {
       const policy = resolveModelOverridePolicy({ enabled: false });
       const input = "Hello [[tts:voice=alloy]] world";
@@ -426,11 +434,28 @@ describe("tts", () => {
           OPENAI_API_KEY: undefined,
           ELEVENLABS_API_KEY: undefined,
           XI_API_KEY: undefined,
+          TELNYX_API_KEY: undefined,
         },
         () => {
           const config = resolveTtsConfig(baseCfg);
           const provider = getTtsProvider(config, "/tmp/tts-prefs-edge.json");
           expect(provider).toBe("edge");
+        },
+      );
+    });
+
+    it("prefers Telnyx when OpenAI and ElevenLabs are missing and Telnyx key exists", () => {
+      withEnv(
+        {
+          OPENAI_API_KEY: undefined,
+          ELEVENLABS_API_KEY: undefined,
+          XI_API_KEY: undefined,
+          TELNYX_API_KEY: "test-telnyx-key",
+        },
+        () => {
+          const config = resolveTtsConfig(baseCfg);
+          const provider = getTtsProvider(config, "/tmp/tts-prefs-telnyx.json");
+          expect(provider).toBe("telnyx");
         },
       );
     });

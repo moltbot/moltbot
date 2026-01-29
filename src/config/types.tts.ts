@@ -1,4 +1,4 @@
-export type TtsProvider = "elevenlabs" | "openai" | "edge";
+export type TtsProvider = "elevenlabs" | "openai" | "edge" | "telnyx";
 
 export type TtsMode = "final" | "all";
 
@@ -72,6 +72,14 @@ export type TtsConfig = {
     saveSubtitles?: boolean;
     proxy?: string;
     timeoutMs?: number;
+  };
+  /** Telnyx TTS configuration. */
+  telnyx?: {
+    apiKey?: string;
+    /** Voice ID (e.g. "Telnyx.NaturalHD.astra", "Telnyx.Kokoro.af_heart"). */
+    voice?: string;
+    /** WebSocket inactivity timeout in seconds (default: 20). */
+    inactivityTimeout?: number;
   };
   /** Optional path for local TTS user preferences JSON. */
   prefsPath?: string;
