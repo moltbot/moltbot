@@ -16,6 +16,7 @@ Status: beta.
 - Agents: summarize dropped messages during compaction safeguard pruning. (#2509) Thanks @jogi47.
 - Memory Search: allow extra paths for memory indexing (ignores symlinks). (#3600) Thanks @kira-ariaki.
 - Skills: add multi-image input support to Nano Banana Pro skill. (#1958) Thanks @tyler6204.
+- CLI/Onboarding: add LLM Gateway API key auth option in configure/onboard.
 - Agents: honor tools.exec.safeBins in exec allowlist checks. (#2281)
 - Matrix: switch plugin SDK to @vector-im/matrix-bot-sdk.
 - Docs: tighten Fly private deployment steps. (#2289) Thanks @dguido.

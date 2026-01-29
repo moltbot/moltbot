@@ -9,6 +9,7 @@ import { applyGoogleGeminiModelDefault } from "../../google-gemini-model-default
 import {
   applyAuthProfileConfig,
   applyKimiCodeConfig,
+  applyLlmgatewayConfig,
   applyMinimaxApiConfig,
   applyMinimaxConfig,
   applyMoonshotConfig,
@@ -21,6 +22,7 @@ import {
   setAnthropicApiKey,
   setGeminiApiKey,
   setKimiCodeApiKey,
+  setLlmgatewayApiKey,
   setMinimaxApiKey,
   setMoonshotApiKey,
   setOpencodeZenApiKey,
@@ -212,6 +214,25 @@ export async function applyNonInteractiveAuthChoice(params: {
       mode: "api_key",
     });
     return applyOpenrouterConfig(nextConfig);
+  }
+
+  if (authChoice === "llmgateway-api-key") {
+    const resolved = await resolveNonInteractiveApiKey({
+      provider: "llmgateway",
+      cfg: baseConfig,
+      flagValue: opts.llmgatewayApiKey,
+      flagName: "--llmgateway-api-key",
+      envVar: "LLM_GATEWAY_API_KEY",
+      runtime,
+    });
+    if (!resolved) return null;
+    if (resolved.source !== "profile") await setLlmgatewayApiKey(resolved.key);
+    nextConfig = applyAuthProfileConfig(nextConfig, {
+      profileId: "llmgateway:default",
+      provider: "llmgateway",
+      mode: "api_key",
+    });
+    return applyLlmgatewayConfig(nextConfig);
   }
 
   if (authChoice === "ai-gateway-api-key") {

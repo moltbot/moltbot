@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   applyAuthProfileConfig,
+  applyLlmgatewayConfig,
+  applyLlmgatewayProviderConfig,
   applyMinimaxApiConfig,
   applyMinimaxApiProviderConfig,
   applyOpencodeZenConfig,
@@ -15,6 +17,7 @@ import {
   applyOpenrouterProviderConfig,
   applySyntheticConfig,
   applySyntheticProviderConfig,
+  LLMGATEWAY_DEFAULT_MODEL_REF,
   OPENROUTER_DEFAULT_MODEL_REF,
   SYNTHETIC_DEFAULT_MODEL_ID,
   SYNTHETIC_DEFAULT_MODEL_REF,
@@ -411,6 +414,45 @@ describe("applyOpenrouterConfig", () => {
 
   it("preserves existing model fallbacks", () => {
     const cfg = applyOpenrouterConfig({
+      agents: {
+        defaults: {
+          model: { fallbacks: ["anthropic/claude-opus-4-5"] },
+        },
+      },
+    });
+    expect(cfg.agents?.defaults?.model?.fallbacks).toEqual(["anthropic/claude-opus-4-5"]);
+  });
+});
+
+describe("applyLlmgatewayProviderConfig", () => {
+  it("adds allowlist entry for the default model", () => {
+    const cfg = applyLlmgatewayProviderConfig({});
+    const models = cfg.agents?.defaults?.models ?? {};
+    expect(Object.keys(models)).toContain(LLMGATEWAY_DEFAULT_MODEL_REF);
+  });
+
+  it("preserves existing alias for the default model", () => {
+    const cfg = applyLlmgatewayProviderConfig({
+      agents: {
+        defaults: {
+          models: {
+            [LLMGATEWAY_DEFAULT_MODEL_REF]: { alias: "Gateway" },
+          },
+        },
+      },
+    });
+    expect(cfg.agents?.defaults?.models?.[LLMGATEWAY_DEFAULT_MODEL_REF]?.alias).toBe("Gateway");
+  });
+});
+
+describe("applyLlmgatewayConfig", () => {
+  it("sets correct primary model", () => {
+    const cfg = applyLlmgatewayConfig({});
+    expect(cfg.agents?.defaults?.model?.primary).toBe(LLMGATEWAY_DEFAULT_MODEL_REF);
+  });
+
+  it("preserves existing model fallbacks", () => {
+    const cfg = applyLlmgatewayConfig({
       agents: {
         defaults: {
           model: { fallbacks: ["anthropic/claude-opus-4-5"] },

@@ -12,6 +12,7 @@ import {
 } from "../agents/venice-models.js";
 import type { MoltbotConfig } from "../config/config.js";
 import {
+  LLMGATEWAY_DEFAULT_MODEL_REF,
   OPENROUTER_DEFAULT_MODEL_REF,
   VERCEL_AI_GATEWAY_DEFAULT_MODEL_REF,
   ZAI_DEFAULT_MODEL_REF,
@@ -131,6 +132,47 @@ export function applyOpenrouterConfig(cfg: MoltbotConfig): MoltbotConfig {
               }
             : undefined),
           primary: OPENROUTER_DEFAULT_MODEL_REF,
+        },
+      },
+    },
+  };
+}
+
+export function applyLlmgatewayProviderConfig(cfg: MoltbotConfig): MoltbotConfig {
+  const models = { ...cfg.agents?.defaults?.models };
+  models[LLMGATEWAY_DEFAULT_MODEL_REF] = {
+    ...models[LLMGATEWAY_DEFAULT_MODEL_REF],
+    alias: models[LLMGATEWAY_DEFAULT_MODEL_REF]?.alias ?? "LLM Gateway",
+  };
+
+  return {
+    ...cfg,
+    agents: {
+      ...cfg.agents,
+      defaults: {
+        ...cfg.agents?.defaults,
+        models,
+      },
+    },
+  };
+}
+
+export function applyLlmgatewayConfig(cfg: MoltbotConfig): MoltbotConfig {
+  const next = applyLlmgatewayProviderConfig(cfg);
+  const existingModel = next.agents?.defaults?.model;
+  return {
+    ...next,
+    agents: {
+      ...next.agents,
+      defaults: {
+        ...next.agents?.defaults,
+        model: {
+          ...(existingModel && "fallbacks" in (existingModel as Record<string, unknown>)
+            ? {
+                fallbacks: (existingModel as { fallbacks?: string[] }).fallbacks,
+              }
+            : undefined),
+          primary: LLMGATEWAY_DEFAULT_MODEL_REF,
         },
       },
     },
