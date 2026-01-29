@@ -13,6 +13,7 @@ import {
   SYNTHETIC_MODEL_CATALOG,
 } from "./synthetic-models.js";
 import { discoverVeniceModels, VENICE_BASE_URL } from "./venice-models.js";
+import { discoverAllShengSuanYunModels, SHENGSUANYUN_BASE_URL } from "./shengsuanyun-models.js";
 
 type ModelsConfig = NonNullable<MoltbotConfig["models"]>;
 export type ProviderConfig = NonNullable<ModelsConfig["providers"]>[string];
@@ -359,6 +360,15 @@ async function buildOllamaProvider(): Promise<ProviderConfig> {
   };
 }
 
+async function buildShengSuanYunProvider(): Promise<ProviderConfig> {
+  const models = await discoverAllShengSuanYunModels();
+  return {
+    baseUrl: SHENGSUANYUN_BASE_URL,
+    api: "openai-completions",
+    models,
+  };
+}
+
 export async function resolveImplicitProviders(params: {
   agentDir: string;
 }): Promise<ModelsConfig["providers"]> {
@@ -416,6 +426,14 @@ export async function resolveImplicitProviders(params: {
     resolveApiKeyFromProfiles({ provider: "ollama", store: authStore });
   if (ollamaKey) {
     providers.ollama = { ...(await buildOllamaProvider()), apiKey: ollamaKey };
+  }
+
+  // ShengSuanYun provider - only add if explicitly configured
+  const shengsuanyunKey =
+    resolveEnvApiKeyVarName("shengsuanyun") ??
+    resolveApiKeyFromProfiles({ provider: "shengsuanyun", store: authStore });
+  if (shengsuanyunKey) {
+    providers.shengsuanyun = { ...(await buildShengSuanYunProvider()), apiKey: shengsuanyunKey };
   }
 
   return providers;

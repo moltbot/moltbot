@@ -10,9 +10,11 @@ import {
   VENICE_DEFAULT_MODEL_REF,
   VENICE_MODEL_CATALOG,
 } from "../agents/venice-models.js";
+import { SHENGSUANYUN_BASE_URL } from "../agents/shengsuanyun-models.js";
 import type { MoltbotConfig } from "../config/config.js";
 import {
   OPENROUTER_DEFAULT_MODEL_REF,
+  SHENGSUANYUN_DEFAULT_MODEL_REF,
   VERCEL_AI_GATEWAY_DEFAULT_MODEL_REF,
   ZAI_DEFAULT_MODEL_REF,
 } from "./onboard-auth.credentials.js";
@@ -405,6 +407,76 @@ export function applyVeniceConfig(cfg: MoltbotConfig): MoltbotConfig {
               }
             : undefined),
           primary: VENICE_DEFAULT_MODEL_REF,
+        },
+      },
+    },
+  };
+}
+
+/**
+ * Apply ShengSuanYun provider configuration only (adds to models.providers).
+ */
+export function applyShengSuanYunProviderConfig(cfg: MoltbotConfig): MoltbotConfig {
+  const models = { ...cfg.agents?.defaults?.models };
+  models[SHENGSUANYUN_DEFAULT_MODEL_REF] = {
+    ...models[SHENGSUANYUN_DEFAULT_MODEL_REF],
+    alias: models[SHENGSUANYUN_DEFAULT_MODEL_REF]?.alias ?? "ShengSuanYun",
+  };
+
+  const providers = { ...cfg.models?.providers };
+  const existingProvider = providers.shengsuanyun;
+  const { apiKey: existingApiKey, ...existingProviderRest } = (existingProvider ?? {}) as Record<
+    string,
+    unknown
+  > as { apiKey?: string };
+  const resolvedApiKey = typeof existingApiKey === "string" ? existingApiKey : undefined;
+  const normalizedApiKey = resolvedApiKey?.trim();
+
+  providers.shengsuanyun = {
+    ...existingProviderRest,
+    baseUrl: SHENGSUANYUN_BASE_URL,
+    api: "openai-completions",
+    ...(normalizedApiKey ? { apiKey: normalizedApiKey } : {}),
+    // Models will be discovered automatically by resolveImplicitProviders
+    models: [],
+  };
+
+  return {
+    ...cfg,
+    agents: {
+      ...cfg.agents,
+      defaults: {
+        ...cfg.agents?.defaults,
+        models,
+      },
+    },
+    models: {
+      mode: cfg.models?.mode ?? "merge",
+      providers,
+    },
+  };
+}
+
+/**
+ * Apply ShengSuanYun provider configuration AND set ShengSuanYun as the default model.
+ * Use this when ShengSuanYun is the primary provider choice during onboarding.
+ */
+export function applyShengSuanYunConfig(cfg: MoltbotConfig): MoltbotConfig {
+  const next = applyShengSuanYunProviderConfig(cfg);
+  const existingModel = next.agents?.defaults?.model;
+  return {
+    ...next,
+    agents: {
+      ...next.agents,
+      defaults: {
+        ...next.agents?.defaults,
+        model: {
+          ...(existingModel && "fallbacks" in (existingModel as Record<string, unknown>)
+            ? {
+                fallbacks: (existingModel as { fallbacks?: string[] }).fallbacks,
+              }
+            : undefined),
+          primary: SHENGSUANYUN_DEFAULT_MODEL_REF,
         },
       },
     },

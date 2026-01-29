@@ -12,6 +12,10 @@ import {
   GOOGLE_GEMINI_DEFAULT_MODEL,
 } from "./google-gemini-model-default.js";
 import {
+  setShengSuanYunApiKey,
+  SHENGSUANYUN_DEFAULT_MODEL_REF,
+} from "./onboard-auth.credentials.js";
+import {
   applyAuthProfileConfig,
   applyKimiCodeConfig,
   applyKimiCodeProviderConfig,
@@ -21,6 +25,8 @@ import {
   applyOpencodeZenProviderConfig,
   applyOpenrouterConfig,
   applyOpenrouterProviderConfig,
+  applyShengSuanYunConfig,
+  applyShengSuanYunProviderConfig,
   applySyntheticConfig,
   applySyntheticProviderConfig,
   applyVeniceConfig,
@@ -577,6 +583,74 @@ export async function applyAuthChoiceApiProviders(
       agentModelOverride = applied.agentModelOverride ?? agentModelOverride;
     }
     return { config: nextConfig, agentModelOverride };
+  }
+
+  if (authChoice === "shengsuanyun-api-key") {
+    const store = ensureAuthProfileStore(params.agentDir, { allowKeychainPrompt: false });
+    const profileOrder = resolveAuthProfileOrder({
+      cfg: nextConfig,
+      store,
+      provider: "shengsuanyun",
+    });
+    const existingProfileId = profileOrder.find((profileId) => Boolean(store.profiles[profileId]));
+    const existingCred = existingProfileId ? store.profiles[existingProfileId] : undefined;
+    let profileId = "shengsuanyun:default";
+    let mode: "api_key" | "token" = "api_key";
+    let hasCredential = false;
+
+    if (existingProfileId && existingCred?.type) {
+      profileId = existingProfileId;
+      mode = existingCred.type === "token" ? "token" : "api_key";
+      hasCredential = true;
+    }
+
+    if (!hasCredential && params.opts?.token && params.opts?.tokenProvider === "shengsuanyun") {
+      await setShengSuanYunApiKey(normalizeApiKeyInput(params.opts.token), params.agentDir);
+      hasCredential = true;
+    }
+
+    if (!hasCredential) {
+      const envKey = resolveEnvApiKey("shengsuanyun");
+      if (envKey) {
+        const useExisting = await params.prompter.confirm({
+          message: `Use existing SHENGSUANYUN_API_KEY (${envKey.source}, ${formatApiKeyPreview(envKey.apiKey)})?`,
+          initialValue: true,
+        });
+        if (useExisting) {
+          await setShengSuanYunApiKey(envKey.apiKey, params.agentDir);
+          hasCredential = true;
+        }
+      }
+    }
+
+    if (!hasCredential) {
+      const key = await params.prompter.text({
+        message: "Enter ShengSuanYun API key",
+        validate: validateApiKeyInput,
+      });
+      await setShengSuanYunApiKey(normalizeApiKeyInput(String(key)), params.agentDir);
+      hasCredential = true;
+    }
+
+    if (hasCredential) {
+      nextConfig = applyAuthProfileConfig(nextConfig, {
+        profileId,
+        provider: "shengsuanyun",
+        mode,
+      });
+    }
+    const applied = await applyDefaultModelChoice({
+      config: nextConfig,
+      setDefaultModel: params.setDefaultModel,
+      defaultModel: SHENGSUANYUN_DEFAULT_MODEL_REF,
+      applyDefaultConfig: applyShengSuanYunConfig,
+      applyProviderConfig: applyShengSuanYunProviderConfig,
+      noteDefault: SHENGSUANYUN_DEFAULT_MODEL_REF,
+      noteAgentModel,
+      prompter: params.prompter,
+    });
+    agentModelOverride = applied.agentModelOverride ?? agentModelOverride;
+    return { config: applied.config, agentModelOverride };
   }
 
   return null;

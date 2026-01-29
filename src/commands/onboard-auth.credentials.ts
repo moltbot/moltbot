@@ -164,3 +164,17 @@ export async function setOpencodeZenApiKey(key: string, agentDir?: string) {
     agentDir: resolveAuthAgentDir(agentDir),
   });
 }
+
+export const SHENGSUANYUN_DEFAULT_MODEL_REF = "shengsuanyun/openai/gpt-5-nano";
+export async function setShengSuanYunApiKey(key: string, agentDir?: string) {
+  // Write to resolved agent dir so gateway finds credentials on startup.
+  upsertAuthProfile({
+    profileId: "shengsuanyun:default",
+    credential: {
+      type: "api_key",
+      provider: "shengsuanyun",
+      key,
+    },
+    agentDir: resolveAuthAgentDir(agentDir),
+  });
+}

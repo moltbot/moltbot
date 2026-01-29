@@ -20,7 +20,8 @@ export type AuthChoiceGroupId =
   | "minimax"
   | "synthetic"
   | "venice"
-  | "qwen";
+  | "qwen"
+  | "shengsuanyun";
 
 export type AuthChoiceGroup = {
   value: AuthChoiceGroupId;
@@ -113,6 +114,12 @@ const AUTH_CHOICE_GROUP_DEFS: {
     hint: "API key",
     choices: ["opencode-zen"],
   },
+  {
+    value: "shengsuanyun",
+    label: "ShengSuanYun",
+    hint: "API key",
+    choices: ["shengsuanyun-api-key"],
+  },
 ];
 
 export function buildAuthChoiceOptions(params: {
@@ -142,6 +149,7 @@ export function buildAuthChoiceOptions(params: {
   options.push({ value: "moonshot-api-key", label: "Moonshot AI API key" });
   options.push({ value: "kimi-code-api-key", label: "Kimi Code API key" });
   options.push({ value: "synthetic-api-key", label: "Synthetic API key" });
+  options.push({ value: "shengsuanyun-api-key", label: "ShengSuanYun API key" });
   options.push({
     value: "venice-api-key",
     label: "Venice AI API key",
