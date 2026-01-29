@@ -145,6 +145,8 @@ struct GeneralSettings: View {
                 self.remoteDirectRow
             }
 
+            self.remoteTokenRow
+
             GatewayDiscoveryInlineList(
                 discovery: self.gatewayDiscovery,
                 currentTarget: self.state.remoteTarget,
@@ -299,6 +301,23 @@ struct GeneralSettings: View {
                     .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             Text("Direct mode requires a ws:// or wss:// URL (Tailscale Serve uses wss://<magicdns>).")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.leading, self.remoteLabelWidth + 10)
+        }
+    }
+
+    private var remoteTokenRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .center, spacing: 10) {
+                Text("Gateway token")
+                    .font(.callout.weight(.semibold))
+                    .frame(width: self.remoteLabelWidth, alignment: .leading)
+                SecureField("Shared gateway auth token", text: self.$state.remoteToken)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: .infinity)
+            }
+            Text("Must match gateway.auth.token (or gateway.remote.token) on the gateway host.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.leading, self.remoteLabelWidth + 10)
