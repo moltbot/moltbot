@@ -11,21 +11,27 @@ describe("applyPluginAutoEnable", () => {
       env: {},
     });
 
-    expect(result.config.plugins?.entries?.slack?.enabled).toBe(true);
-    expect(result.config.plugins?.allow).toEqual(["telegram", "slack"]);
+    // Built-in channels (slack) are enabled via channels.<id>.enabled, not plugins.entries.
+    expect((result.config.channels as Record<string, unknown>)?.slack).toMatchObject({
+      enabled: true,
+    });
+    // Built-in channels don't need plugins.allow entry.
+    expect(result.config.plugins?.allow).toEqual(["telegram"]);
     expect(result.changes.join("\n")).toContain("Slack configured, not enabled yet.");
   });
 
   it("respects explicit disable", () => {
     const result = applyPluginAutoEnable({
       config: {
-        channels: { slack: { botToken: "x" } },
-        plugins: { entries: { slack: { enabled: false } } },
+        channels: { slack: { botToken: "x", enabled: false } },
       },
       env: {},
     });
 
-    expect(result.config.plugins?.entries?.slack?.enabled).toBe(false);
+    // Built-in channels check enabled in channels.<id>.enabled.
+    expect((result.config.channels as Record<string, unknown>)?.slack).toMatchObject({
+      enabled: false,
+    });
     expect(result.changes).toEqual([]);
   });
 
@@ -72,8 +78,12 @@ describe("applyPluginAutoEnable", () => {
         env: {},
       });
 
+      // bluebubbles is a plugin channel, so it goes to plugins.entries.
       expect(result.config.plugins?.entries?.bluebubbles?.enabled).toBe(true);
-      expect(result.config.plugins?.entries?.imessage?.enabled).toBeUndefined();
+      // imessage is a built-in channel, but it's skipped due to preferOver.
+      expect((result.config.channels as Record<string, unknown>)?.imessage).not.toMatchObject({
+        enabled: true,
+      });
       expect(result.changes.join("\n")).toContain("bluebubbles configured, not enabled yet.");
       expect(result.changes.join("\n")).not.toContain("iMessage configured, not enabled yet.");
     });
@@ -83,15 +93,17 @@ describe("applyPluginAutoEnable", () => {
         config: {
           channels: {
             bluebubbles: { serverUrl: "http://localhost:1234", password: "x" },
-            imessage: { cliPath: "/usr/local/bin/imsg" },
+            imessage: { cliPath: "/usr/local/bin/imsg", enabled: true },
           },
-          plugins: { entries: { imessage: { enabled: true } } },
         },
         env: {},
       });
 
       expect(result.config.plugins?.entries?.bluebubbles?.enabled).toBe(true);
-      expect(result.config.plugins?.entries?.imessage?.enabled).toBe(true);
+      // imessage was already enabled in channels, stays enabled.
+      expect((result.config.channels as Record<string, unknown>)?.imessage).toMatchObject({
+        enabled: true,
+      });
     });
 
     it("allows imessage auto-enable when bluebubbles is explicitly disabled", () => {
@@ -107,7 +119,10 @@ describe("applyPluginAutoEnable", () => {
       });
 
       expect(result.config.plugins?.entries?.bluebubbles?.enabled).toBe(false);
-      expect(result.config.plugins?.entries?.imessage?.enabled).toBe(true);
+      // imessage is a built-in channel, so it goes to channels.imessage.enabled.
+      expect((result.config.channels as Record<string, unknown>)?.imessage).toMatchObject({
+        enabled: true,
+      });
       expect(result.changes.join("\n")).toContain("iMessage configured, not enabled yet.");
     });
 
@@ -124,7 +139,10 @@ describe("applyPluginAutoEnable", () => {
       });
 
       expect(result.config.plugins?.entries?.bluebubbles?.enabled).toBeUndefined();
-      expect(result.config.plugins?.entries?.imessage?.enabled).toBe(true);
+      // imessage is a built-in channel, so it goes to channels.imessage.enabled.
+      expect((result.config.channels as Record<string, unknown>)?.imessage).toMatchObject({
+        enabled: true,
+      });
     });
 
     it("enables imessage normally when only imessage is configured", () => {
@@ -135,7 +153,10 @@ describe("applyPluginAutoEnable", () => {
         env: {},
       });
 
-      expect(result.config.plugins?.entries?.imessage?.enabled).toBe(true);
+      // imessage is a built-in channel, so it goes to channels.imessage.enabled.
+      expect((result.config.channels as Record<string, unknown>)?.imessage).toMatchObject({
+        enabled: true,
+      });
       expect(result.changes.join("\n")).toContain("iMessage configured, not enabled yet.");
     });
   });

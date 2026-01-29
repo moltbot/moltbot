@@ -270,8 +270,26 @@ function resolveConfiguredPlugins(
 }
 
 function isPluginExplicitlyDisabled(cfg: MoltbotConfig, pluginId: string): boolean {
+  // Built-in channels use channels.<id>.enabled, not plugins.entries.
+  const builtinChannelId = normalizeChatChannelId(pluginId);
+  if (builtinChannelId) {
+    const channels = cfg.channels as Record<string, unknown> | undefined;
+    const entry = channels?.[builtinChannelId];
+    return isRecord(entry) && entry.enabled === false;
+  }
   const entry = cfg.plugins?.entries?.[pluginId];
   return entry?.enabled === false;
+}
+
+function isPluginAlreadyEnabled(cfg: MoltbotConfig, pluginId: string): boolean {
+  // Built-in channels use channels.<id>.enabled, not plugins.entries.
+  const builtinChannelId = normalizeChatChannelId(pluginId);
+  if (builtinChannelId) {
+    const channels = cfg.channels as Record<string, unknown> | undefined;
+    const entry = channels?.[builtinChannelId];
+    return isRecord(entry) && entry.enabled === true;
+  }
+  return cfg.plugins?.entries?.[pluginId]?.enabled === true;
 }
 
 function isPluginDenied(cfg: MoltbotConfig, pluginId: string): boolean {
@@ -317,7 +335,29 @@ function ensureAllowlisted(cfg: MoltbotConfig, pluginId: string): MoltbotConfig 
   };
 }
 
+function enableBuiltinChannel(cfg: MoltbotConfig, channelId: string): MoltbotConfig {
+  const channels = cfg.channels as Record<string, unknown> | undefined;
+  const existingEntry = channels?.[channelId];
+  const channelEntry = isRecord(existingEntry) ? existingEntry : {};
+  return {
+    ...cfg,
+    channels: {
+      ...channels,
+      [channelId]: {
+        ...channelEntry,
+        enabled: true,
+      },
+    },
+  };
+}
+
 function enablePluginEntry(cfg: MoltbotConfig, pluginId: string): MoltbotConfig {
+  // Built-in channels should be enabled via channels.<id>.enabled, not plugins.entries.
+  const builtinChannelId = normalizeChatChannelId(pluginId);
+  if (builtinChannelId) {
+    return enableBuiltinChannel(cfg, builtinChannelId);
+  }
+
   const entries = {
     ...cfg.plugins?.entries,
     [pluginId]: {
@@ -366,12 +406,24 @@ export function applyPluginAutoEnable(params: {
     if (isPluginDenied(next, entry.pluginId)) continue;
     if (isPluginExplicitlyDisabled(next, entry.pluginId)) continue;
     if (shouldSkipPreferredPluginAutoEnable(next, entry, configured)) continue;
-    const allow = next.plugins?.allow;
-    const allowMissing = Array.isArray(allow) && !allow.includes(entry.pluginId);
-    const alreadyEnabled = next.plugins?.entries?.[entry.pluginId]?.enabled === true;
-    if (alreadyEnabled && !allowMissing) continue;
+
+    const isBuiltinChannel = normalizeChatChannelId(entry.pluginId) !== null;
+    const alreadyEnabled = isPluginAlreadyEnabled(next, entry.pluginId);
+
+    // For plugin channels, also check plugins.allow list.
+    if (!isBuiltinChannel) {
+      const allow = next.plugins?.allow;
+      const allowMissing = Array.isArray(allow) && !allow.includes(entry.pluginId);
+      if (alreadyEnabled && !allowMissing) continue;
+    } else {
+      if (alreadyEnabled) continue;
+    }
+
     next = enablePluginEntry(next, entry.pluginId);
-    next = ensureAllowlisted(next, entry.pluginId);
+    // Built-in channels don't need plugins.allow entry.
+    if (!isBuiltinChannel) {
+      next = ensureAllowlisted(next, entry.pluginId);
+    }
     changes.push(formatAutoEnableChange(entry));
   }
 
