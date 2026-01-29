@@ -61,11 +61,13 @@ export async function onboardCommand(opts: OnboardOptions, runtime: RuntimeEnv =
   }
 
   if (process.platform === "win32") {
+    const { resolveLocaleFromEnv, t } = await import("../i18n/i18n.js");
+    const locale = resolveLocaleFromEnv();
     runtime.log(
       [
-        "Windows detected.",
-        "WSL2 is strongly recommended; native Windows is untested and more problematic.",
-        "Guide: https://docs.molt.bot/windows",
+        t(locale, "windows.detected"),
+        t(locale, "windows.recommend"),
+        t(locale, "windows.guide"),
       ].join("\n"),
     );
   }

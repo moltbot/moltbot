@@ -23,6 +23,30 @@ If you want a personal, single-user assistant that feels local, fast, and always
 
 [Website](https://molt.bot) · [Docs](https://docs.molt.bot) · [Getting Started](https://docs.molt.bot/start/getting-started) · [Updating](https://docs.molt.bot/install/updating) · [Showcase](https://docs.molt.bot/start/showcase) · [FAQ](https://docs.molt.bot/start/faq) · [Wizard](https://docs.molt.bot/start/wizard) · [Nix](https://github.com/moltbot/nix-clawdbot) · [Docker](https://docs.molt.bot/install/docker) · [Discord](https://discord.gg/clawd)
 
+## 繁體中文（zh-TW）
+
+此 fork 目標是把 **CLI 安裝/初始化流程（`moltbot onboard` / wizard）** 加入繁體中文介面。
+
+### 啟用繁中介面
+
+macOS / Linux（zsh/bash）：
+
+```bash
+export MOLTBOT_LANG=zh-TW
+moltbot onboard --install-daemon
+```
+
+Windows（PowerShell）：
+
+```powershell
+$env:MOLTBOT_LANG = "zh-TW"
+moltbot onboard --install-daemon
+```
+
+也支援從系統語系自動判斷（例如 `LANG=zh_TW.UTF-8`）。
+
+---
+
 Preferred setup: run the onboarding wizard (`moltbot onboard`). It walks through gateway, workspace, channels, and skills. The CLI wizard is the recommended path and works on **macOS, Linux, and Windows (via WSL2; strongly recommended)**.
 Works with npm, pnpm, or bun.
 New install? Start here: [Getting started](https://docs.molt.bot/start/getting-started)

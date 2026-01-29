@@ -38,6 +38,7 @@ import { logConfigUpdated } from "../config/logging.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { defaultRuntime } from "../runtime.js";
 import { resolveUserPath } from "../utils.js";
+import { resolveLocaleFromEnv, t } from "../i18n/i18n.js";
 import { finalizeOnboardingWizard } from "./onboarding.finalize.js";
 import { configureGatewayForOnboarding } from "./onboarding.gateway-config.js";
 import type { QuickstartGatewayDefaults, WizardFlow } from "./onboarding.types.js";
@@ -49,34 +50,61 @@ async function requireRiskAcknowledgement(params: {
 }) {
   if (params.opts.acceptRisk === true) return;
 
+  const locale = resolveLocaleFromEnv();
+
+  const securityBodyEn = [
+    "Security warning — please read.",
+    "",
+    "Moltbot is a hobby project and still in beta. Expect sharp edges.",
+    "This bot can read files and run actions if tools are enabled.",
+    "A bad prompt can trick it into doing unsafe things.",
+    "",
+    "If you’re not comfortable with basic security and access control, don’t run Moltbot.",
+    "Ask someone experienced to help before enabling tools or exposing it to the internet.",
+    "",
+    "Recommended baseline:",
+    "- Pairing/allowlists + mention gating.",
+    "- Sandbox + least-privilege tools.",
+    "- Keep secrets out of the agent’s reachable filesystem.",
+    "- Use the strongest available model for any bot with tools or untrusted inboxes.",
+    "",
+    "Run regularly:",
+    "moltbot security audit --deep",
+    "moltbot security audit --fix",
+    "",
+    "Must read: https://docs.molt.bot/gateway/security",
+  ];
+
+  const securityBodyZhTw = [
+    "安全警告 — 請務必先閱讀。",
+    "",
+    "Moltbot 是一個興趣專案，目前仍在 beta，請預期會有一些粗糙邊角。",
+    "當你啟用工具（tools）後，這個 bot 可能具備讀檔/執行動作的能力。",
+    "不良提示（prompt）可能誘導它做出不安全的操作。",
+    "",
+    "如果你不熟悉基本資安與存取控制，建議不要直接在生產環境跑 Moltbot。",
+    "在啟用工具或把它暴露到網路前，請找有經驗的人協助檢視設定。",
+    "",
+    "建議底線（baseline）：",
+    "- Pairing/allowlists + mention gating（配對/白名單 + 只回應@提及）",
+    "- Sandbox + 最小權限工具",
+    "- 不要把機密放在 agent 可讀到的檔案系統",
+    "- 有工具或會讀不受信任訊息時，請用你能用到的最強模型",
+    "",
+    "建議定期執行：",
+    "moltbot security audit --deep",
+    "moltbot security audit --fix",
+    "",
+    "必讀：https://docs.molt.bot/gateway/security",
+  ];
+
   await params.prompter.note(
-    [
-      "Security warning — please read.",
-      "",
-      "Moltbot is a hobby project and still in beta. Expect sharp edges.",
-      "This bot can read files and run actions if tools are enabled.",
-      "A bad prompt can trick it into doing unsafe things.",
-      "",
-      "If you’re not comfortable with basic security and access control, don’t run Moltbot.",
-      "Ask someone experienced to help before enabling tools or exposing it to the internet.",
-      "",
-      "Recommended baseline:",
-      "- Pairing/allowlists + mention gating.",
-      "- Sandbox + least-privilege tools.",
-      "- Keep secrets out of the agent’s reachable filesystem.",
-      "- Use the strongest available model for any bot with tools or untrusted inboxes.",
-      "",
-      "Run regularly:",
-      "moltbot security audit --deep",
-      "moltbot security audit --fix",
-      "",
-      "Must read: https://docs.molt.bot/gateway/security",
-    ].join("\n"),
-    "Security",
+    (locale === "zh-TW" ? securityBodyZhTw : securityBodyEn).join("\n"),
+    t(locale, "security.title"),
   );
 
   const ok = await params.prompter.confirm({
-    message: "I understand this is powerful and inherently risky. Continue?",
+    message: t(locale, "security.confirm"),
     initialValue: false,
   });
   if (!ok) {
@@ -89,23 +117,27 @@ export async function runOnboardingWizard(
   runtime: RuntimeEnv = defaultRuntime,
   prompter: WizardPrompter,
 ) {
+  const locale = resolveLocaleFromEnv();
+
   printWizardHeader(runtime);
-  await prompter.intro("Moltbot onboarding");
+  await prompter.intro(t(locale, "onboard.intro"));
   await requireRiskAcknowledgement({ opts, prompter });
 
   const snapshot = await readConfigFileSnapshot();
   let baseConfig: MoltbotConfig = snapshot.valid ? snapshot.config : {};
 
   if (snapshot.exists && !snapshot.valid) {
-    await prompter.note(summarizeExistingConfig(baseConfig), "Invalid config");
+    await prompter.note(summarizeExistingConfig(baseConfig), t(locale, "onboard.configInvalid"));
     if (snapshot.issues.length > 0) {
       await prompter.note(
         [
           ...snapshot.issues.map((iss) => `- ${iss.path}: ${iss.message}`),
           "",
-          "Docs: https://docs.molt.bot/gateway/configuration",
+          locale === "zh-TW"
+            ? "文件：https://docs.molt.bot/gateway/configuration"
+            : "Docs: https://docs.molt.bot/gateway/configuration",
         ].join("\n"),
-        "Config issues",
+        t(locale, "onboard.configIssues"),
       );
     }
     await prompter.outro(
@@ -135,47 +167,49 @@ export async function runOnboardingWizard(
   let flow: WizardFlow =
     explicitFlow ??
     ((await prompter.select({
-      message: "Onboarding mode",
+      message: t(locale, "onboard.mode"),
       options: [
-        { value: "quickstart", label: "QuickStart", hint: quickstartHint },
-        { value: "advanced", label: "Manual", hint: manualHint },
+        { value: "quickstart", label: t(locale, "onboard.mode.quickstart"), hint: quickstartHint },
+        { value: "advanced", label: t(locale, "onboard.mode.manual"), hint: manualHint },
       ],
       initialValue: "quickstart",
     })) as "quickstart" | "advanced");
 
   if (opts.mode === "remote" && flow === "quickstart") {
     await prompter.note(
-      "QuickStart only supports local gateways. Switching to Manual mode.",
-      "QuickStart",
+      locale === "zh-TW"
+        ? "快速開始（QuickStart）只支援本機 Gateway，將切換為手動模式（Manual）。"
+        : "QuickStart only supports local gateways. Switching to Manual mode.",
+      t(locale, "onboard.quickstart.title"),
     );
     flow = "advanced";
   }
 
   if (snapshot.exists) {
-    await prompter.note(summarizeExistingConfig(baseConfig), "Existing config detected");
+    await prompter.note(summarizeExistingConfig(baseConfig), t(locale, "onboard.configExisting"));
 
     const action = (await prompter.select({
-      message: "Config handling",
+      message: t(locale, "onboard.configHandling"),
       options: [
-        { value: "keep", label: "Use existing values" },
-        { value: "modify", label: "Update values" },
-        { value: "reset", label: "Reset" },
+        { value: "keep", label: t(locale, "onboard.config.keep") },
+        { value: "modify", label: t(locale, "onboard.config.modify") },
+        { value: "reset", label: t(locale, "onboard.config.reset") },
       ],
     })) as "keep" | "modify" | "reset";
 
     if (action === "reset") {
       const workspaceDefault = baseConfig.agents?.defaults?.workspace ?? DEFAULT_WORKSPACE;
       const resetScope = (await prompter.select({
-        message: "Reset scope",
+        message: t(locale, "onboard.resetScope"),
         options: [
-          { value: "config", label: "Config only" },
+          { value: "config", label: t(locale, "onboard.reset.config") },
           {
             value: "config+creds+sessions",
-            label: "Config + creds + sessions",
+            label: t(locale, "onboard.reset.configCredsSessions"),
           },
           {
             value: "full",
-            label: "Full reset (config + creds + sessions + workspace)",
+            label: t(locale, "onboard.reset.full"),
           },
         ],
       })) as ResetScope;
@@ -254,7 +288,7 @@ export async function runOnboardingWizard(
     };
     const quickstartLines = quickstartGateway.hasExisting
       ? [
-          "Keeping your current gateway settings:",
+          t(locale, "onboard.quickstart.keepExisting"),
           `Gateway port: ${quickstartGateway.port}`,
           `Gateway bind: ${formatBind(quickstartGateway.bind)}`,
           ...(quickstartGateway.bind === "custom" && quickstartGateway.customBindHost
@@ -262,16 +296,16 @@ export async function runOnboardingWizard(
             : []),
           `Gateway auth: ${formatAuth(quickstartGateway.authMode)}`,
           `Tailscale exposure: ${formatTailscale(quickstartGateway.tailscaleMode)}`,
-          "Direct to chat channels.",
+          t(locale, "onboard.quickstart.direct"),
         ]
       : [
           `Gateway port: ${DEFAULT_GATEWAY_PORT}`,
           "Gateway bind: Loopback (127.0.0.1)",
           "Gateway auth: Token (default)",
           "Tailscale exposure: Off",
-          "Direct to chat channels.",
+          t(locale, "onboard.quickstart.direct"),
         ];
-    await prompter.note(quickstartLines.join("\n"), "QuickStart");
+    await prompter.note(quickstartLines.join("\n"), t(locale, "onboard.quickstart.title"));
   }
 
   const localPort = resolveGatewayPort(baseConfig);
@@ -294,18 +328,18 @@ export async function runOnboardingWizard(
     (flow === "quickstart"
       ? "local"
       : ((await prompter.select({
-          message: "What do you want to set up?",
+          message: t(locale, "onboard.whatToSetup"),
           options: [
             {
               value: "local",
-              label: "Local gateway (this machine)",
+              label: t(locale, "onboard.localGateway"),
               hint: localProbe.ok
                 ? `Gateway reachable (${localUrl})`
                 : `No gateway detected (${localUrl})`,
             },
             {
               value: "remote",
-              label: "Remote gateway (info-only)",
+              label: t(locale, "onboard.remoteGateway"),
               hint: !remoteUrl
                 ? "No remote URL configured yet"
                 : remoteProbe?.ok
@@ -320,7 +354,7 @@ export async function runOnboardingWizard(
     nextConfig = applyWizardMetadata(nextConfig, { command: "onboard", mode });
     await writeConfigFile(nextConfig);
     logConfigUpdated(runtime);
-    await prompter.outro("Remote gateway configured.");
+    await prompter.outro(t(locale, "onboard.remoteConfigured"));
     return;
   }
 
@@ -329,7 +363,7 @@ export async function runOnboardingWizard(
     (flow === "quickstart"
       ? (baseConfig.agents?.defaults?.workspace ?? DEFAULT_WORKSPACE)
       : await prompter.text({
-          message: "Workspace directory",
+          message: t(locale, "onboard.workspaceDir"),
           initialValue: baseConfig.agents?.defaults?.workspace ?? DEFAULT_WORKSPACE,
         }));
 
@@ -403,7 +437,7 @@ export async function runOnboardingWizard(
   const settings = gateway.settings;
 
   if (opts.skipChannels ?? opts.skipProviders) {
-    await prompter.note("Skipping channel setup.", "Channels");
+    await prompter.note(t(locale, "onboard.skipChannels"), t(locale, "onboard.channelsTitle"));
   } else {
     const quickstartAllowFromChannels =
       flow === "quickstart"
@@ -427,7 +461,7 @@ export async function runOnboardingWizard(
   });
 
   if (opts.skipSkills) {
-    await prompter.note("Skipping skills setup.", "Skills");
+    await prompter.note(t(locale, "onboard.skipSkills"), t(locale, "onboard.skillsTitle"));
   } else {
     nextConfig = await setupSkills(nextConfig, workspaceDir, runtime, prompter);
   }
