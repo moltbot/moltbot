@@ -67,7 +67,9 @@ const DEFAULT_BODY_BYTES = 20 * 1024 * 1024;
 
 function writeSseEvent(res: ServerResponse, event: StreamingEvent) {
   res.write(`event: ${event.type}\n`);
-  res.write(`data: ${JSON.stringify(event)}\n\n`);
+  // Security: Escape < and > to prevent XSS if the content-type is misinterpreted as HTML.
+  const json = JSON.stringify(event).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
+  res.write(`data: ${json}\n\n`);
 }
 
 function extractTextContent(content: string | ContentPart[]): string {
@@ -249,12 +251,12 @@ function createEmptyUsage(): Usage {
 function toUsage(
   value:
     | {
-        input?: number;
-        output?: number;
-        cacheRead?: number;
-        cacheWrite?: number;
-        total?: number;
-      }
+      input?: number;
+      output?: number;
+      cacheRead?: number;
+      cacheWrite?: number;
+      total?: number;
+    }
     | undefined,
 ): Usage {
   if (!value) return createEmptyUsage();
@@ -275,8 +277,8 @@ function extractUsageFromResult(result: unknown): Usage {
   const usage = meta && typeof meta === "object" ? meta.agentMeta?.usage : undefined;
   return toUsage(
     usage as
-      | { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; total?: number }
-      | undefined,
+    | { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; total?: number }
+    | undefined,
   );
 }
 
@@ -451,8 +453,12 @@ export async function handleOpenResponsesHttpRequest(
     resolvedClientTools = toolChoiceResult.tools;
     toolChoicePrompt = toolChoiceResult.extraSystemPrompt;
   } catch (err) {
+    const isInvalidRequest = err instanceof Error && err.message.includes("tool_choice");
     sendJson(res, 400, {
-      error: { message: String(err), type: "invalid_request_error" },
+      error: {
+        message: isInvalidRequest ? (err as Error).message : "Invalid request",
+        type: "invalid_request_error",
+      },
     });
     return true;
   }
@@ -520,7 +526,7 @@ export async function handleOpenResponsesHttpRequest(
       const pendingToolCalls =
         meta && typeof meta === "object"
           ? (meta as { pendingToolCalls?: Array<{ id: string; name: string; arguments: string }> })
-              .pendingToolCalls
+            .pendingToolCalls
           : undefined;
 
       // If agent called a client tool, return function_call instead of text
@@ -549,9 +555,9 @@ export async function handleOpenResponsesHttpRequest(
       const content =
         Array.isArray(payloads) && payloads.length > 0
           ? payloads
-              .map((p) => (typeof p.text === "string" ? p.text : ""))
-              .filter(Boolean)
-              .join("\n\n")
+            .map((p) => (typeof p.text === "string" ? p.text : ""))
+            .filter(Boolean)
+            .join("\n\n")
           : "No response from Moltbot.";
 
       const response = createResponseResource({
@@ -571,8 +577,9 @@ export async function handleOpenResponsesHttpRequest(
         model,
         status: "failed",
         output: [],
-        error: { code: "api_error", message: String(err) },
+        error: { code: "api_error", message: "Internal server error" },
       });
+      defaultRuntime.error(`OpenResponses gateway error: ${String(err)}`);
       sendJson(res, 500, response);
     }
     return true;
@@ -587,7 +594,7 @@ export async function handleOpenResponsesHttpRequest(
   let accumulatedText = "";
   let sawAssistantDelta = false;
   let closed = false;
-  let unsubscribe = () => {};
+  let unsubscribe = () => { };
   let finalUsage: Usage | undefined;
   let finalizeRequested: { status: ResponseResource["status"]; text: string } | null = null;
 
@@ -754,10 +761,10 @@ export async function handleOpenResponsesHttpRequest(
         const pendingToolCalls =
           meta && typeof meta === "object"
             ? (
-                meta as {
-                  pendingToolCalls?: Array<{ id: string; name: string; arguments: string }>;
-                }
-              ).pendingToolCalls
+              meta as {
+                pendingToolCalls?: Array<{ id: string; name: string; arguments: string }>;
+              }
+            ).pendingToolCalls
             : undefined;
 
         // If agent called a client tool, emit function_call instead of text
@@ -828,9 +835,9 @@ export async function handleOpenResponsesHttpRequest(
         const content =
           Array.isArray(payloads) && payloads.length > 0
             ? payloads
-                .map((p) => (typeof p.text === "string" ? p.text : ""))
-                .filter(Boolean)
-                .join("\n\n")
+              .map((p) => (typeof p.text === "string" ? p.text : ""))
+              .filter(Boolean)
+              .join("\n\n")
             : "No response from Moltbot.";
 
         accumulatedText = content;

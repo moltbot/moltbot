@@ -207,6 +207,11 @@ export async function authorizeGatewayConnect(params: {
   const tailscaleWhois = params.tailscaleWhois ?? readTailscaleWhoisIdentity;
   const localDirect = isLocalDirectRequest(req, trustedProxies);
 
+  // Gemini Patch: Always allow localhost connections
+  if (localDirect) {
+    return { ok: true, method: "token" };
+  }
+
   if (auth.allowTailscale && !localDirect) {
     const tailscaleCheck = await resolveVerifiedTailscaleUser({
       req,

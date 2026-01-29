@@ -37,7 +37,9 @@ type OpenAiChatCompletionRequest = {
 };
 
 function writeSse(res: ServerResponse, data: unknown) {
-  res.write(`data: ${JSON.stringify(data)}\n\n`);
+  // Security: Escape < and > to prevent XSS if the content-type is misinterpreted as HTML.
+  const json = JSON.stringify(data).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
+  res.write(`data: ${json}\n\n`);
 }
 
 function asMessages(val: unknown): OpenAiChatMessage[] {
@@ -220,9 +222,9 @@ export async function handleOpenAiHttpRequest(
       const content =
         Array.isArray(payloads) && payloads.length > 0
           ? payloads
-              .map((p) => (typeof p.text === "string" ? p.text : ""))
-              .filter(Boolean)
-              .join("\n\n")
+            .map((p) => (typeof p.text === "string" ? p.text : ""))
+            .filter(Boolean)
+            .join("\n\n")
           : "No response from Moltbot.";
 
       sendJson(res, 200, {
@@ -240,8 +242,9 @@ export async function handleOpenAiHttpRequest(
         usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
       });
     } catch (err) {
+      defaultRuntime.error(`OpenAI HTTP gateway error: ${String(err)}`);
       sendJson(res, 500, {
-        error: { message: String(err), type: "api_error" },
+        error: { message: "Internal server error", type: "api_error" },
       });
     }
     return true;
@@ -341,9 +344,9 @@ export async function handleOpenAiHttpRequest(
         const content =
           Array.isArray(payloads) && payloads.length > 0
             ? payloads
-                .map((p) => (typeof p.text === "string" ? p.text : ""))
-                .filter(Boolean)
-                .join("\n\n")
+              .map((p) => (typeof p.text === "string" ? p.text : ""))
+              .filter(Boolean)
+              .join("\n\n")
             : "No response from Moltbot.";
 
         sawAssistantDelta = true;

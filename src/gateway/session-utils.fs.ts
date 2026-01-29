@@ -2,10 +2,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { resolveSessionTranscriptPath } from "../config/sessions.js";
+import {
+  resolveSessionTranscriptPath,
+  resolveSessionTranscriptsDirForAgent,
+} from "../config/sessions.js";
 import { stripEnvelope } from "./chat-sanitize.js";
 import type { SessionPreviewItem } from "./session-utils.types.js";
 
+/**
+ * Synchronously reads session messages. Use `readSessionMessagesAsync` for non-blocking I/O.
+ */
 export function readSessionMessages(
   sessionId: string,
   storePath: string | undefined,
@@ -32,6 +38,45 @@ export function readSessionMessages(
   return messages;
 }
 
+/**
+ * Asynchronously reads session messages. Preferred for hot paths to avoid blocking.
+ */
+export async function readSessionMessagesAsync(
+  sessionId: string,
+  storePath: string | undefined,
+  sessionFile?: string,
+): Promise<unknown[]> {
+  const candidates = resolveSessionTranscriptCandidates(sessionId, storePath, sessionFile);
+
+  let filePath: string | undefined;
+  for (const candidate of candidates) {
+    try {
+      await fs.promises.access(candidate, fs.constants.F_OK);
+      filePath = candidate;
+      break;
+    } catch {
+      // continue to next candidate
+    }
+  }
+  if (!filePath) return [];
+
+  const raw = await fs.promises.readFile(filePath, "utf-8");
+  const lines = raw.split(/\r?\n/);
+  const messages: unknown[] = [];
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    try {
+      const parsed = JSON.parse(line);
+      if (parsed?.message) {
+        messages.push(parsed.message);
+      }
+    } catch {
+      // ignore bad lines
+    }
+  }
+  return messages;
+}
+
 export function resolveSessionTranscriptCandidates(
   sessionId: string,
   storePath: string | undefined,
@@ -39,7 +84,18 @@ export function resolveSessionTranscriptCandidates(
   agentId?: string,
 ): string[] {
   const candidates: string[] = [];
-  if (sessionFile) candidates.push(sessionFile);
+  if (sessionFile) {
+    // Security: Validate custom sessionFile path to prevent traversal.
+    const sessionsDir = resolveSessionTranscriptsDirForAgent(agentId);
+    try {
+      const resolved = path.resolve(sessionsDir, sessionFile);
+      const relative = path.relative(sessionsDir, resolved);
+      const isSafe = relative && !relative.startsWith("..") && !path.isAbsolute(relative);
+      if (isSafe) candidates.push(resolved);
+    } catch {
+      // ignore invalid paths
+    }
+  }
   if (storePath) {
     const dir = path.dirname(storePath);
     candidates.push(path.join(dir, `${sessionId}.jsonl`));
