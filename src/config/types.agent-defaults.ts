@@ -16,6 +16,21 @@ export type AgentModelEntryConfig = {
   alias?: string;
   /** Provider-specific API parameters (e.g., GLM-4.7 thinking mode). */
   params?: Record<string, unknown>;
+  /** Model compatibility overrides (e.g., OpenRouter routing preferences). */
+  compat?: ModelCompatEntryConfig;
+};
+
+export type ModelCompatEntryConfig = {
+  supportsStore?: boolean;
+  supportsDeveloperRole?: boolean;
+  supportsReasoningEffort?: boolean;
+  maxTokensField?: "max_completion_tokens" | "max_tokens";
+  openRouterRouting?: OpenRouterRoutingConfig;
+};
+
+export type OpenRouterRoutingConfig = {
+  only?: string[];
+  order?: string[];
 };
 
 export type AgentModelListConfig = {

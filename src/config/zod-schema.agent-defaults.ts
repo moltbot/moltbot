@@ -37,6 +37,24 @@ export const AgentDefaultsSchema = z
             alias: z.string().optional(),
             /** Provider-specific API parameters (e.g., GLM-4.7 thinking mode). */
             params: z.record(z.string(), z.unknown()).optional(),
+            /** Model compatibility overrides (e.g., OpenRouter routing preferences). */
+            compat: z
+              .object({
+                supportsStore: z.boolean().optional(),
+                supportsDeveloperRole: z.boolean().optional(),
+                supportsReasoningEffort: z.boolean().optional(),
+                maxTokensField: z
+                  .union([z.literal("max_completion_tokens"), z.literal("max_tokens")])
+                  .optional(),
+                openRouterRouting: z
+                  .object({
+                    only: z.array(z.string()).optional(),
+                    order: z.array(z.string()).optional(),
+                  })
+                  .optional(),
+              })
+              .strict()
+              .optional(),
           })
           .strict(),
       )

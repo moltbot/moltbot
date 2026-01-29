@@ -19,6 +19,12 @@ export const ModelCompatSchema = z
     maxTokensField: z
       .union([z.literal("max_completion_tokens"), z.literal("max_tokens")])
       .optional(),
+    openRouterRouting: z
+      .object({
+        only: z.array(z.string()).optional(),
+        order: z.array(z.string()).optional(),
+      })
+      .optional(),
   })
   .strict()
   .optional();
