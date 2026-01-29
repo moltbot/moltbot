@@ -17,7 +17,7 @@ export function detectAnomalies(event: AfterToolCallEvent): string[] {
 
   if (event.toolName === "exec") {
     const cmd = String(event.params?.command ?? "");
-    if (/curl|wget|nc\s/.test(cmd) && /[a-z]+\.[a-z]{2,}/.test(cmd)) {
+    if (/curl|wget|nc[\s]|nc$|ncat/i.test(cmd) && /[a-z]+\.[a-z]{2,}|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/i.test(cmd)) {
       anomalies.push("unauthorized_outbound");
     }
   }

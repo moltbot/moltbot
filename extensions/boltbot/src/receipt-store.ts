@@ -25,13 +25,31 @@ export interface ReceiptStore {
 export function createReceiptStore(backend?: string): ReceiptStore {
   if (backend === "eigenda") {
     const { EigenDAReceiptStore } = require("./stores/eigenda.js");
-    return new EigenDAReceiptStore(process.env.EIGENDA_PROXY_URL!);
+    const proxyUrl = process.env.EIGENDA_PROXY_URL;
+    if (!proxyUrl) {
+      throw new Error("EIGENDA_PROXY_URL environment variable is required when using the eigenda backend");
+    }
+    return new EigenDAReceiptStore(proxyUrl);
   }
   return new LocalReceiptStore();
 }
 
+function canonicalize(value: unknown): unknown {
+  if (value === null || value === undefined || typeof value !== "object") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(canonicalize);
+  }
+  const sorted: Record<string, unknown> = {};
+  for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+    sorted[key] = canonicalize((value as Record<string, unknown>)[key]);
+  }
+  return sorted;
+}
+
 export function hashData(data: unknown): string {
   return createHash("sha256")
-    .update(JSON.stringify(data ?? ""))
+    .update(JSON.stringify(canonicalize(data) ?? ""))
     .digest("hex");
 }

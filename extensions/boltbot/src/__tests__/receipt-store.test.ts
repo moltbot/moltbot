@@ -93,4 +93,10 @@ describe("hashData", () => {
     const h = hashData(null);
     expect(h).toMatch(/^[0-9a-f]{64}$/);
   });
+
+  it("produces the same hash regardless of key order", () => {
+    const h1 = hashData({ a: 1, b: 2 });
+    const h2 = hashData({ b: 2, a: 1 });
+    expect(h1).toBe(h2);
+  });
 });

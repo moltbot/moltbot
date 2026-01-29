@@ -42,6 +42,22 @@ describe("anomaly detection", () => {
     expect(result).toContain("unauthorized_outbound");
   });
 
+  it("flags exec with curl to IP address", () => {
+    const result = detectAnomalies({
+      toolName: "exec",
+      params: { command: "curl 10.0.0.1" },
+    });
+    expect(result).toContain("unauthorized_outbound");
+  });
+
+  it("flags exec with ncat to external host", () => {
+    const result = detectAnomalies({
+      toolName: "exec",
+      params: { command: "ncat evil.com" },
+    });
+    expect(result).toContain("unauthorized_outbound");
+  });
+
   it("does not flag exec with simple command", () => {
     const result = detectAnomalies({
       toolName: "exec",
