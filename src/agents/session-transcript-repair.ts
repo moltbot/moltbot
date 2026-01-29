@@ -56,12 +56,19 @@ function makeMissingToolResult(params: {
 
 export { makeMissingToolResult };
 
-export function sanitizeToolUseArgs(messages: AgentMessage[]): AgentMessage[] {
+export type ToolUseSanitizationReport = {
+  messages: AgentMessage[];
+  sanitizedCount: number;
+  changed: boolean;
+};
+
+export function sanitizeToolUseArgs(messages: AgentMessage[]): ToolUseSanitizationReport {
   // Creates new message objects only when sanitization is needed; otherwise
   // returns the original messages to avoid unnecessary copying, while guarding
   // against corrupt JSON in tool arguments that could break the session.
   const out: AgentMessage[] = [];
   let changed = false;
+  let sanitizedCount = 0;
 
   for (const msg of messages) {
     if (msg.role !== "assistant" || !Array.isArray(msg.content)) {
@@ -99,8 +106,11 @@ export function sanitizeToolUseArgs(messages: AgentMessage[]): AgentMessage[] {
           } catch {
             // Invalid JSON found in tool args.
             // Replace with empty object to prevent downstream crashes.
+            sanitizedCount += 1;
+            const original = String(toolBlock[inputField]);
+            const sample = original.length > 100 ? `${original.slice(0, 100)}...` : original;
             console.warn(
-              `[SessionRepair] Sanitized malformed JSON in tool use '${toolBlock.name || "unknown"}'. Original: ${toolBlock[inputField]}`,
+              `[SessionRepair] Sanitized malformed JSON in tool use '${toolBlock.name || "unknown"}'. Original: ${sample}`,
             );
             nextContent.push({
               ...toolBlock,
@@ -129,10 +139,16 @@ export function sanitizeToolUseArgs(messages: AgentMessage[]): AgentMessage[] {
     }
   }
 
-  return changed ? out : messages;
+  return {
+    messages: changed ? out : messages,
+    sanitizedCount,
+    changed,
+  };
 }
+
 export function sanitizeToolUseResultPairing(messages: AgentMessage[]): AgentMessage[] {
-  return repairToolUseResultPairing(messages).messages;
+  const sanitized = sanitizeToolUseArgs(messages);
+  return repairToolUseResultPairing(sanitized.messages).messages;
 }
 
 export type ToolUseRepairReport = {
