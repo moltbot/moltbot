@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { buildHistoryContextFromEntries, type HistoryEntry } from "../auto-reply/reply/history.js";
 import { createDefaultDeps } from "../cli/deps.js";
 import { agentCommand } from "../commands/agent.js";
+import type { ImageContent } from "../commands/agent/types.js";
 import { emitAgentEvent, onAgentEvent } from "../infra/agent-events.js";
 import { defaultRuntime } from "../runtime.js";
 import { authorizeGatewayConnect, type ResolvedGatewayAuth } from "./auth.js";
@@ -64,8 +65,30 @@ function extractTextContent(content: unknown): string {
   return "";
 }
 
+function extractImages(content: unknown): ImageContent[] {
+  if (!Array.isArray(content)) return [];
+  const images: ImageContent[] = [];
+  for (const part of content) {
+    if (!part || typeof part !== "object") continue;
+    const p = part as { type?: unknown; image_url?: { url?: unknown } };
+    if (p.type === "image_url" && typeof p.image_url?.url === "string") {
+      const url = p.image_url.url;
+      const match = /^data:(image\/[^;]+);base64,(.*)$/.exec(url);
+      if (match) {
+        images.push({
+          type: "image",
+          mimeType: match[1]!,
+          data: match[2]!,
+        });
+      }
+    }
+  }
+  return images;
+}
+
 function buildAgentPrompt(messagesUnknown: unknown): {
   message: string;
+  images?: ImageContent[];
   extraSystemPrompt?: string;
 } {
   const messages = asMessages(messagesUnknown);
@@ -73,20 +96,26 @@ function buildAgentPrompt(messagesUnknown: unknown): {
   const systemParts: string[] = [];
   const conversationEntries: Array<{ role: "user" | "assistant" | "tool"; entry: HistoryEntry }> =
     [];
+  let lastUserImages: ImageContent[] | undefined;
 
   for (const msg of messages) {
     if (!msg || typeof msg !== "object") continue;
     const role = typeof msg.role === "string" ? msg.role.trim() : "";
     const content = extractTextContent(msg.content).trim();
-    if (!role || !content) continue;
+    const images = extractImages(msg.content);
+
     if (role === "system" || role === "developer") {
-      systemParts.push(content);
+      if (content) systemParts.push(content);
       continue;
     }
 
     const normalizedRole = role === "function" ? "tool" : role;
     if (normalizedRole !== "user" && normalizedRole !== "assistant" && normalizedRole !== "tool") {
       continue;
+    }
+
+    if (normalizedRole === "user") {
+      lastUserImages = images.length > 0 ? images : undefined;
     }
 
     const name = typeof msg.name === "string" ? msg.name.trim() : "";
@@ -99,10 +128,12 @@ function buildAgentPrompt(messagesUnknown: unknown): {
             ? `Tool:${name}`
             : "Tool";
 
-    conversationEntries.push({
-      role: normalizedRole,
-      entry: { sender, body: content },
-    });
+    if (content || images.length > 0) {
+      conversationEntries.push({
+        role: normalizedRole,
+        entry: { sender, body: content || (images.length > 0 ? "(image)" : "") },
+      });
+    }
   }
 
   let message = "";
@@ -134,6 +165,7 @@ function buildAgentPrompt(messagesUnknown: unknown): {
 
   return {
     message,
+    images: lastUserImages,
     extraSystemPrompt: systemParts.length > 0 ? systemParts.join("\n\n") : undefined,
   };
 }
@@ -187,10 +219,10 @@ export async function handleOpenAiHttpRequest(
   const agentId = resolveAgentIdForRequest({ req, model });
   const sessionKey = resolveOpenAiSessionKey({ req, agentId, user });
   const prompt = buildAgentPrompt(payload.messages);
-  if (!prompt.message) {
+  if (!prompt.message && (!prompt.images || prompt.images.length === 0)) {
     sendJson(res, 400, {
       error: {
-        message: "Missing user message in `messages`.",
+        message: "Missing user message or images in `messages`.",
         type: "invalid_request_error",
       },
     });
@@ -204,7 +236,8 @@ export async function handleOpenAiHttpRequest(
     try {
       const result = await agentCommand(
         {
-          message: prompt.message,
+          message: prompt.message || "(image)",
+          images: prompt.images,
           extraSystemPrompt: prompt.extraSystemPrompt,
           sessionKey,
           runId,
@@ -311,7 +344,8 @@ export async function handleOpenAiHttpRequest(
     try {
       const result = await agentCommand(
         {
-          message: prompt.message,
+          message: prompt.message || "(image)",
+          images: prompt.images,
           extraSystemPrompt: prompt.extraSystemPrompt,
           sessionKey,
           runId,
