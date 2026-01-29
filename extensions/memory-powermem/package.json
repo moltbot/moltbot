@@ -1,0 +1,14 @@
+{
+  "name": "@moltbot/memory-powermem",
+  "version": "2026.1.27-beta.1",
+  "type": "module",
+  "description": "Moltbot PowerMem long-term memory plugin (HTTP API). Intelligent extraction, Ebbinghaus forgetting curve.",
+  "dependencies": {
+    "@sinclair/typebox": "0.34.47"
+  },
+  "moltbot": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

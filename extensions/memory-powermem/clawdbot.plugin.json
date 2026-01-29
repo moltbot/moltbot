@@ -1,0 +1,69 @@
+{
+  "id": "memory-powermem",
+  "kind": "memory",
+  "uiHints": {
+    "baseUrl": {
+      "label": "PowerMem API URL",
+      "placeholder": "http://localhost:8000",
+      "help": "Base URL of PowerMem HTTP API (no /api/v1). Start server with: powermem-server --port 8000"
+    },
+    "apiKey": {
+      "label": "API Key",
+      "sensitive": true,
+      "placeholder": "",
+      "help": "Optional; required if PowerMem server has authentication enabled"
+    },
+    "userId": {
+      "label": "User ID",
+      "placeholder": "moltbot-user",
+      "advanced": true,
+      "help": "PowerMem user_id for memory isolation (optional)"
+    },
+    "agentId": {
+      "label": "Agent ID",
+      "placeholder": "moltbot-agent",
+      "advanced": true,
+      "help": "PowerMem agent_id for memory isolation (optional)"
+    },
+    "autoCapture": {
+      "label": "Auto-Capture",
+      "help": "Automatically store important information from conversations"
+    },
+    "autoRecall": {
+      "label": "Auto-Recall",
+      "help": "Automatically inject relevant memories into context"
+    },
+    "inferOnAdd": {
+      "label": "Infer on Add",
+      "help": "Use PowerMem intelligent extraction when adding (infer=true)"
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "baseUrl": {
+        "type": "string"
+      },
+      "apiKey": {
+        "type": "string"
+      },
+      "userId": {
+        "type": "string"
+      },
+      "agentId": {
+        "type": "string"
+      },
+      "autoCapture": {
+        "type": "boolean"
+      },
+      "autoRecall": {
+        "type": "boolean"
+      },
+      "inferOnAdd": {
+        "type": "boolean"
+      }
+    },
+    "required": ["baseUrl"]
+  }
+}
