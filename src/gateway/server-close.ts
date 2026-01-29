@@ -103,7 +103,13 @@ export function createGatewayCloseHandler(params: {
     // owned by PID 1, which appear valid to the new server iteration because
     // isAlive(1) returns true (same process). This blocks session access for
     // up to staleMs (30 min) until the lock expires.
-    await releaseAllSessionWriteLocks();
+    try {
+      await releaseAllSessionWriteLocks();
+    } catch {
+      // Best effort — don't let lock cleanup failure prevent shutdown.
+      // The instance nonce mechanism will detect surviving stale locks
+      // on the next server iteration.
+    }
 
     for (const c of params.clients) {
       try {

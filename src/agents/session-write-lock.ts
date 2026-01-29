@@ -1,10 +1,28 @@
+import { randomBytes } from "node:crypto";
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+/**
+ * Instance nonce — regenerated each time the gateway server starts within
+ * the process. ESM modules are cached for the process lifetime, so this
+ * must be mutable and explicitly reset via `resetInstanceNonce()` during
+ * shutdown. After an in-process restart (SIGUSR1), lock files written by
+ * the previous server iteration carry a stale nonce, letting us detect
+ * them even when the PID hasn't changed (common in containers where
+ * PID = 1).
+ */
+let instanceNonce: string = randomBytes(12).toString("hex");
+
+function resetInstanceNonce(): void {
+  instanceNonce = randomBytes(12).toString("hex");
+}
+
 type LockFilePayload = {
   pid: number;
   createdAt: string;
+  /** Instance nonce — absent in lock files written by older versions. */
+  nonce?: string;
 };
 
 type HeldLock = {
@@ -93,7 +111,11 @@ async function readLockPayload(lockPath: string): Promise<LockFilePayload | null
     const parsed = JSON.parse(raw) as Partial<LockFilePayload>;
     if (typeof parsed.pid !== "number") return null;
     if (typeof parsed.createdAt !== "string") return null;
-    return { pid: parsed.pid, createdAt: parsed.createdAt };
+    return {
+      pid: parsed.pid,
+      createdAt: parsed.createdAt,
+      nonce: typeof parsed.nonce === "string" ? parsed.nonce : undefined,
+    };
   } catch {
     return null;
   }
@@ -144,7 +166,11 @@ export async function acquireSessionWriteLock(params: {
     try {
       const handle = await fs.open(lockPath, "wx");
       await handle.writeFile(
-        JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() }, null, 2),
+        JSON.stringify(
+          { pid: process.pid, nonce: instanceNonce, createdAt: new Date().toISOString() },
+          null,
+          2,
+        ),
         "utf8",
       );
       HELD_LOCKS.set(normalizedSessionFile, { count: 1, handle, lockPath });
@@ -166,7 +192,18 @@ export async function acquireSessionWriteLock(params: {
       const createdAt = payload?.createdAt ? Date.parse(payload.createdAt) : NaN;
       const stale = !Number.isFinite(createdAt) || Date.now() - createdAt > staleMs;
       const alive = payload?.pid ? isAlive(payload.pid) : false;
-      if (stale || !alive) {
+
+      // Nonce mismatch: lock was written by a previous server iteration of the
+      // same process (e.g. PID 1 in a container after SIGUSR1).  The old
+      // iteration is gone even though the PID is still alive, so treat the
+      // lock as stale.  If the lock has no nonce (written by an older version)
+      // we fall through to the existing pid+staleMs checks for backward compat.
+      const nonceMismatch =
+        payload?.nonce !== undefined &&
+        payload.nonce !== instanceNonce &&
+        payload.pid === process.pid;
+
+      if (stale || !alive || nonceMismatch) {
         await fs.rm(lockPath, { force: true });
         continue;
       }
@@ -180,7 +217,6 @@ export async function acquireSessionWriteLock(params: {
   const owner = payload?.pid ? `pid=${payload.pid}` : "unknown";
   throw new Error(`session file locked (timeout ${timeoutMs}ms): ${owner} ${lockPath}`);
 }
-
 
 /**
  * Release all held session write locks.
@@ -205,9 +241,18 @@ export async function releaseAllSessionWriteLocks(): Promise<void> {
     }
     HELD_LOCKS.delete(sessionFile);
   }
+  // Rotate the instance nonce AFTER all locks are cleaned up, so that any
+  // lock files that survive this cleanup (e.g. due to fs errors) are
+  // detectable as stale by the next server iteration. Rotating before
+  // cleanup would let a concurrent acquirer see the old nonce as stale
+  // and reclaim a lock we haven't finished releasing yet.
+  resetInstanceNonce();
 }
 export const __testing = {
   cleanupSignals: [...CLEANUP_SIGNALS],
   handleTerminationSignal,
   releaseAllLocksSync,
+  get instanceNonce() {
+    return instanceNonce;
+  },
 };
