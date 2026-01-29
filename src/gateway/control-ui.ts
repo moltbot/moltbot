@@ -76,6 +76,20 @@ function contentTypeForExt(ext: string): string {
   }
 }
 
+function setControlUiSecurityHeaders(res: ServerResponse) {
+  // Control UI is a local-first surface. These headers provide defense-in-depth
+  // against token leakage and UI embedding attacks.
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("X-Frame-Options", "DENY");
+  // Keep CSP minimal to avoid breaking the UI build (it injects an inline config script).
+  // We still prevent embedding + plugin/object injection.
+  res.setHeader(
+    "Content-Security-Policy",
+    "frame-ancestors 'none'; base-uri 'none'; object-src 'none'",
+  );
+}
+
 export type ControlUiAvatarResolution =
   | { kind: "none"; reason: string }
   | { kind: "local"; filePath: string }
@@ -88,6 +102,7 @@ type ControlUiAvatarMeta = {
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
+  setControlUiSecurityHeaders(res);
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache");
   res.end(JSON.stringify(body));
@@ -141,6 +156,7 @@ export function handleControlUiAvatarRequest(
 
   if (req.method === "HEAD") {
     res.statusCode = 200;
+    setControlUiSecurityHeaders(res);
     res.setHeader("Content-Type", contentTypeForExt(path.extname(resolved.filePath).toLowerCase()));
     res.setHeader("Cache-Control", "no-cache");
     res.end();
@@ -153,12 +169,14 @@ export function handleControlUiAvatarRequest(
 
 function respondNotFound(res: ServerResponse) {
   res.statusCode = 404;
+  setControlUiSecurityHeaders(res);
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.end("Not Found");
 }
 
 function serveFile(res: ServerResponse, filePath: string) {
   const ext = path.extname(filePath).toLowerCase();
+  setControlUiSecurityHeaders(res);
   res.setHeader("Content-Type", contentTypeForExt(ext));
   // Static UI should never be cached aggressively while iterating; allow the
   // browser to revalidate.
@@ -214,6 +232,7 @@ function serveIndexHtml(res: ServerResponse, indexPath: string, opts: ServeIndex
       agentId: resolvedAgentId,
       basePath,
     }) ?? identity.avatar;
+  setControlUiSecurityHeaders(res);
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache");
   const raw = fs.readFileSync(indexPath, "utf8");

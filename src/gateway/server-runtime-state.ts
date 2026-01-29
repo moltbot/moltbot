@@ -102,6 +102,9 @@ export async function createGatewayRuntimeState(params: {
   const handlePluginRequest = createGatewayPluginRequestHandler({
     registry: params.pluginRegistry,
     log: params.logPlugins,
+    auth: params.resolvedAuth,
+    trustedProxies: params.cfg.gateway?.trustedProxies,
+    protectApiPaths: params.cfg.gateway?.plugins?.http?.protectApiPaths ?? true,
   });
 
   const bindHosts = await resolveGatewayListenHosts(params.bindHost);

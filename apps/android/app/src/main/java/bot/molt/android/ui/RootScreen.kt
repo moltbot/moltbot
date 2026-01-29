@@ -326,7 +326,15 @@ private fun CanvasView(viewModel: MainViewModel, modifier: Modifier = Modifier) 
         settings.javaScriptEnabled = true
         // Some embedded web UIs (incl. the "background website") use localStorage/sessionStorage.
         settings.domStorageEnabled = true
-        settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+        // Security: avoid loading HTTP subresources into HTTPS pages.
+        settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        settings.javaScriptCanOpenWindowsAutomatically = false
+        settings.setSupportMultipleWindows(false)
+        // Reduce file:// origin privilege (asset scaffold doesn't need cross-file access).
+        @Suppress("DEPRECATION")
+        settings.allowFileAccessFromFileURLs = false
+        @Suppress("DEPRECATION")
+        settings.allowUniversalAccessFromFileURLs = false
         if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
           WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, false)
         } else {

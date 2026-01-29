@@ -426,6 +426,17 @@ export const MoltbotSchema = z
           })
           .strict()
           .optional(),
+        plugins: z
+          .object({
+            http: z
+              .object({
+                protectApiPaths: z.boolean().optional(),
+              })
+              .strict()
+              .optional(),
+          })
+          .strict()
+          .optional(),
         nodes: z
           .object({
             browser: z

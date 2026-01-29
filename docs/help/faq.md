@@ -323,13 +323,13 @@ The wizard now opens your browser with a tokenized dashboard URL right after onb
 
 **Localhost (same machine):**
 - Open `http://127.0.0.1:18789/`.
-- If it asks for auth, run `moltbot dashboard` and use the tokenized link (`?token=...`).
+- If it asks for auth, run `moltbot dashboard` and use the tokenized link (`#token=...`).
 - The token is the same value as `gateway.auth.token` (or `CLAWDBOT_GATEWAY_TOKEN`) and is stored by the UI after first load.
 
 **Not on localhost:**
 - **Tailscale Serve** (recommended): keep bind loopback, run `moltbot gateway --tailscale serve`, open `https://<magicdns>/`. If `gateway.auth.allowTailscale` is `true`, identity headers satisfy auth (no token).
 - **Tailnet bind**: run `moltbot gateway --bind tailnet --token "<token>"`, open `http://<tailscale-ip>:18789/`, paste token in dashboard settings.
-- **SSH tunnel**: `ssh -N -L 18789:127.0.0.1:18789 user@host` then open `http://127.0.0.1:18789/?token=...` from `moltbot dashboard`.
+- **SSH tunnel**: `ssh -N -L 18789:127.0.0.1:18789 user@host` then open `http://127.0.0.1:18789/#token=...` from `moltbot dashboard`.
 
 See [Dashboard](/web/dashboard) and [Web surfaces](/web) for bind modes and auth details.
 
@@ -2292,14 +2292,14 @@ Your gateway is running with auth enabled (`gateway.auth.*`), but the UI is not 
 
 Facts (from code):
 - The Control UI stores the token in browser localStorage key `moltbot.control.settings.v1`.
-- The UI can import `?token=...` (and/or `?password=...`) once, then strips it from the URL.
+- The UI can import `#token=...` (and/or `#password=...`) once, then strips it from the URL.
 
 Fix:
 - Fastest: `moltbot dashboard` (prints + copies tokenized link, tries to open; shows SSH hint if headless).
 - If you don’t have a token yet: `moltbot doctor --generate-gateway-token`.
-- If remote, tunnel first: `ssh -N -L 18789:127.0.0.1:18789 user@host` then open `http://127.0.0.1:18789/?token=...`.
+- If remote, tunnel first: `ssh -N -L 18789:127.0.0.1:18789 user@host` then open `http://127.0.0.1:18789/#token=...`.
 - Set `gateway.auth.token` (or `CLAWDBOT_GATEWAY_TOKEN`) on the gateway host.
-- In the Control UI settings, paste the same token (or refresh with a one-time `?token=...` link).
+- In the Control UI settings, paste the same token (or refresh with a one-time `#token=...` link).
 - Still stuck? Run `moltbot status --all` and follow [Troubleshooting](/gateway/troubleshooting). See [Dashboard](/web/dashboard) for auth details.
 
 ### I set gatewaybind tailnet but it cant bind nothing listens

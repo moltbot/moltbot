@@ -101,7 +101,32 @@ export async function extractArchive(params: {
   const label = kind === "zip" ? "extract zip" : "extract tar";
   if (kind === "tar") {
     await withTimeout(
-      tar.x({ file: params.archivePath, cwd: params.destDir }),
+      tar.x({
+        file: params.archivePath,
+        cwd: params.destDir,
+        // Defense-in-depth: prevent path traversal and link-based extraction attacks.
+        // (We only need regular files + dirs for npm/plugin archives.)
+        preservePaths: false,
+        strict: true,
+        filter: (entryPath, entry) => {
+          const normalized = String(entryPath ?? "").replaceAll("\\", "/");
+          if (!normalized) return false;
+          if (normalized.startsWith("/") || normalized === ".." || normalized.startsWith("../")) {
+            params.logger?.warn?.(`blocked tar entry (path escape): ${entryPath}`);
+            return false;
+          }
+          if (normalized.includes("/../")) {
+            params.logger?.warn?.(`blocked tar entry (path traversal): ${entryPath}`);
+            return false;
+          }
+          const type = String((entry as any)?.type ?? "");
+          if (type === "SymbolicLink" || type === "Link") {
+            params.logger?.warn?.(`blocked tar entry (${type}): ${entryPath}`);
+            return false;
+          }
+          return true;
+        },
+      }),
       params.timeoutMs,
       label,
     );

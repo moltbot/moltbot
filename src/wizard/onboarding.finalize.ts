@@ -249,11 +249,14 @@ export async function finalizeOnboardingWizard(options: FinalizeOnboardingOption
     customBindHost: settings.customBindHost,
     basePath: controlUiBasePath,
   });
-  const tokenParam =
-    settings.authMode === "token" && settings.gatewayToken
-      ? `?token=${encodeURIComponent(settings.gatewayToken)}`
-      : "";
-  const authedUrl = `${links.httpUrl}${tokenParam}`;
+  const authedUrl = (() => {
+    if (settings.authMode !== "token" || !settings.gatewayToken) return "";
+    const url = new URL(links.httpUrl);
+    const frag = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
+    frag.set("token", settings.gatewayToken);
+    url.hash = frag.toString();
+    return url.toString();
+  })();
   const gatewayProbe = await probeGatewayReachable({
     url: links.wsUrl,
     token: settings.authMode === "token" ? settings.gatewayToken : undefined,
@@ -274,7 +277,7 @@ export async function finalizeOnboardingWizard(options: FinalizeOnboardingOption
   await prompter.note(
     [
       `Web UI: ${links.httpUrl}`,
-      tokenParam ? `Web UI (with token): ${authedUrl}` : undefined,
+      authedUrl ? `Web UI (with token): ${authedUrl}` : undefined,
       `Gateway WS: ${links.wsUrl}`,
       gatewayStatusLine,
       "Docs: https://docs.molt.bot/web/control-ui",

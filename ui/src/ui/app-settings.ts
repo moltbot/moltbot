@@ -58,12 +58,24 @@ export function setLastActiveSessionKey(host: SettingsHost, next: string) {
 }
 
 export function applySettingsFromUrl(host: SettingsHost) {
-  if (!window.location.search) return;
-  const params = new URLSearchParams(window.location.search);
-  const tokenRaw = params.get("token");
-  const passwordRaw = params.get("password");
-  const sessionRaw = params.get("session");
-  const gatewayUrlRaw = params.get("gatewayUrl");
+  const hasQuery = Boolean(window.location.search);
+  const hasHash = Boolean(window.location.hash);
+  if (!hasQuery && !hasHash) return;
+
+  const url = new URL(window.location.href);
+  const queryParams = new URLSearchParams(url.search);
+  const fragmentRaw = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+  const fragmentParams = new URLSearchParams(fragmentRaw);
+
+  // Security: accept sensitive fields ONLY from the URL fragment.
+  // Query params are sent to the server and commonly end up in logs and analytics.
+  const tokenRaw = fragmentParams.get("token");
+  const passwordRaw = fragmentParams.get("password");
+  const gatewayUrlRaw = fragmentParams.get("gatewayUrl");
+
+  // Session is not a secret; accept from either query or fragment.
+  const sessionRaw = queryParams.get("session") ?? fragmentParams.get("session");
+
   let shouldCleanUrl = false;
 
   if (tokenRaw != null) {
@@ -71,7 +83,7 @@ export function applySettingsFromUrl(host: SettingsHost) {
     if (token && token !== host.settings.token) {
       applySettings(host, { ...host.settings, token });
     }
-    params.delete("token");
+    fragmentParams.delete("token");
     shouldCleanUrl = true;
   }
 
@@ -80,7 +92,7 @@ export function applySettingsFromUrl(host: SettingsHost) {
     if (password) {
       (host as { password: string }).password = password;
     }
-    params.delete("password");
+    fragmentParams.delete("password");
     shouldCleanUrl = true;
   }
 
@@ -94,6 +106,7 @@ export function applySettingsFromUrl(host: SettingsHost) {
         lastActiveSessionKey: session,
       });
     }
+    // Keep session in the URL by default; don't force-clean it.
   }
 
   if (gatewayUrlRaw != null) {
@@ -101,13 +114,22 @@ export function applySettingsFromUrl(host: SettingsHost) {
     if (gatewayUrl && gatewayUrl !== host.settings.gatewayUrl) {
       host.pendingGatewayUrl = gatewayUrl;
     }
-    params.delete("gatewayUrl");
+    fragmentParams.delete("gatewayUrl");
+    shouldCleanUrl = true;
+  }
+
+  // Opportunistically strip sensitive query params too (legacy links).
+  if (queryParams.has("token") || queryParams.has("password") || queryParams.has("gatewayUrl")) {
+    queryParams.delete("token");
+    queryParams.delete("password");
+    queryParams.delete("gatewayUrl");
     shouldCleanUrl = true;
   }
 
   if (!shouldCleanUrl) return;
-  const url = new URL(window.location.href);
-  url.search = params.toString();
+  url.search = queryParams.toString();
+  const nextFragment = fragmentParams.toString();
+  url.hash = nextFragment ? `#${nextFragment}` : "";
   window.history.replaceState({}, "", url.toString());
 }
 

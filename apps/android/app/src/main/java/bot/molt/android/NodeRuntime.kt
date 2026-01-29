@@ -3,6 +3,7 @@ package bot.molt.android
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.location.LocationManager
 import android.os.Build
 import android.os.SystemClock
@@ -255,6 +256,36 @@ class NodeRuntime(context: Context) {
   private fun resolveMainSessionKey(): String {
     val trimmed = _mainSessionKey.value.trim()
     return if (trimmed.isEmpty()) "main" else trimmed
+  }
+
+  private fun isTrustedCanvasA2uiSource(): Boolean {
+    val rawUrl = canvas.currentUrl()?.trim().orEmpty()
+    if (rawUrl.isEmpty()) return false
+
+    val uri =
+      try {
+        Uri.parse(rawUrl)
+      } catch (_: Throwable) {
+        return false
+      }
+    val scheme = uri.scheme?.trim()?.lowercase().orEmpty()
+    if (scheme != "http" && scheme != "https") return false
+
+    val host = uri.host?.trim()?.lowercase().orEmpty()
+    if (host.isEmpty()) return false
+
+    // Only accept A2UI actions from the currently-connected gateway origin(s).
+    val endpoint = connectedEndpoint
+    val allowedHosts =
+      listOfNotNull(endpoint?.host, endpoint?.lanHost, endpoint?.tailnetDns)
+        .map { it.trim().lowercase() }
+        .filter { it.isNotEmpty() }
+        .toSet()
+
+    if (host in allowedHosts) return true
+    // Dev/loopback convenience (should not be reachable on public networks).
+    if (host == "localhost" || host == "127.0.0.1") return true
+    return false
   }
 
   private fun maybeNavigateToA2uiOnConnect() {
@@ -653,6 +684,11 @@ class NodeRuntime(context: Context) {
     scope.launch {
       val trimmed = payloadJson.trim()
       if (trimmed.isEmpty()) return@launch
+      // Prevent untrusted pages (e.g. arbitrary websites) from escalating into agent actions.
+      // Only allow A2UI messages from the connected gateway canvas origin.
+      if (!isTrustedCanvasA2uiSource()) return@launch
+      // Avoid memory/DoS via huge payloads.
+      if (trimmed.length > 64 * 1024) return@launch
 
       val root =
         try {

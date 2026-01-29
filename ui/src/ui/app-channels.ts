@@ -115,10 +115,12 @@ export async function handleNostrProfileSave(host: MoltbotApp) {
   };
 
   try {
+    const auth = host.settings.token.trim() ? host.settings.token.trim() : host.password.trim();
     const response = await fetch(buildNostrProfileUrl(accountId), {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
+        ...(auth ? { Authorization: `Bearer ${auth}` } : {}),
       },
       body: JSON.stringify(state.values),
     });
@@ -180,10 +182,12 @@ export async function handleNostrProfileImport(host: MoltbotApp) {
   };
 
   try {
+    const auth = host.settings.token.trim() ? host.settings.token.trim() : host.password.trim();
     const response = await fetch(buildNostrProfileUrl(accountId, "/import"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(auth ? { Authorization: `Bearer ${auth}` } : {}),
       },
       body: JSON.stringify({ autoMerge: true }),
     });

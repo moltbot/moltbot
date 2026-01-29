@@ -31,7 +31,14 @@ export async function dashboardCommand(
     customBindHost,
     basePath,
   });
-  const authedUrl = token ? `${links.httpUrl}?token=${encodeURIComponent(token)}` : links.httpUrl;
+  const authedUrl = (() => {
+    if (!token) return links.httpUrl;
+    const url = new URL(links.httpUrl);
+    const params = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
+    params.set("token", token);
+    url.hash = params.toString();
+    return url.toString();
+  })();
 
   runtime.log(`Dashboard URL: ${authedUrl}`);
 

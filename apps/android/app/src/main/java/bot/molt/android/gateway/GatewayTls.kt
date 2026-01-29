@@ -5,6 +5,7 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
+import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.HostnameVerifier
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocketFactory
@@ -62,7 +63,18 @@ fun buildGatewayTlsConfig(
   return GatewayTlsConfig(
     sslSocketFactory = context.socketFactory,
     trustManager = trustManager,
-    hostnameVerifier = HostnameVerifier { _, _ -> true },
+    // Prefer hostname verification for DNS names (defense-in-depth for TOFU).
+    // Keep IP connections permissive since the gateway commonly uses self-signed
+    // certs and fingerprint pinning/TOFU is the primary binding.
+    hostnameVerifier =
+      HostnameVerifier { hostname, session ->
+        val h = hostname.trim()
+        if (h.isEmpty()) return@HostnameVerifier false
+        val isIpv4 = h.matches(Regex("^\\d{1,3}(?:\\.\\d{1,3}){3}$"))
+        val isIpv6 = h.contains(":")
+        if (isIpv4 || isIpv6) true
+        else HttpsURLConnection.getDefaultHostnameVerifier().verify(h, session)
+      },
   )
 }
 

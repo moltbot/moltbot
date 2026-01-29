@@ -103,7 +103,7 @@ server {
 
 ## 5) Access Moltbot and grant privileges
 
-Access `https://<vm-name>.exe.xyz/?token=YOUR-TOKEN-FROM-TERMINAL`. Approve
+Access `https://<vm-name>.exe.xyz/#token=YOUR-TOKEN-FROM-TERMINAL`. Approve
 devices with `moltbot devices list` and `moltbot device approve`. When in doubt,
 use Shelley from your browser!
 

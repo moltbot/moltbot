@@ -634,18 +634,27 @@ extension GatewayEndpointStore {
             components.scheme = "http"
         }
         components.path = "/"
-        var queryItems: [URLQueryItem] = []
+        // Security: never put credentials in URL query params (they end up in logs / history).
+        // Use a fragment instead; the browser can hydrate from it and immediately clean the URL.
+        var fragmentItems: [URLQueryItem] = []
         if let token = config.token?.trimmingCharacters(in: .whitespacesAndNewlines),
            !token.isEmpty
         {
-            queryItems.append(URLQueryItem(name: "token", value: token))
+            fragmentItems.append(URLQueryItem(name: "token", value: token))
         }
         if let password = config.password?.trimmingCharacters(in: .whitespacesAndNewlines),
            !password.isEmpty
         {
-            queryItems.append(URLQueryItem(name: "password", value: password))
+            fragmentItems.append(URLQueryItem(name: "password", value: password))
         }
-        components.queryItems = queryItems.isEmpty ? nil : queryItems
+        components.queryItems = nil
+        if fragmentItems.isEmpty {
+            components.fragment = nil
+        } else {
+            var frag = URLComponents()
+            frag.queryItems = fragmentItems
+            components.fragment = frag.percentEncodedQuery
+        }
         guard let url = components.url else {
             throw NSError(domain: "Dashboard", code: 2, userInfo: [
                 NSLocalizedDescriptionKey: "Failed to build dashboard URL",

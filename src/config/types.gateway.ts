@@ -191,6 +191,19 @@ export type GatewayHttpConfig = {
   endpoints?: GatewayHttpEndpointsConfig;
 };
 
+export type GatewayPluginsHttpConfig = {
+  /**
+   * Protect plugin-provided API endpoints under `/api/**` with Gateway auth.
+   * This is enabled by default because plugins can register HTTP handlers that
+   * mutate config or trigger agent actions.
+   */
+  protectApiPaths?: boolean;
+};
+
+export type GatewayPluginsConfig = {
+  http?: GatewayPluginsHttpConfig;
+};
+
 export type GatewayNodesConfig = {
   /** Browser routing policy for node-hosted browser proxies. */
   browser?: {
@@ -232,6 +245,7 @@ export type GatewayConfig = {
   reload?: GatewayReloadConfig;
   tls?: GatewayTlsConfig;
   http?: GatewayHttpConfig;
+  plugins?: GatewayPluginsConfig;
   nodes?: GatewayNodesConfig;
   /**
    * IPs of trusted reverse proxies (e.g. Traefik, nginx). When a connection

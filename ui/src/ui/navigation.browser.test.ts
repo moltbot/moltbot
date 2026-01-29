@@ -149,34 +149,37 @@ describe("control UI routing", () => {
     expect(container.scrollTop).toBe(maxScroll);
   });
 
-  it("hydrates token from URL params and strips it", async () => {
-    const app = mountApp("/ui/overview?token=abc123");
+  it("hydrates token from URL fragment and strips it", async () => {
+    const app = mountApp("/ui/overview#token=abc123");
     await app.updateComplete;
 
     expect(app.settings.token).toBe("abc123");
     expect(window.location.pathname).toBe("/ui/overview");
     expect(window.location.search).toBe("");
+    expect(window.location.hash).toBe("");
   });
 
-  it("hydrates password from URL params and strips it", async () => {
-    const app = mountApp("/ui/overview?password=sekret");
+  it("hydrates password from URL fragment and strips it", async () => {
+    const app = mountApp("/ui/overview#password=sekret");
     await app.updateComplete;
 
     expect(app.password).toBe("sekret");
     expect(window.location.pathname).toBe("/ui/overview");
     expect(window.location.search).toBe("");
+    expect(window.location.hash).toBe("");
   });
 
-  it("hydrates token from URL params even when settings already set", async () => {
+  it("hydrates token from URL fragment even when settings already set", async () => {
     localStorage.setItem(
       "moltbot.control.settings.v1",
       JSON.stringify({ token: "existing-token" }),
     );
-    const app = mountApp("/ui/overview?token=abc123");
+    const app = mountApp("/ui/overview#token=abc123");
     await app.updateComplete;
 
     expect(app.settings.token).toBe("abc123");
     expect(window.location.pathname).toBe("/ui/overview");
     expect(window.location.search).toBe("");
+    expect(window.location.hash).toBe("");
   });
 });
