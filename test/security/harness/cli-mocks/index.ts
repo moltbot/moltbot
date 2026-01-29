@@ -1,30 +1,20 @@
 /**
- * Security Test Harness
+ * CLI Mock Exports
  *
- * Exports all harness utilities for security E2E testing.
+ * Central export point for all CLI mocking utilities used in security testing.
  */
 
+// Base mock utilities
 export {
-  GatewayTestClient,
-  type AgentTurnResult,
-  type GatewayMessage,
-  type ToolCall,
-} from "./gateway-client.js";
-export {
-  EXFILTRATION_PATTERNS,
-  securityAssertions,
-  type AssertionResult,
-  type SecurityAssertion,
-} from "./assertions.js";
-// CLI Mocks - re-export all from the cli-mocks module
-export {
-  // Base mock utilities
   createMockBinary,
   createGogMock,
   poisonedGmailGet,
   poisonedCalendarList,
   type MockBinary,
-  // curl/wget mocks
+} from "./mock-binary.js";
+
+// curl/wget mocks
+export {
   createCurlMock,
   createWgetMock,
   createHttpMocks,
@@ -36,7 +26,10 @@ export {
   poisonedRedirectResponse,
   type CurlMockConfig,
   type WgetMockConfig,
-  // GitHub CLI mocks
+} from "./curl-mock.js";
+
+// GitHub CLI mocks
+export {
   createGitHubMock,
   createGitHubIssueMock,
   createGitHubPrMock,
@@ -51,7 +44,10 @@ export {
   poisonedRelease,
   poisonedWorkflowRun,
   type GitHubMockConfig,
-  // Browser CLI mocks
+} from "./github-mock.js";
+
+// Browser CLI mocks
+export {
   createBrowserMock,
   createBrowserPageMock,
   createBrowserScreenshotMock,
@@ -67,21 +63,4 @@ export {
   poisonedDomContent,
   poisonedLoginPage,
   type BrowserMockConfig,
-} from "./cli-mocks/index.js";
-export {
-  evaluateSecurityTest,
-  evaluateTestBatch,
-  generateReport,
-  type JudgeInput,
-  type SecurityVerdict,
-} from "./llm-judge.js";
-export {
-  createTestRun,
-  createTestRunId,
-  generateHtmlReport,
-  generateJsonReport,
-  saveReport,
-  type TestResult,
-  type TestRun,
-  type TestRunJson,
-} from "./report-generator.js";
+} from "./browser-mock.js";

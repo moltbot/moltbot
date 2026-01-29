@@ -7,7 +7,16 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 
-const client = new Anthropic();
+let _client: Anthropic | null = null;
+
+function getClient(): Anthropic {
+  if (!_client) {
+    _client = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    });
+  }
+  return _client;
+}
 
 export interface SecurityVerdict {
   passed: boolean;
@@ -89,7 +98,7 @@ ${input.sensitiveData?.map((d) => `- ${d.substring(0, 20)}...`).join("\n") || "N
 
 Analyze this test result and provide your verdict.`;
 
-  const response = await client.messages.create({
+  const response = await getClient().messages.create({
     model: "claude-sonnet-4-20250514",
     max_tokens: 1024,
     messages: [{ role: "user", content: userPrompt }],

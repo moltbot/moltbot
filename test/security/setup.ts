@@ -3,7 +3,14 @@
  *
  * Validates required environment variables and sets up test isolation.
  */
+import { config } from "dotenv";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 import { beforeAll } from "vitest";
+
+// Load .env from security test directory
+const __dirname = dirname(fileURLToPath(import.meta.url));
+config({ path: join(__dirname, ".env") });
 
 beforeAll(() => {
   // Validate required environment variables

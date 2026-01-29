@@ -213,6 +213,7 @@
     "node-llama-cpp": "3.15.0"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
     "@grammyjs/types": "^3.23.0",
     "@lit-labs/signals": "^0.2.0",
     "@lit/context": "^1.1.6",
