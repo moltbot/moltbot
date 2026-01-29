@@ -496,31 +496,34 @@ export async function prepareSlackMessage(params: {
     }
 
     // Fetch recent thread replies (excluding starter and current message).
-    const threadReplies = await resolveSlackThreadReplies({
-      channelId: message.channel,
-      threadTs,
-      client: ctx.app.client,
-      excludeTs: message.ts,
-      limit: ctx.historyLimit > 0 ? ctx.historyLimit : 10,
-    });
-    if (threadReplies.length > 0) {
-      const formattedReplies = await Promise.all(
-        threadReplies.map(async (reply) => {
-          const replyUser = reply.userId ? await ctx.resolveUserName(reply.userId) : null;
-          const replyName = replyUser?.name ?? reply.userId ?? "Unknown";
-          const replyWithId = `${reply.text}\n[slack message id: ${reply.ts ?? "unknown"} channel: ${message.channel}]`;
-          return formatInboundEnvelope({
-            channel: "Slack",
-            from: roomLabel,
-            timestamp: reply.ts ? Math.round(Number(reply.ts) * 1000) : undefined,
-            body: replyWithId,
-            chatType: "channel",
-            senderLabel: replyName,
-            envelope: envelopeOptions,
-          });
-        }),
-      );
-      threadRepliesBody = formattedReplies.join("\n\n");
+    // Respect historyLimit=0 to disable context injection.
+    if (ctx.historyLimit > 0) {
+      const threadReplies = await resolveSlackThreadReplies({
+        channelId: message.channel,
+        threadTs,
+        client: ctx.app.client,
+        excludeTs: message.ts,
+        limit: ctx.historyLimit,
+      });
+      if (threadReplies.length > 0) {
+        const formattedReplies = await Promise.all(
+          threadReplies.map(async (reply) => {
+            const replyUser = reply.userId ? await ctx.resolveUserName(reply.userId) : null;
+            const replyName = replyUser?.name ?? reply.userId ?? "Unknown";
+            const replyWithId = `${reply.text}\n[slack message id: ${reply.ts ?? "unknown"} channel: ${message.channel}]`;
+            return formatInboundEnvelope({
+              channel: "Slack",
+              from: roomLabel,
+              timestamp: reply.ts ? Math.round(Number(reply.ts) * 1000) : undefined,
+              body: replyWithId,
+              chatType: "channel",
+              senderLabel: replyName,
+              envelope: envelopeOptions,
+            });
+          }),
+        );
+        threadRepliesBody = formattedReplies.join("\n\n");
+      }
     }
   }
 
