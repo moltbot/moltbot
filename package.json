@@ -15,6 +15,7 @@
     "clawdbot": "./moltbot.mjs"
   },
   "files": [
+    "dist/entry.js",
     "dist/acp/**",
     "dist/agents/**",
     "dist/auto-reply/**",
@@ -81,7 +82,7 @@
   "scripts": {
     "dev": "node scripts/run-node.mjs",
     "postinstall": "node scripts/postinstall.js",
-    "prepack": "pnpm build && pnpm ui:build",
+    "prepack": "pnpm build && pnpm ui:build && node scripts/verify-package.js",
     "docs:list": "node scripts/docs-list.js",
     "docs:bin": "node scripts/build-docs-list.mjs",
     "docs:dev": "cd docs && mint dev",
