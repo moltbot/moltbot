@@ -39,21 +39,27 @@ function normalizePresenceKey(key: string | undefined): string | undefined {
 }
 
 function resolvePrimaryIPv4(): string | undefined {
-  const nets = os.networkInterfaces();
-  const prefer = ["en0", "eth0"];
-  const pick = (names: string[]) => {
-    for (const name of names) {
-      const list = nets[name];
-      const entry = list?.find((n) => n.family === "IPv4" && !n.internal);
-      if (entry?.address) return entry.address;
-    }
-    for (const list of Object.values(nets)) {
-      const entry = list?.find((n) => n.family === "IPv4" && !n.internal);
-      if (entry?.address) return entry.address;
-    }
-    return undefined;
-  };
-  return pick(prefer) ?? os.hostname();
+  try {
+    const nets = os.networkInterfaces();
+    const prefer = ["en0", "eth0"];
+    const pick = (names: string[]) => {
+      for (const name of names) {
+        const list = nets[name];
+        const entry = list?.find((n) => n.family === "IPv4" && !n.internal);
+        if (entry?.address) return entry.address;
+      }
+      for (const list of Object.values(nets)) {
+        const entry = list?.find((n) => n.family === "IPv4" && !n.internal);
+        if (entry?.address) return entry.address;
+      }
+      return undefined;
+    };
+    return pick(prefer) ?? os.hostname();
+  } catch {
+    // Some environments (e.g. certain VPS setups) can throw from os.networkInterfaces().
+    // Fall back to hostname so the CLI can still boot.
+    return os.hostname();
+  }
 }
 
 function initSelfPresence() {
