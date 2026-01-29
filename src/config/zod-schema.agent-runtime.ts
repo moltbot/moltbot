@@ -91,6 +91,7 @@ export const SandboxDockerSchema = z
     capDrop: z.array(z.string()).optional(),
     env: z.record(z.string(), z.string()).optional(),
     setupCommand: z.string().optional(),
+    shellCommand: z.array(z.string()).optional(),
     pidsLimit: z.number().int().positive().optional(),
     memory: z.union([z.string(), z.number()]).optional(),
     memorySwap: z.union([z.string(), z.number()]).optional(),

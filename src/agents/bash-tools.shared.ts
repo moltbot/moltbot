@@ -15,7 +15,16 @@ export type BashSandboxConfig = {
   workspaceDir: string;
   containerWorkdir: string;
   env?: Record<string, string>;
+  shellCommand?: string[];
 };
+
+const DEFAULT_SANDBOX_SHELL_COMMAND = ["sh", "-lc"];
+
+export function resolveSandboxShellCommand(shellCommand?: string[]) {
+  if (!shellCommand) return DEFAULT_SANDBOX_SHELL_COMMAND;
+  const trimmed = shellCommand.map((entry) => entry.trim()).filter(Boolean);
+  return trimmed.length > 0 ? trimmed : DEFAULT_SANDBOX_SHELL_COMMAND;
+}
 
 export function buildSandboxEnv(params: {
   defaultPath: string;
@@ -51,6 +60,7 @@ export function buildDockerExecArgs(params: {
   workdir?: string;
   env: Record<string, string>;
   tty: boolean;
+  shellCommand?: string[];
 }) {
   const args = ["exec", "-i"];
   if (params.tty) args.push("-t");
@@ -72,7 +82,8 @@ export function buildDockerExecArgs(params: {
   const pathExport = hasCustomPath
     ? 'export PATH="${CLAWDBOT_PREPEND_PATH}:$PATH"; unset CLAWDBOT_PREPEND_PATH; '
     : "";
-  args.push(params.containerName, "sh", "-lc", `${pathExport}${params.command}`);
+  const [shell, ...shellArgs] = resolveSandboxShellCommand(params.shellCommand);
+  args.push(params.containerName, shell, ...shellArgs, `${pathExport}${params.command}`);
   return args;
 }
 

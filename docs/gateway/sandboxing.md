@@ -123,7 +123,8 @@ Docker installs and the containerized gateway live here:
 
 ## setupCommand (one-time container setup)
 `setupCommand` runs **once** after the sandbox container is created (not on every run).
-It executes inside the container via `sh -lc`.
+It executes inside the container via `sh -lc` unless `agents.defaults.sandbox.docker.shellCommand`
+overrides it.
 
 Paths:
 - Global: `agents.defaults.sandbox.docker.setupCommand`

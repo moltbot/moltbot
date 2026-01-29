@@ -66,7 +66,8 @@ Example:
   already sets `env.PATH`). The daemon itself still runs with a minimal `PATH`:
   - macOS: `/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin`, `/bin`
   - Linux: `/usr/local/bin`, `/usr/bin`, `/bin`
-- `host=sandbox`: runs `sh -lc` (login shell) inside the container, so `/etc/profile` may reset `PATH`.
+- `host=sandbox`: runs `sh -lc` (login shell) inside the container unless
+  `agents.defaults.sandbox.docker.shellCommand` overrides it, so `/etc/profile` may reset `PATH`.
   Moltbot prepends `env.PATH` after profile sourcing via an internal env var (no shell interpolation);
   `tools.exec.pathPrepend` applies here too.
 - `host=node`: only env overrides you pass are sent to the node. `tools.exec.pathPrepend` only applies

@@ -19,6 +19,8 @@ export type SandboxDockerSettings = {
   env?: Record<string, string>;
   /** Optional setup command run once after container creation. */
   setupCommand?: string;
+  /** Optional shell command + args for sandbox exec (default: ["sh", "-lc"]). */
+  shellCommand?: string[];
   /** Limit container PIDs (0 = Docker default). */
   pidsLimit?: number;
   /** Limit container memory (e.g. 512m, 2g, or bytes as number). */

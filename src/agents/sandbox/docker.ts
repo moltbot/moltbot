@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { defaultRuntime } from "../../runtime.js";
 import { formatCliCommand } from "../../cli/command-format.js";
 import { DEFAULT_SANDBOX_IMAGE, SANDBOX_AGENT_WORKSPACE_MOUNT } from "./constants.js";
+import { resolveSandboxShellCommand } from "../bash-tools.shared.js";
 import { readRegistry, updateRegistry } from "./registry.js";
 import { computeSandboxConfigHash } from "./config-hash.js";
 import { resolveSandboxAgentId, resolveSandboxScopeKey, slugifySessionKey } from "./shared.js";
@@ -203,7 +204,8 @@ async function createSandboxContainer(params: {
   await execDocker(["start", name]);
 
   if (cfg.setupCommand?.trim()) {
-    await execDocker(["exec", "-i", name, "sh", "-lc", cfg.setupCommand]);
+    const [shell, ...shellArgs] = resolveSandboxShellCommand(cfg.shellCommand);
+    await execDocker(["exec", "-i", name, shell, ...shellArgs, cfg.setupCommand]);
   }
 }
 

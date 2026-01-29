@@ -9,6 +9,7 @@ export type SandboxDockerConfig = {
   capDrop: string[];
   env?: Record<string, string>;
   setupCommand?: string;
+  shellCommand?: string[];
   pidsLimit?: number;
   memory?: string | number;
   memorySwap?: string | number;

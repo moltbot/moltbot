@@ -2181,7 +2181,8 @@ cross-session isolation. Use `scope: "session"` for per-session isolation.
 Legacy: `perSession` is still supported (`true` → `scope: "session"`,
 `false` → `scope: "shared"`).
 
-`setupCommand` runs **once** after the container is created (inside the container via `sh -lc`).
+`setupCommand` runs **once** after the container is created (inside the container via `sh -lc`, or
+the command specified in `agents.defaults.sandbox.docker.shellCommand`).
 For package installs, ensure network egress, a writable root FS, and a root user.
 
 ```json5
@@ -2204,6 +2205,7 @@ For package installs, ensure network egress, a writable root FS, and a root user
           capDrop: ["ALL"],
           env: { LANG: "C.UTF-8" },
           setupCommand: "apt-get update && apt-get install -y git curl jq",
+          shellCommand: ["bash", "-lc"],
           // Per-agent override (multi-agent): agents.list[].sandbox.docker.*
           pidsLimit: 256,
           memory: "1g",

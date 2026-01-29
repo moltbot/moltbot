@@ -66,6 +66,7 @@ export function resolveSandboxDockerConfig(params: {
     capDrop: agentDocker?.capDrop ?? globalDocker?.capDrop ?? ["ALL"],
     env,
     setupCommand: agentDocker?.setupCommand ?? globalDocker?.setupCommand,
+    shellCommand: agentDocker?.shellCommand ?? globalDocker?.shellCommand,
     pidsLimit: agentDocker?.pidsLimit ?? globalDocker?.pidsLimit,
     memory: agentDocker?.memory ?? globalDocker?.memory,
     memorySwap: agentDocker?.memorySwap ?? globalDocker?.memorySwap,

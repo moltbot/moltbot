@@ -275,6 +275,7 @@ export function createMoltbotCodingTools(options?: {
           workspaceDir: sandbox.workspaceDir,
           containerWorkdir: sandbox.containerWorkdir,
           env: sandbox.docker.env,
+          shellCommand: sandbox.docker.shellCommand,
         }
       : undefined,
   });

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { peekSystemEvents, resetSystemEventsForTest } from "../infra/system-events.js";
 import { getFinishedSession, resetProcessRegistryForTests } from "./bash-process-registry.js";
 import { createExecTool, createProcessTool, execTool, processTool } from "./bash-tools.js";
-import { buildDockerExecArgs } from "./bash-tools.shared.js";
+import { buildDockerExecArgs, resolveSandboxShellCommand } from "./bash-tools.shared.js";
 import { sanitizeBinaryOutput } from "./shell-utils.js";
 
 const isWin = process.platform === "win32";
@@ -412,5 +412,23 @@ describe("buildDockerExecArgs", () => {
     });
 
     expect(args).toContain("-t");
+  });
+
+  it("uses configured sandbox shell command when provided", () => {
+    const args = buildDockerExecArgs({
+      containerName: "test-container",
+      command: "echo test",
+      env: { HOME: "/home/user" },
+      tty: false,
+      shellCommand: ["bash", "-lc"],
+    });
+
+    expect(args).toContain("bash");
+    expect(args).toContain("-lc");
+  });
+
+  it("falls back to default shell command when override is empty", () => {
+    const resolved = resolveSandboxShellCommand(["", " "]);
+    expect(resolved).toEqual(["sh", "-lc"]);
   });
 });

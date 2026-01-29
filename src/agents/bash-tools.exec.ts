@@ -372,6 +372,7 @@ async function runExecProcess(opts: {
           workdir: opts.containerWorkdir ?? opts.sandbox.containerWorkdir,
           env: opts.env,
           tty: opts.usePty,
+          shellCommand: opts.sandbox.shellCommand,
         }),
       ],
       options: {
