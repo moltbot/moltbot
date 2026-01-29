@@ -437,7 +437,8 @@ const FIELD_HELP: Record<string, string> = {
   "tools.web.search.enabled": "Enable the web_search tool (requires a provider API key).",
   "tools.web.search.provider": 'Search provider ("brave" or "perplexity").',
   "tools.web.search.apiKey": "Brave Search API key (fallback: BRAVE_API_KEY env var).",
-  "tools.web.search.baseUrl": "Brave Search base URL override (default: https://api.search.brave.com).",
+  "tools.web.search.baseUrl":
+    "Brave Search base URL override (default: https://api.search.brave.com).",
   "tools.web.search.authStyle":
     'Auth header style: "x-subscription-token" (Brave default) or "bearer" (for select proxies).',
   "tools.web.search.maxResults": "Default number of results to return (1-10).",
