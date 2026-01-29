@@ -373,6 +373,38 @@ Use config:
 }
 ```
 
+#### Docker-in-Docker (gateway in container)
+
+If the gateway itself runs in a Docker container and you want sandbox browsers,
+set `cdpHost` to `host.docker.internal` (Docker Desktop) so the gateway can
+reach the browser container's CDP endpoint:
+
+```json5
+{
+  agents: {
+    defaults: {
+      sandbox: {
+        browser: {
+          enabled: true,
+          cdpHost: "host.docker.internal"
+        }
+      }
+    }
+  },
+  tools: {
+    sandbox: {
+      tools: {
+        allow: ["*"]  // browser is denied by default
+      }
+    }
+  }
+}
+```
+
+The gateway automatically remaps volume mount paths for Docker-in-Docker when
+`CLAWDBOT_SANDBOX_HOST_CONFIG_DIR` and `CLAWDBOT_SANDBOX_HOST_WORKSPACE_DIR`
+environment variables are set (already configured in `docker-compose.yml`).
+
 Custom browser image:
 
 ```json5

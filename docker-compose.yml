@@ -1,6 +1,8 @@
 services:
   moltbot-gateway:
     image: ${CLAWDBOT_IMAGE:-moltbot:local}
+    # Required for Docker socket access when creating sandbox containers (DinD)
+    user: root
     environment:
       HOME: /home/node
       TERM: xterm-256color
@@ -8,9 +10,13 @@ services:
       CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY}
       CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY}
       CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE}
+      # Docker-in-Docker: host paths for sandbox container volume mounts
+      CLAWDBOT_SANDBOX_HOST_CONFIG_DIR: ${CLAWDBOT_CONFIG_DIR}
+      CLAWDBOT_SANDBOX_HOST_WORKSPACE_DIR: ${CLAWDBOT_WORKSPACE_DIR}
     volumes:
       - ${CLAWDBOT_CONFIG_DIR}:/home/node/.clawdbot
       - ${CLAWDBOT_WORKSPACE_DIR}:/home/node/clawd
+      - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "${CLAWDBOT_GATEWAY_PORT:-18789}:18789"
       - "${CLAWDBOT_BRIDGE_PORT:-18790}:18790"
