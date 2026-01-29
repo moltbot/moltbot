@@ -29,13 +29,11 @@ import { resolveDiscordChannelAllowlist } from "../resolve-channels.js";
 import { resolveDiscordUserAllowlist } from "../resolve-users.js";
 import { normalizeDiscordToken } from "../token.js";
 import {
-  cacheBotMessage,
   DiscordMessageListener,
   DiscordPresenceListener,
   DiscordReactionListener,
   DiscordReactionRemoveListener,
   registerDiscordListener,
-  type ReactionTriggerCallback,
 } from "./listeners.js";
 import { createDiscordMessageHandler } from "./message-handler.js";
 import {
