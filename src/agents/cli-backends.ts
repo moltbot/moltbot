@@ -74,6 +74,37 @@ const DEFAULT_CODEX_BACKEND: CliBackendConfig = {
   serialize: true,
 };
 
+const COPILOT_MODEL_ALIASES: Record<string, string> = {
+  "gpt-5": "gpt-5",
+  "gpt-4.1": "gpt-4.1",
+  "gpt-4.1-mini": "gpt-4.1-mini",
+  "gpt-4.1-nano": "gpt-4.1-nano",
+  "gpt-4o": "gpt-4o",
+  o1: "o1",
+  "o1-mini": "o1-mini",
+  "o3-mini": "o3-mini",
+  "claude-sonnet-4.5": "claude-sonnet-4.5",
+  "claude-sonnet-4": "claude-sonnet-4",
+};
+
+/**
+ * Default configuration for the Copilot CLI backend.
+ *
+ * Note: The Copilot CLI uses the `@github/copilot-sdk` for programmatic control.
+ * This backend config is used for CLI-style invocation patterns, but the actual
+ * execution is handled by the SDK in `copilot-runner.ts`.
+ */
+const DEFAULT_COPILOT_BACKEND: CliBackendConfig = {
+  command: "copilot",
+  args: [],
+  output: "text",
+  input: "arg",
+  modelAliases: COPILOT_MODEL_ALIASES,
+  sessionMode: "always",
+  sessionIdFields: ["sessionId", "session_id"],
+  serialize: true,
+};
+
 function normalizeBackendKey(key: string): string {
   return normalizeProviderId(key);
 }
@@ -107,6 +138,7 @@ export function resolveCliBackendIds(cfg?: MoltbotConfig): Set<string> {
   const ids = new Set<string>([
     normalizeBackendKey("claude-cli"),
     normalizeBackendKey("codex-cli"),
+    normalizeBackendKey("copilot-cli"),
   ]);
   const configured = cfg?.agents?.defaults?.cliBackends ?? {};
   for (const key of Object.keys(configured)) {
@@ -131,6 +163,12 @@ export function resolveCliBackendConfig(
   }
   if (normalized === "codex-cli") {
     const merged = mergeBackendConfig(DEFAULT_CODEX_BACKEND, override);
+    const command = merged.command?.trim();
+    if (!command) return null;
+    return { id: normalized, config: { ...merged, command } };
+  }
+  if (normalized === "copilot-cli") {
+    const merged = mergeBackendConfig(DEFAULT_COPILOT_BACKEND, override);
     const command = merged.command?.trim();
     if (!command) return null;
     return { id: normalized, config: { ...merged, command } };

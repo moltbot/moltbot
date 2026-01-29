@@ -200,6 +200,25 @@ Moltbot also ships a default for `codex-cli`:
 - `imageArg: "--image"`
 - `sessionMode: "existing"`
 
+Moltbot also ships a default for `copilot-cli`:
+
+- `command: "copilot"`
+- `sessionMode: "always"`
+- Uses the `@github/copilot-sdk` for programmatic control via JSON-RPC
+- Supports models: `gpt-5`, `gpt-4.1`, `gpt-4.1-mini`, `gpt-4o`, `o1`, `o1-mini`, `o3-mini`, `claude-sonnet-4.5`
+
+To use Copilot CLI:
+```bash
+# Install the CLI globally
+npm install -g @github/copilot
+
+# Authenticate
+copilot auth login
+
+# Use in Moltbot
+moltbot agent --message "hi" --model copilot-cli/gpt-4.1
+```
+
 Override only if needed (common: absolute `command` path).
 
 ## Limitations

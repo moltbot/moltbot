@@ -26,9 +26,11 @@ import {
   resolveSystemPromptUsage,
   writeCliImages,
 } from "./cli-runner/helpers.js";
+import { runCopilotCliAgent, isCopilotCliAvailable } from "./copilot-runner.js";
 import { FailoverError, resolveFailoverStatus } from "./failover-error.js";
 import { classifyFailoverReason, isFailoverErrorMessage } from "./pi-embedded-helpers.js";
 import type { EmbeddedPiRunResult } from "./pi-embedded-runner.js";
+import { normalizeProviderId } from "./model-selection.js";
 
 const log = createSubsystemLogger("agent/claude-cli");
 
@@ -50,6 +52,29 @@ export async function runCliAgent(params: {
   cliSessionId?: string;
   images?: ImageContent[];
 }): Promise<EmbeddedPiRunResult> {
+  // Route copilot-cli requests to the SDK-based runner
+  const normalizedProvider = normalizeProviderId(params.provider);
+  if (normalizedProvider === "copilot-cli") {
+    return runCopilotCliAgent({
+      sessionId: params.sessionId,
+      sessionKey: params.sessionKey,
+      sessionFile: params.sessionFile,
+      workspaceDir: params.workspaceDir,
+      config: params.config,
+      prompt: params.prompt,
+      provider: params.provider,
+      model: params.model,
+      thinkLevel: params.thinkLevel,
+      timeoutMs: params.timeoutMs,
+      runId: params.runId,
+      extraSystemPrompt: params.extraSystemPrompt,
+      streamParams: params.streamParams,
+      ownerNumbers: params.ownerNumbers,
+      cliSessionId: params.cliSessionId,
+      images: params.images,
+    });
+  }
+
   const started = Date.now();
   const resolvedWorkspace = resolveUserPath(params.workspaceDir);
   const workspaceDir = resolvedWorkspace;
@@ -333,3 +358,6 @@ export async function runClaudeCliAgent(params: {
     images: params.images,
   });
 }
+
+// Re-export Copilot-specific utilities
+export { isCopilotCliAvailable } from "./copilot-runner.js";

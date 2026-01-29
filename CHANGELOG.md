@@ -14,6 +14,7 @@ Status: beta.
 - Memory Search: allow extra paths for memory indexing. (#3600) Thanks @kira-ariaki.
 
 ### Changes
+- Agents: add GitHub Copilot SDK integration for `copilot-cli` backend. Supports programmatic control of the Copilot CLI via `@github/copilot-sdk`.
 - Providers: add Venice AI integration; update Moonshot Kimi references to kimi-k2.5; update MiniMax API endpoint/format. (#2762, #3064)
 - Providers: add Xiaomi MiMo (mimo-v2-flash) support and onboarding flow. (#3454) Thanks @WqyJh.
 - Telegram: quote replies, edit-message action, silent sends, sticker support + vision caching, linkPreview toggle, plugin sendPayload support. (#2900, #2394, #2382, #2548, #1700, #1917)
