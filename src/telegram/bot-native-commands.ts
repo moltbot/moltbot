@@ -468,6 +468,7 @@ export const registerTelegramNativeCommands = ({
             CommandAuthorized: commandAuthorized,
             CommandSource: "native" as const,
             SessionKey: `telegram:slash:${senderId || chatId}`,
+            AccountId: route.accountId,
             CommandTargetSessionKey: sessionKey,
             MessageThreadId: threadIdForSend,
             IsForum: isForum,
@@ -487,7 +488,7 @@ export const registerTelegramNativeCommands = ({
             cfg,
             dispatcherOptions: {
               responsePrefix: resolveEffectiveMessagesConfig(cfg, route.agentId).responsePrefix,
-              deliver: async (payload) => {
+              deliver: async (payload, info) => {
                 await deliverReplies({
                   replies: [payload],
                   chatId: String(chatId),
@@ -500,6 +501,7 @@ export const registerTelegramNativeCommands = ({
                   tableMode,
                   chunkMode,
                   linkPreview: telegramCfg.linkPreview,
+                  notifyEmptyResponse: info.kind === "final",
                 });
               },
               onError: (err, info) => {
