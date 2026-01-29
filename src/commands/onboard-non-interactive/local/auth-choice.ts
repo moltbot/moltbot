@@ -16,6 +16,7 @@ import {
   applyOpenrouterConfig,
   applySyntheticConfig,
   applyVeniceConfig,
+  applyMorpheusConfig,
   applyVercelAiGatewayConfig,
   applyXiaomiConfig,
   applyZaiConfig,
@@ -28,6 +29,7 @@ import {
   setOpenrouterApiKey,
   setSyntheticApiKey,
   setVeniceApiKey,
+  setMorpheusApiKey,
   setVercelAiGatewayApiKey,
   setXiaomiApiKey,
   setZaiApiKey,
@@ -328,6 +330,25 @@ export async function applyNonInteractiveAuthChoice(params: {
       mode: "api_key",
     });
     return applyVeniceConfig(nextConfig);
+  }
+
+  if (authChoice === "morpheus-api-key") {
+    const resolved = await resolveNonInteractiveApiKey({
+      provider: "morpheus",
+      cfg: baseConfig,
+      flagValue: opts.morpheusApiKey,
+      flagName: "--morpheus-api-key",
+      envVar: "MORPHEUS_API_KEY",
+      runtime,
+    });
+    if (!resolved) return null;
+    if (resolved.source !== "profile") await setMorpheusApiKey(resolved.key);
+    nextConfig = applyAuthProfileConfig(nextConfig, {
+      profileId: "morpheus:default",
+      provider: "morpheus",
+      mode: "api_key",
+    });
+    return applyMorpheusConfig(nextConfig);
   }
 
   if (

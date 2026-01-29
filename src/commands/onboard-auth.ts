@@ -4,6 +4,10 @@ export {
 } from "../agents/synthetic-models.js";
 export { VENICE_DEFAULT_MODEL_ID, VENICE_DEFAULT_MODEL_REF } from "../agents/venice-models.js";
 export {
+  MORPHEUS_DEFAULT_MODEL_ID,
+  MORPHEUS_DEFAULT_MODEL_REF,
+} from "../agents/morpheus-models.js";
+export {
   applyAuthProfileConfig,
   applyKimiCodeConfig,
   applyKimiCodeProviderConfig,
@@ -15,6 +19,8 @@ export {
   applySyntheticProviderConfig,
   applyVeniceConfig,
   applyVeniceProviderConfig,
+  applyMorpheusConfig,
+  applyMorpheusProviderConfig,
   applyVercelAiGatewayConfig,
   applyVercelAiGatewayProviderConfig,
   applyXiaomiConfig,
@@ -45,6 +51,7 @@ export {
   setOpenrouterApiKey,
   setSyntheticApiKey,
   setVeniceApiKey,
+  setMorpheusApiKey,
   setVercelAiGatewayApiKey,
   setXiaomiApiKey,
   setZaiApiKey,
