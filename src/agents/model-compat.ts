@@ -7,7 +7,8 @@ function isOpenAiCompletionsModel(model: Model<Api>): model is Model<"openai-com
 export function normalizeModelCompat(model: Model<Api>): Model<Api> {
   const baseUrl = model.baseUrl ?? "";
   const isZai = model.provider === "zai" || baseUrl.includes("api.z.ai");
-  if (!isZai || !isOpenAiCompletionsModel(model)) return model;
+  const isNearAi = model.provider === "nearai" || baseUrl.includes("cloud-api.near.ai");
+  if ((!isZai && !isNearAi) || !isOpenAiCompletionsModel(model)) return model;
 
   const openaiModel = model as Model<"openai-completions">;
   const compat = openaiModel.compat ?? undefined;

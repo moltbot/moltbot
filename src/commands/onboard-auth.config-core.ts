@@ -11,6 +11,12 @@ import {
   VENICE_DEFAULT_MODEL_REF,
   VENICE_MODEL_CATALOG,
 } from "../agents/venice-models.js";
+import {
+  buildNearAiModelDefinition,
+  NEAR_AI_BASE_URL,
+  NEAR_AI_DEFAULT_MODEL_REF,
+  NEAR_AI_MODEL_CATALOG,
+} from "../agents/nearai-models.js";
 import type { MoltbotConfig } from "../config/config.js";
 import {
   OPENROUTER_DEFAULT_MODEL_REF,
@@ -478,6 +484,81 @@ export function applyVeniceConfig(cfg: MoltbotConfig): MoltbotConfig {
               }
             : undefined),
           primary: VENICE_DEFAULT_MODEL_REF,
+        },
+      },
+    },
+  };
+}
+
+/**
+ * Apply NEAR AI provider configuration without changing the default model.
+ * Registers NEAR AI models and sets up the provider, but preserves existing model selection.
+ */
+export function applyNearAiProviderConfig(cfg: MoltbotConfig): MoltbotConfig {
+  const models = { ...cfg.agents?.defaults?.models };
+  models[NEAR_AI_DEFAULT_MODEL_REF] = {
+    ...models[NEAR_AI_DEFAULT_MODEL_REF],
+    alias: models[NEAR_AI_DEFAULT_MODEL_REF]?.alias ?? "GLM-4.7",
+  };
+
+  const providers = { ...cfg.models?.providers };
+  const existingProvider = providers["nearai"];
+  const existingModels = Array.isArray(existingProvider?.models) ? existingProvider.models : [];
+  const nearAiModels = NEAR_AI_MODEL_CATALOG.map(buildNearAiModelDefinition);
+  const mergedModels = [
+    ...existingModels,
+    ...nearAiModels.filter((model) => !existingModels.some((existing) => existing.id === model.id)),
+  ];
+  const { apiKey: existingApiKey, ...existingProviderRest } = (existingProvider ?? {}) as Record<
+    string,
+    unknown
+  > as { apiKey?: string };
+  const resolvedApiKey = typeof existingApiKey === "string" ? existingApiKey : undefined;
+  const normalizedApiKey = resolvedApiKey?.trim();
+  providers["nearai"] = {
+    ...existingProviderRest,
+    baseUrl: NEAR_AI_BASE_URL,
+    api: "openai-completions",
+    ...(normalizedApiKey ? { apiKey: normalizedApiKey } : {}),
+    models: mergedModels.length > 0 ? mergedModels : nearAiModels,
+  };
+
+  return {
+    ...cfg,
+    agents: {
+      ...cfg.agents,
+      defaults: {
+        ...cfg.agents?.defaults,
+        models,
+      },
+    },
+    models: {
+      mode: cfg.models?.mode ?? "merge",
+      providers,
+    },
+  };
+}
+
+/**
+ * Apply NEAR AI provider configuration AND set NEAR AI as the default model.
+ * Use this when NEAR AI is the primary provider choice during onboarding.
+ */
+export function applyNearAiConfig(cfg: MoltbotConfig): MoltbotConfig {
+  const next = applyNearAiProviderConfig(cfg);
+  const existingModel = next.agents?.defaults?.model;
+  return {
+    ...next,
+    agents: {
+      ...next.agents,
+      defaults: {
+        ...next.agents?.defaults,
+        model: {
+          ...(existingModel && "fallbacks" in (existingModel as Record<string, unknown>)
+            ? {
+                fallbacks: (existingModel as { fallbacks?: string[] }).fallbacks,
+              }
+            : undefined),
+          primary: NEAR_AI_DEFAULT_MODEL_REF,
         },
       },
     },

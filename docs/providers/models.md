@@ -42,6 +42,7 @@ See [Venice AI](/providers/venice).
 - [GLM models](/providers/glm)
 - [MiniMax](/providers/minimax)
 - [Venius (Venice AI)](/providers/venice)
+- [NEAR AI (private, verifiable)](/providers/nearai)
 - [Amazon Bedrock](/bedrock)
 
 For the full provider catalog (xAI, Groq, Mistral, etc.) and advanced configuration,

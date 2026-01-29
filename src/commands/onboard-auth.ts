@@ -3,6 +3,7 @@ export {
   SYNTHETIC_DEFAULT_MODEL_REF,
 } from "../agents/synthetic-models.js";
 export { VENICE_DEFAULT_MODEL_ID, VENICE_DEFAULT_MODEL_REF } from "../agents/venice-models.js";
+export { NEAR_AI_DEFAULT_MODEL_ID, NEAR_AI_DEFAULT_MODEL_REF } from "../agents/nearai-models.js";
 export {
   applyAuthProfileConfig,
   applyKimiCodeConfig,
@@ -15,6 +16,8 @@ export {
   applySyntheticProviderConfig,
   applyVeniceConfig,
   applyVeniceProviderConfig,
+  applyNearAiConfig,
+  applyNearAiProviderConfig,
   applyVercelAiGatewayConfig,
   applyVercelAiGatewayProviderConfig,
   applyXiaomiConfig,
@@ -45,6 +48,7 @@ export {
   setOpenrouterApiKey,
   setSyntheticApiKey,
   setVeniceApiKey,
+  setNearAiApiKey,
   setVercelAiGatewayApiKey,
   setXiaomiApiKey,
   setZaiApiKey,

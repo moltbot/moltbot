@@ -41,4 +41,26 @@ describe("normalizeModelCompat", () => {
     const normalized = normalizeModelCompat(model);
     expect(normalized.compat?.supportsDeveloperRole).toBe(false);
   });
+
+  it("forces supportsDeveloperRole off for nearai provider", () => {
+    const model = {
+      ...baseModel(),
+      provider: "nearai",
+      baseUrl: "https://cloud-api.near.ai/v1",
+    };
+    delete (model as { compat?: unknown }).compat;
+    const normalized = normalizeModelCompat(model);
+    expect(normalized.compat?.supportsDeveloperRole).toBe(false);
+  });
+
+  it("forces supportsDeveloperRole off for near.ai baseUrl", () => {
+    const model = {
+      ...baseModel(),
+      provider: "custom",
+      baseUrl: "https://cloud-api.near.ai/v1",
+    };
+    delete (model as { compat?: unknown }).compat;
+    const normalized = normalizeModelCompat(model);
+    expect(normalized.compat?.supportsDeveloperRole).toBe(false);
+  });
 });
