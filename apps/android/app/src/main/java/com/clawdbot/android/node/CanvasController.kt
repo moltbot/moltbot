@@ -8,6 +8,9 @@ import android.webkit.WebView
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.scale
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -21,6 +24,8 @@ import com.clawdbot.android.BuildConfig
 import kotlin.coroutines.resume
 
 class CanvasController {
+  private val _hasContent = MutableStateFlow(false)
+  val hasContent: StateFlow<Boolean> = _hasContent.asStateFlow()
   enum class SnapshotFormat(val rawValue: String) {
     Png("png"),
     Jpeg("jpeg"),
@@ -48,6 +53,7 @@ class CanvasController {
   fun navigate(url: String) {
     val trimmed = url.trim()
     this.url = if (trimmed.isBlank() || trimmed == "/") null else trimmed
+    _hasContent.value = this.url != null
     reload()
   }
 

@@ -330,6 +330,7 @@ class NodeRuntime(context: Context) {
   val manualToken: StateFlow<String> = prefs.manualToken
   val lastDiscoveredStableId: StateFlow<String> = prefs.lastDiscoveredStableId
   val canvasDebugStatusEnabled: StateFlow<Boolean> = prefs.canvasDebugStatusEnabled
+  val canvasHasContent: StateFlow<Boolean> = canvas.hasContent
 
   private var didAutoConnect = false
   private var suppressWakeWordsSync = false
