@@ -8,6 +8,7 @@ import { type LogLevel, normalizeLogLevel } from "./levels.js";
 import { getLogger, type LoggerSettings } from "./logger.js";
 import { readLoggingConfig } from "./config.js";
 import { loggingState } from "./state.js";
+import { formatLocalHHMMSS } from "./time.js";
 
 export type ConsoleStyle = "pretty" | "compact" | "json";
 type ConsoleSettings = {
@@ -129,9 +130,8 @@ function isEpipeError(err: unknown): boolean {
 }
 
 function formatConsoleTimestamp(style: ConsoleStyle): string {
-  const now = new Date().toISOString();
-  if (style === "pretty") return now.slice(11, 19);
-  return now;
+  if (style === "pretty") return formatLocalHHMMSS();
+  return new Date().toISOString();
 }
 
 function hasTimestampPrefix(value: string): boolean {
