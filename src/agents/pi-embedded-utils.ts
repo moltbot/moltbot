@@ -206,6 +206,32 @@ export function extractAssistantThinking(msg: AssistantMessage): string {
   return blocks.join("\n").trim();
 }
 
+/**
+ * Extract image blocks from assistant message content.
+ * Used for OpenRouter image generation models that return images as ImageContent.
+ */
+export function extractAssistantImages(
+  msg: AssistantMessage,
+): Array<{ mimeType: string; data: string }> {
+  if (!Array.isArray(msg.content)) return [];
+  const images: Array<{ mimeType: string; data: string }> = [];
+  for (const block of msg.content) {
+    if (!block || typeof block !== "object") continue;
+    const record = block as unknown as Record<string, unknown>;
+    if (
+      record.type === "image" &&
+      typeof record.data === "string" &&
+      typeof record.mimeType === "string"
+    ) {
+      images.push({
+        mimeType: record.mimeType,
+        data: record.data,
+      });
+    }
+  }
+  return images;
+}
+
 export function formatReasoningMessage(text: string): string {
   const trimmed = text.trim();
   if (!trimmed) return "";

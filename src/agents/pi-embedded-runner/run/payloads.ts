@@ -4,6 +4,7 @@ import type { ReasoningLevel, VerboseLevel } from "../../../auto-reply/thinking.
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../../../auto-reply/tokens.js";
 import { formatToolAggregate } from "../../../auto-reply/tool-meta.js";
 import type { MoltbotConfig } from "../../../config/config.js";
+import { saveMediaBuffer } from "../../../media/store.js";
 import {
   formatAssistantErrorText,
   formatRawAssistantErrorForUi,
@@ -12,15 +13,33 @@ import {
   normalizeTextForComparison,
 } from "../../pi-embedded-helpers.js";
 import {
+  extractAssistantImages,
   extractAssistantText,
   extractAssistantThinking,
   formatReasoningMessage,
 } from "../../pi-embedded-utils.js";
 import type { ToolResultFormat } from "../../pi-embedded-subscribe.js";
 
+/**
+ * Save base64 image data from OpenRouter image generation models.
+ * Uses the standard media store with "generated" subdirectory.
+ */
+async function saveGeneratedImage(image: {
+  mimeType: string;
+  data: string;
+}): Promise<string | null> {
+  try {
+    const buffer = Buffer.from(image.data, "base64");
+    const saved = await saveMediaBuffer(buffer, image.mimeType, "generated");
+    return saved.path;
+  } catch {
+    return null;
+  }
+}
+
 type ToolMetaEntry = { toolName: string; meta?: string };
 
-export function buildEmbeddedRunPayloads(params: {
+export async function buildEmbeddedRunPayloads(params: {
   assistantTexts: string[];
   toolMetas: ToolMetaEntry[];
   lastAssistant: AssistantMessage | undefined;
@@ -31,16 +50,18 @@ export function buildEmbeddedRunPayloads(params: {
   reasoningLevel?: ReasoningLevel;
   toolResultFormat?: ToolResultFormat;
   inlineToolResultsAllowed: boolean;
-}): Array<{
-  text?: string;
-  mediaUrl?: string;
-  mediaUrls?: string[];
-  replyToId?: string;
-  isError?: boolean;
-  audioAsVoice?: boolean;
-  replyToTag?: boolean;
-  replyToCurrent?: boolean;
-}> {
+}): Promise<
+  Array<{
+    text?: string;
+    mediaUrl?: string;
+    mediaUrls?: string[];
+    replyToId?: string;
+    isError?: boolean;
+    audioAsVoice?: boolean;
+    replyToTag?: boolean;
+    replyToCurrent?: boolean;
+  }>
+> {
   const replyItems: Array<{
     text: string;
     media?: string[];
@@ -206,6 +227,21 @@ export function buildEmbeddedRunPayloads(params: {
         text: `⚠️ ${toolSummary} failed${errorSuffix}`,
         isError: true,
       });
+    }
+  }
+
+  // Extract and save generated images from OpenRouter image models
+  if (params.lastAssistant) {
+    const generatedImages = extractAssistantImages(params.lastAssistant);
+    for (const img of generatedImages) {
+      const filePath = await saveGeneratedImage(img);
+      if (filePath) {
+        // Add image as a separate media item
+        replyItems.push({
+          text: "",
+          media: [filePath],
+        });
+      }
     }
   }
 

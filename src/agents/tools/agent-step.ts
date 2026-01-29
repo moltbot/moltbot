@@ -3,7 +3,16 @@ import crypto from "node:crypto";
 import { callGateway } from "../../gateway/call.js";
 import { INTERNAL_MESSAGE_CHANNEL } from "../../utils/message-channel.js";
 import { AGENT_LANE_NESTED } from "../lanes.js";
-import { extractAssistantText, stripToolMessages } from "./sessions-helpers.js";
+import {
+  extractAssistantText,
+  extractAssistantImages,
+  stripToolMessages,
+} from "./sessions-helpers.js";
+
+export interface AssistantReplyContent {
+  text?: string;
+  images?: Array<{ mimeType: string; data: string }>;
+}
 
 export async function readLatestAssistantReply(params: {
   sessionKey: string;
@@ -16,6 +25,29 @@ export async function readLatestAssistantReply(params: {
   const filtered = stripToolMessages(Array.isArray(history?.messages) ? history.messages : []);
   const last = filtered.length > 0 ? filtered[filtered.length - 1] : undefined;
   return last ? extractAssistantText(last) : undefined;
+}
+
+/**
+ * Read the latest assistant reply including both text and images.
+ * Used for subagent announce flow where images need to be forwarded.
+ */
+export async function readLatestAssistantReplyWithMedia(params: {
+  sessionKey: string;
+  limit?: number;
+}): Promise<AssistantReplyContent> {
+  const history = (await callGateway({
+    method: "chat.history",
+    params: { sessionKey: params.sessionKey, limit: params.limit ?? 50 },
+  })) as { messages?: unknown[] };
+  const filtered = stripToolMessages(Array.isArray(history?.messages) ? history.messages : []);
+  const last = filtered.length > 0 ? filtered[filtered.length - 1] : undefined;
+  if (!last) return {};
+  const text = extractAssistantText(last);
+  const images = extractAssistantImages(last);
+  return {
+    text: text || undefined,
+    images: images.length > 0 ? images : undefined,
+  };
 }
 
 export async function runAgentStep(params: {

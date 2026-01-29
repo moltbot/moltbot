@@ -11,6 +11,7 @@ import {
 import { normalizeMainKey } from "../routing/session-key.js";
 import { resolveQueueSettings } from "../auto-reply/reply/queue.js";
 import { callGateway } from "../gateway/call.js";
+import { saveMediaBuffer } from "../media/store.js";
 import { defaultRuntime } from "../runtime.js";
 import {
   type DeliveryContext,
@@ -20,7 +21,24 @@ import {
 } from "../utils/delivery-context.js";
 import { isEmbeddedPiRunActive, queueEmbeddedPiMessage } from "./pi-embedded.js";
 import { type AnnounceQueueItem, enqueueAnnounce } from "./subagent-announce-queue.js";
-import { readLatestAssistantReply } from "./tools/agent-step.js";
+import { readLatestAssistantReplyWithMedia } from "./tools/agent-step.js";
+
+/**
+ * Save base64 image data from subagent image generation models.
+ * Uses the standard media store with "generated" subdirectory.
+ */
+async function saveGeneratedImage(image: {
+  mimeType: string;
+  data: string;
+}): Promise<string | null> {
+  try {
+    const buffer = Buffer.from(image.data, "base64");
+    const saved = await saveMediaBuffer(buffer, image.mimeType, "generated");
+    return saved.path;
+  } catch {
+    return null;
+  }
+}
 
 function formatDurationShort(valueMs?: number) {
   if (!valueMs || !Number.isFinite(valueMs) || valueMs <= 0) return undefined;
@@ -321,6 +339,7 @@ export async function runSubagentAnnounceFlow(params: {
   try {
     const requesterOrigin = normalizeDeliveryContext(params.requesterOrigin);
     let reply = params.roundOneReply;
+    let replyImages: Array<{ mimeType: string; data: string }> | undefined;
     let outcome: SubagentRunOutcome | undefined = params.outcome;
     if (!reply && params.waitForCompletion !== false) {
       const waitMs = Math.min(params.timeoutMs, 60_000);
@@ -353,15 +372,20 @@ export async function runSubagentAnnounceFlow(params: {
       if (wait?.status === "timeout") {
         if (!outcome) outcome = { status: "timeout" };
       }
-      reply = await readLatestAssistantReply({
+      // Use the new function that also extracts images
+      const replyContent = await readLatestAssistantReplyWithMedia({
         sessionKey: params.childSessionKey,
       });
+      reply = replyContent.text;
+      replyImages = replyContent.images;
     }
 
-    if (!reply) {
-      reply = await readLatestAssistantReply({
+    if (!reply && !replyImages) {
+      const replyContent = await readLatestAssistantReplyWithMedia({
         sessionKey: params.childSessionKey,
       });
+      reply = replyContent.text;
+      replyImages = replyContent.images;
     }
 
     if (!outcome) outcome = { status: "unknown" };
@@ -372,6 +396,39 @@ export async function runSubagentAnnounceFlow(params: {
       startedAt: params.startedAt,
       endedAt: params.endedAt,
     });
+
+    // Handle generated images - send them directly to the user
+    const savedImagePaths: string[] = [];
+    if (replyImages && replyImages.length > 0) {
+      for (const img of replyImages) {
+        const filePath = await saveGeneratedImage(img);
+        if (filePath) {
+          savedImagePaths.push(filePath);
+        }
+      }
+      // Send images directly to the user if we have a delivery context
+      if (savedImagePaths.length > 0 && requesterOrigin?.to && requesterOrigin?.channel) {
+        try {
+          await callGateway({
+            method: "send",
+            params: {
+              to: requesterOrigin.to,
+              message: "Here's what I generated:", // Non-empty message required
+              mediaUrls: savedImagePaths,
+              channel: requesterOrigin.channel,
+              accountId: requesterOrigin.accountId,
+              idempotencyKey: crypto.randomUUID(),
+            },
+            timeoutMs: 30_000,
+          });
+          defaultRuntime.log(
+            `[subagent] Images sent: ${savedImagePaths.length} image(s) to ${requesterOrigin.to}`,
+          );
+        } catch (err) {
+          defaultRuntime.error?.(`Failed to send subagent images: ${String(err)}`);
+        }
+      }
+    }
 
     // Build status label
     const statusLabel =
@@ -385,17 +442,25 @@ export async function runSubagentAnnounceFlow(params: {
 
     // Build instructional message for main agent
     const taskLabel = params.label || params.task || "background task";
+    // If we sent images, mention it in the findings
+    const imageNote =
+      savedImagePaths.length > 0
+        ? `\n[${savedImagePaths.length} image(s) were generated and sent to the user]`
+        : "";
     const triggerMessage = [
       `A background task "${taskLabel}" just ${statusLabel}.`,
       "",
       "Findings:",
       reply || "(no output)",
+      imageNote,
       "",
       statsLine,
       "",
       "Summarize this naturally for the user. Keep it brief (1-2 sentences). Flow it into the conversation naturally.",
       "Do not mention technical details like tokens, stats, or that this was a background task.",
-      "You can respond with NO_REPLY if no announcement is needed (e.g., internal task with no user-facing result).",
+      savedImagePaths.length > 0
+        ? "The generated image(s) have already been sent to the user. Just acknowledge the completion naturally."
+        : "You can respond with NO_REPLY if no announcement is needed (e.g., internal task with no user-facing result).",
     ].join("\n");
 
     const queued = await maybeQueueSubagentAnnounce({

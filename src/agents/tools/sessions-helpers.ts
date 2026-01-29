@@ -325,3 +325,32 @@ export function extractAssistantText(message: unknown): string | undefined {
   const joined = chunks.join("").trim();
   return joined ? sanitizeUserFacingText(joined) : undefined;
 }
+
+/**
+ * Extract image blocks from an assistant message.
+ * Used for OpenRouter image generation models that return images.
+ */
+export function extractAssistantImages(
+  message: unknown,
+): Array<{ mimeType: string; data: string }> {
+  if (!message || typeof message !== "object") return [];
+  if ((message as { role?: unknown }).role !== "assistant") return [];
+  const content = (message as { content?: unknown }).content;
+  if (!Array.isArray(content)) return [];
+  const images: Array<{ mimeType: string; data: string }> = [];
+  for (const block of content) {
+    if (!block || typeof block !== "object") continue;
+    const record = block as Record<string, unknown>;
+    if (
+      record.type === "image" &&
+      typeof record.data === "string" &&
+      typeof record.mimeType === "string"
+    ) {
+      images.push({
+        mimeType: record.mimeType,
+        data: record.data,
+      });
+    }
+  }
+  return images;
+}
