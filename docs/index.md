@@ -8,7 +8,7 @@ read_when:
 > *"EXFOLIATE! EXFOLIATE!"* — A space lobster, probably
 
 <p align="center">
-  <img src="whatsapp-clawd.jpg" alt="Moltbot" width="420" />
+  <img src="whatsapp-moltbot.jpg" alt="Moltbot" width="420" />
 </p>
 
 <p align="center">
