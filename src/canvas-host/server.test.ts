@@ -210,6 +210,16 @@ describe("canvas host", () => {
       return; // Skip when A2UI bundle not built (e.g. CI before canvas:a2ui:bundle or path not found)
     }
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "moltbot-canvas-"));
+    const a2uiRoot = path.resolve(process.cwd(), "src/canvas-host/a2ui");
+    const bundlePath = path.join(a2uiRoot, "a2ui.bundle.js");
+    let createdBundle = false;
+
+    try {
+      await fs.stat(bundlePath);
+    } catch {
+      await fs.writeFile(bundlePath, "window.moltbotA2UI = {};", "utf8");
+      createdBundle = true;
+    }
 
     const server = await startCanvasHost({
       runtime: defaultRuntime,
@@ -234,6 +244,9 @@ describe("canvas host", () => {
       expect(js).toContain("moltbotA2UI");
     } finally {
       await server.close();
+      if (createdBundle) {
+        await fs.rm(bundlePath, { force: true });
+      }
       await fs.rm(dir, { recursive: true, force: true });
     }
   });
