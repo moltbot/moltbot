@@ -1,5 +1,68 @@
 import { normalizeShip } from "../targets.js";
 
+// Cite types for message references
+export interface ChanCite {
+  chan: { nest: string; where: string };
+}
+export interface GroupCite {
+  group: string;
+}
+export interface DeskCite {
+  desk: { flag: string; where: string };
+}
+export interface BaitCite {
+  bait: { group: string; graph: string; where: string };
+}
+export type Cite = ChanCite | GroupCite | DeskCite | BaitCite;
+
+export interface ParsedCite {
+  type: "chan" | "group" | "desk" | "bait";
+  nest?: string;
+  author?: string;
+  postId?: string;
+  group?: string;
+  flag?: string;
+  where?: string;
+}
+
+// Extract all cites from message content
+export function extractCites(content: unknown): ParsedCite[] {
+  if (!content || !Array.isArray(content)) return [];
+  
+  const cites: ParsedCite[] = [];
+  
+  for (const verse of content) {
+    if (verse?.block?.cite && typeof verse.block.cite === "object") {
+      const cite = verse.block.cite;
+      
+      if (cite.chan && typeof cite.chan === "object") {
+        const { nest, where } = cite.chan;
+        const whereMatch = where?.match(/\/msg\/(~[a-z-]+)\/(.+)/);
+        cites.push({
+          type: "chan",
+          nest,
+          where,
+          author: whereMatch?.[1],
+          postId: whereMatch?.[2],
+        });
+      } else if (cite.group && typeof cite.group === "string") {
+        cites.push({ type: "group", group: cite.group });
+      } else if (cite.desk && typeof cite.desk === "object") {
+        cites.push({ type: "desk", flag: cite.desk.flag, where: cite.desk.where });
+      } else if (cite.bait && typeof cite.bait === "object") {
+        cites.push({
+          type: "bait",
+          group: cite.bait.group,
+          nest: cite.bait.graph,
+          where: cite.bait.where,
+        });
+      }
+    }
+  }
+  
+  return cites;
+}
+
 export function formatModelName(modelString?: string | null): string {
   if (!modelString) return "AI";
   const modelName = modelString.includes("/") ? modelString.split("/")[1] : modelString;
@@ -138,8 +201,37 @@ export function extractMessageText(content: unknown): string {
           return `\n## ${text}\n`;
         }
         
-        // Cite/quote blocks
+        // Cite/quote blocks - parse the reference structure
         if (block.cite && typeof block.cite === "object") {
+          const cite = block.cite;
+          
+          // ChanCite - reference to a channel message
+          if (cite.chan && typeof cite.chan === "object") {
+            const { nest, where } = cite.chan;
+            // where is typically /msg/~author/timestamp
+            const whereMatch = where?.match(/\/msg\/(~[a-z-]+)\/(.+)/);
+            if (whereMatch) {
+              const [, author, postId] = whereMatch;
+              return `\n> [quoted: ${author} in ${nest}]\n`;
+            }
+            return `\n> [quoted from ${nest}]\n`;
+          }
+          
+          // GroupCite - reference to a group
+          if (cite.group && typeof cite.group === "string") {
+            return `\n> [ref: group ${cite.group}]\n`;
+          }
+          
+          // DeskCite - reference to an app/desk
+          if (cite.desk && typeof cite.desk === "object") {
+            return `\n> [ref: ${cite.desk.flag}]\n`;
+          }
+          
+          // BaitCite - reference with group+graph context
+          if (cite.bait && typeof cite.bait === "object") {
+            return `\n> [ref: ${cite.bait.graph} in ${cite.bait.group}]\n`;
+          }
+          
           return `\n> [quoted message]\n`;
         }
       }

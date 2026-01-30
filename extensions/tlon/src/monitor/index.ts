@@ -12,10 +12,12 @@ import { cacheMessage, getChannelHistory } from "./history.js";
 import { createProcessedMessageTracker } from "./processed-messages.js";
 import {
   extractMessageText,
+  extractCites,
   formatModelName,
   isBotMentioned,
   isDmAllowed,
   isSummarizationRequest,
+  type ParsedCite,
 } from "./utils.js";
 import { fetchAllChannels } from "./discovery.js";
 import { createSettingsManager, type TlonSettingsStore } from "../settings.js";
@@ -177,6 +179,47 @@ export async function monitorTlonProvider(opts: MonitorTlonOpts = {}): Promise<v
     }
   } catch (err) {
     runtime.log?.(`[tlon] Settings store not available, using file config: ${String(err)}`);
+  }
+
+  // Helper to resolve cited message content
+  async function resolveCiteContent(cite: ParsedCite): Promise<string | null> {
+    if (cite.type !== "chan" || !cite.nest || !cite.postId) return null;
+    
+    try {
+      // Scry for the specific post: /v4/{nest}/posts/post/{postId}
+      const scryPath = `/channels/v4/${cite.nest}/posts/post/${cite.postId}.json`;
+      runtime.log?.(`[tlon] Fetching cited post: ${scryPath}`);
+      
+      const data: any = await api!.scry(scryPath);
+      
+      // Extract text from the post's essay content
+      if (data?.essay?.content) {
+        const text = extractMessageText(data.essay.content);
+        return text || null;
+      }
+      
+      return null;
+    } catch (err) {
+      runtime.log?.(`[tlon] Failed to fetch cited post: ${String(err)}`);
+      return null;
+    }
+  }
+
+  // Resolve all cites in message content and return quoted text
+  async function resolveAllCites(content: unknown): Promise<string> {
+    const cites = extractCites(content);
+    if (cites.length === 0) return "";
+    
+    const resolved: string[] = [];
+    for (const cite of cites) {
+      const text = await resolveCiteContent(cite);
+      if (text) {
+        const author = cite.author || "unknown";
+        resolved.push(`> ${author} wrote: ${text}`);
+      }
+    }
+    
+    return resolved.length > 0 ? resolved.join("\n") + "\n\n" : "";
   }
 
   const processMessage = async (params: {
@@ -367,8 +410,11 @@ export async function monitorTlonProvider(opts: MonitorTlonOpts = {}): Promise<v
       const senderShip = normalizeShip(content.author ?? "");
       if (!senderShip || senderShip === botShipName) return;
 
-      const messageText = extractMessageText(content.content);
-      if (!messageText) return;
+      // Resolve any cited/quoted messages first
+      const citedContent = await resolveAllCites(content.content);
+      const rawText = extractMessageText(content.content);
+      const messageText = citedContent + rawText;
+      if (!messageText.trim()) return;
 
       cacheMessage(nest, {
         author: senderShip,
@@ -436,8 +482,11 @@ export async function monitorTlonProvider(opts: MonitorTlonOpts = {}): Promise<v
       const senderShip = normalizeShip(essay.author ?? "");
       if (!senderShip || senderShip === botShipName) return;
 
-      const messageText = extractMessageText(essay.content);
-      if (!messageText) return;
+      // Resolve any cited/quoted messages first
+      const citedContent = await resolveAllCites(essay.content);
+      const rawText = extractMessageText(essay.content);
+      const messageText = citedContent + rawText;
+      if (!messageText.trim()) return;
 
       // For DMs, check allowlist (uses settings store if available)
       if (!isDmAllowed(senderShip, effectiveDmAllowlist)) {
