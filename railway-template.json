@@ -2,34 +2,30 @@
   "$schema": "https://railway.app/railway.schema.json",
   "name": "AssureBot",
   "description": "Lean, secure, self-hosted AI assistant with Telegram, document analysis, and scheduled tasks",
-  "icon": "https://raw.githubusercontent.com/TNovs1/moltbot/main/secure/icon.png",
   "services": [
     {
       "name": "assurebot",
       "build": {
         "builder": "DOCKERFILE",
-        "dockerfilePath": "secure/Dockerfile"
+        "dockerfilePath": "secure/Dockerfile",
+        "watchPatterns": ["secure/**"]
       },
       "deploy": {
         "startCommand": "node dist/index.js",
         "healthcheckPath": "/health",
-        "healthcheckTimeout": 30,
+        "healthcheckTimeout": 60,
         "restartPolicyType": "ON_FAILURE",
         "restartPolicyMaxRetries": 3
       },
       "variables": {
-        "DATABASE_URL": {
-          "reference": "postgres.DATABASE_URL"
-        },
-        "REDIS_URL": {
-          "reference": "redis.REDIS_URL"
-        },
+        "DATABASE_URL": "${{Postgres.DATABASE_URL}}",
+        "REDIS_URL": "${{Redis.REDIS_URL}}",
         "TELEGRAM_BOT_TOKEN": {
           "description": "Telegram bot token from @BotFather",
           "required": true
         },
         "ALLOWED_USERS": {
-          "description": "Comma-separated Telegram user IDs (e.g., 123456789,987654321)",
+          "description": "Comma-separated Telegram user IDs",
           "required": true
         },
         "ANTHROPIC_API_KEY": {
@@ -37,33 +33,25 @@
           "required": false
         },
         "OPENAI_API_KEY": {
-          "description": "OpenAI API key (or use ANTHROPIC_API_KEY or OPENROUTER_API_KEY)",
+          "description": "OpenAI API key",
           "required": false
         },
         "OPENROUTER_API_KEY": {
-          "description": "OpenRouter API key (or use ANTHROPIC_API_KEY or OPENAI_API_KEY)",
+          "description": "OpenRouter API key (100+ models)",
           "required": false
         },
         "AI_MODEL": {
-          "description": "Model to use (e.g., claude-3-5-sonnet-20241022, gpt-4o, anthropic/claude-3.5-sonnet)",
+          "description": "Model override (e.g., claude-3-5-sonnet-20241022)",
           "required": false
-        },
-        "WEBHOOK_SECRET": {
-          "description": "Secret for authenticating webhooks (auto-generated if empty)",
-          "required": false
-        },
-        "SANDBOX_ENABLED": {
-          "description": "Enable Docker sandbox for code execution",
-          "default": "false"
         }
       }
     },
     {
-      "name": "postgres",
+      "name": "Postgres",
       "plugin": "postgresql"
     },
     {
-      "name": "redis",
+      "name": "Redis",
       "plugin": "redis"
     }
   ]

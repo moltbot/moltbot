@@ -49,17 +49,27 @@ Your AI agent that runs on your infrastructure, answers only to you, and you can
 
 ## Deploy to Railway
 
-### One-Click
-
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/assurebot)
-
-### Manual
+### Quick Start
 
 1. Fork this repo
-2. Create Railway project from GitHub
-3. Set environment variables (see below)
-4. Add volume at `/data`
-5. Deploy
+2. Create new Railway project → "Deploy from GitHub repo"
+3. Select your fork
+4. **Critical**: Click "Settings" → Set **Root Directory** to `secure`
+5. Add services:
+   - Click "New" → "Database" → "PostgreSQL"
+   - Click "New" → "Database" → "Redis"
+6. In main service, add Variables:
+   - `TELEGRAM_BOT_TOKEN` (from @BotFather)
+   - `ALLOWED_USERS` (your Telegram user ID, get it from @userinfobot)
+   - `OPENROUTER_API_KEY` or `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`
+7. Railway auto-wires `DATABASE_URL` and `REDIS_URL` from the database services
+8. Deploy!
+
+### Getting Your Telegram User ID
+
+1. Message @userinfobot on Telegram
+2. It replies with your user ID (a number like `123456789`)
+3. Use this as `ALLOWED_USERS`
 
 ## Configuration
 
