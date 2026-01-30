@@ -199,7 +199,7 @@
     "playwright-core": "1.58.0",
     "proper-lockfile": "^4.1.2",
     "qrcode-terminal": "^0.12.0",
-    "sharp": "^0.34.5",
+    "sharp": "0.35.0-rc.0",
     "sqlite-vec": "0.1.7-alpha.2",
     "tar": "7.5.4",
     "tslog": "^4.10.2",
