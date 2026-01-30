@@ -161,7 +161,12 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
     const runner = run(bot, createTelegramRunnerOptions(cfg));
     const stopOnAbort = () => {
       if (opts.abortSignal?.aborted) {
-        void runner.stop();
+        // Properly await runner.stop() to prevent unhandled rejections
+        runner.stop().catch((err) => {
+          (opts.runtime?.error ?? console.error)(
+            `telegram: runner stop failed: ${formatErrorMessage(err)}`,
+          );
+        });
       }
     };
     opts.abortSignal?.addEventListener("abort", stopOnAbort, { once: true });
@@ -194,6 +199,13 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
       }
     } finally {
       opts.abortSignal?.removeEventListener("abort", stopOnAbort);
+      // Ensure runner is stopped to prevent lingering promises
+      try {
+        await runner.stop();
+      } catch (stopErr) {
+        // Suppress errors from runner.stop() in finally block
+        // (already logged by stopOnAbort if abort-triggered)
+      }
     }
   }
 }
