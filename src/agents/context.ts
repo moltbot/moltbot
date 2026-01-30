@@ -10,12 +10,12 @@ type ModelEntry = { id: string; contextWindow?: number };
 const MODEL_CACHE = new Map<string, number>();
 const loadPromise = (async () => {
   try {
-    const { discoverAuthStorage, discoverModels } = await import("@mariozechner/pi-coding-agent");
+    const { AuthStorage, ModelRegistry } = await import("@mariozechner/pi-coding-agent");
     const cfg = loadConfig();
     await ensureOpenClawModelsJson(cfg);
     const agentDir = resolveOpenClawAgentDir();
-    const authStorage = discoverAuthStorage(agentDir);
-    const modelRegistry = discoverModels(authStorage, agentDir);
+    const authStorage = new AuthStorage();
+    const modelRegistry = new ModelRegistry(authStorage);
     const models = modelRegistry.getAll() as ModelEntry[];
     for (const m of models) {
       if (!m?.id) continue;
