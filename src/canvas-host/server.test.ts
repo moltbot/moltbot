@@ -20,12 +20,12 @@ describe("canvas host", () => {
     const out = injectCanvasLiveReload("<html><body>Hello</body></html>");
     expect(out).toContain(CANVAS_WS_PATH);
     expect(out).toContain("location.reload");
-    expect(out).toContain("moltbotCanvasA2UIAction");
-    expect(out).toContain("moltbotSendUserAction");
+    expect(out).toContain("openclawCanvasA2UIAction");
+    expect(out).toContain("openclawSendUserAction");
   });
 
   it("creates a default index.html when missing", async () => {
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "moltbot-canvas-"));
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-canvas-"));
 
     const server = await startCanvasHost({
       runtime: defaultRuntime,
@@ -40,7 +40,7 @@ describe("canvas host", () => {
       const html = await res.text();
       expect(res.status).toBe(200);
       expect(html).toContain("Interactive test page");
-      expect(html).toContain("moltbotSendUserAction");
+      expect(html).toContain("openclawSendUserAction");
       expect(html).toContain(CANVAS_WS_PATH);
     } finally {
       await server.close();
@@ -49,7 +49,7 @@ describe("canvas host", () => {
   });
 
   it("skips live reload injection when disabled", async () => {
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "moltbot-canvas-"));
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-canvas-"));
     await fs.writeFile(path.join(dir, "index.html"), "<html><body>no-reload</body></html>", "utf8");
 
     const server = await startCanvasHost({
@@ -77,7 +77,7 @@ describe("canvas host", () => {
   });
 
   it("serves canvas content from the mounted base path", async () => {
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "moltbot-canvas-"));
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-canvas-"));
     await fs.writeFile(path.join(dir, "index.html"), "<html><body>v1</body></html>", "utf8");
 
     const handler = await createCanvasHostHandler({
@@ -122,7 +122,7 @@ describe("canvas host", () => {
   });
 
   it("reuses a handler without closing it twice", async () => {
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "moltbot-canvas-"));
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-canvas-"));
     await fs.writeFile(path.join(dir, "index.html"), "<html><body>v1</body></html>", "utf8");
 
     const handler = await createCanvasHostHandler({
@@ -155,7 +155,7 @@ describe("canvas host", () => {
   });
 
   it("serves HTML with injection and broadcasts reload on file changes", async () => {
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "moltbot-canvas-"));
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-canvas-"));
     const index = path.join(dir, "index.html");
     await fs.writeFile(index, "<html><body>v1</body></html>", "utf8");
 
@@ -209,7 +209,7 @@ describe("canvas host", () => {
     if (!(await isA2uiAvailable())) {
       return; // Skip when A2UI bundle not built (e.g. CI before canvas:a2ui:bundle or path not found)
     }
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "moltbot-canvas-"));
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-canvas-"));
     const a2uiRoot = path.resolve(process.cwd(), "src/canvas-host/a2ui");
     const bundlePath = path.join(a2uiRoot, "a2ui.bundle.js");
     let createdBundle = false;
@@ -217,7 +217,7 @@ describe("canvas host", () => {
     try {
       await fs.stat(bundlePath);
     } catch {
-      await fs.writeFile(bundlePath, "window.moltbotA2UI = {};", "utf8");
+      await fs.writeFile(bundlePath, "window.openclawA2UI = {};", "utf8");
       createdBundle = true;
     }
 
@@ -230,21 +230,21 @@ describe("canvas host", () => {
     });
 
     try {
-      const res = await fetch(`http://127.0.0.1:${server.port}/__moltbot__/a2ui/`);
+      const res = await fetch(`http://127.0.0.1:${server.port}/__openclaw__/a2ui/`);
       const html = await res.text();
       // 503 when A2UI assets not found (e.g. bundle not built or path resolution differs in CI)
       if (res.status === 503) return;
       expect(res.status).toBe(200);
-      expect(html).toContain("moltbot-a2ui-host");
-      expect(html).toContain("moltbotCanvasA2UIAction");
+      expect(html).toContain("openclaw-a2ui-host");
+      expect(html).toContain("openclawCanvasA2UIAction");
 
       const bundleRes = await fetch(
-        `http://127.0.0.1:${server.port}/__moltbot__/a2ui/a2ui.bundle.js`,
+        `http://127.0.0.1:${server.port}/__openclaw__/a2ui/a2ui.bundle.js`,
       );
       const js = await bundleRes.text();
       if (bundleRes.status === 503) return;
       expect(bundleRes.status).toBe(200);
-      expect(js).toContain("moltbotA2UI");
+      expect(js).toContain("openclawA2UI");
     } finally {
       await server.close();
       if (createdBundle) {

@@ -1,39 +1,19 @@
 services:
   - type: web
-    name: moltbot
+    name: openclaw
     runtime: docker
     plan: starter
     dockerCommand: /bin/sh scripts/render-start.sh
     envVars:
       - key: PORT
         value: "8080"
-      - key: MOLTBOT_GATEWAY_TOKEN
-        sync: false
-      - key: MOLTBOT_STATE_DIR
-        value: /data/.moltbot
-      - key: MOLTBOT_WORKSPACE_DIR
+      - key: OPENCLAW_GATEWAY_TOKEN
+        generateValue: true
+      - key: OPENCLAW_STATE_DIR
+        value: /data/.openclaw
+      - key: OPENCLAW_WORKSPACE_DIR
         value: /data/workspace
-      # LLM Provider API Keys - Set these in Render dashboard as secrets
-      # Required: Set at least one API key for the provider you want to use
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: GROQ_API_KEY
-        sync: false
-      - key: OPENROUTER_API_KEY
-        sync: false
-      - key: MISTRAL_API_KEY
-        sync: false
-      - key: XAI_API_KEY
-        sync: false
-      - key: OPENCODE_API_KEY
-        sync: false
-      - key: DEEPGRAM_API_KEY
-        sync: false
     disk:
-      name: moltbot-data
+      name: openclaw-data
       mountPath: /data
       sizeGB: 1

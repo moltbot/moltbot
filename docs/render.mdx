@@ -2,7 +2,7 @@
 title: Deploy on Render
 ---
 
-Deploy Moltbot on Render using Infrastructure as Code. The included `render.yaml` Blueprint defines your entire stack declaratively—service, disk, environment variables—so you can deploy with a single click and version your infrastructure alongside your code.
+Deploy OpenClaw on Render using Infrastructure as Code. The included `render.yaml` Blueprint defines your entire stack declaratively—service, disk, environment variables—so you can deploy with a single click and version your infrastructure alongside your code.
 
 ## Prerequisites
 
@@ -19,12 +19,12 @@ For a deployment with a built-in installer and proxied Control UI (including Web
 
 ## Deploy with a Render Blueprint
 
-<a href="https://render.com/deploy?repo=https://github.com/moltbot/moltbot" target="_blank" rel="noreferrer">Deploy to Render</a>
+<a href="https://render.com/deploy?repo=https://github.com/openclaw/openclaw" target="_blank" rel="noreferrer">Deploy to Render</a>
 
 Clicking this link will:
 
 1. Create a new Render service from the `render.yaml` Blueprint at the root of this repo.
-2. Prompt you to set `MOLTBOT_GATEWAY_TOKEN` (or set it in **Environment** after deploy).
+2. Prompt you to set the gateway token (or set it in **Environment** after deploy).
 3. Build the Docker image and deploy.
 
 Once deployed, your service URL follows the pattern `https://<service-name>.onrender.com`.
@@ -32,38 +32,28 @@ Once deployed, your service URL follows the pattern `https://<service-name>.onre
 ## Understanding the Blueprint
 
 Render Blueprints are YAML files that define your infrastructure. The `render.yaml` in this
-repository configures everything needed to run Moltbot:
+repository configures everything needed to run OpenClaw:
 
 ```yaml
 services:
   - type: web
-    name: moltbot
+    name: openclaw
     runtime: docker
     plan: starter
     dockerCommand: /bin/sh scripts/render-start.sh
     envVars:
       - key: PORT
         value: "8080"
-      - key: MOLTBOT_GATEWAY_TOKEN
-        sync: false          # set in Render dashboard (secret)
-      - key: MOLTBOT_STATE_DIR
-        value: /data/.moltbot
-      - key: MOLTBOT_WORKSPACE_DIR
+      - key: SETUP_PASSWORD
+        sync: false          # prompts during deploy
+      - key: OPENCLAW_STATE_DIR
+        value: /data/.openclaw
+      - key: OPENCLAW_WORKSPACE_DIR
         value: /data/workspace
-      # LLM Provider API Keys (set these in Render dashboard as secrets)
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: GROQ_API_KEY
-        sync: false
-      - key: OPENROUTER_API_KEY
-        sync: false
-      # Add other provider keys as needed (MISTRAL_API_KEY, XAI_API_KEY, etc.)
+      - key: OPENCLAW_GATEWAY_TOKEN
+        generateValue: true  # auto-generates a secure token
     disk:
-      name: moltbot-data
+      name: openclaw-data
       mountPath: /data
       sizeGB: 1
 ```
@@ -92,12 +82,12 @@ The Blueprint defaults to `starter`. To use free tier, change `plan: free` in yo
 
 ### Set the gateway token
 
-1. In Render **Dashboard → your service → Environment**, set `MOLTBOT_GATEWAY_TOKEN` to a long random secret (or generate one with `openssl rand -hex 32`).
+1. In Render **Dashboard → your service → Environment**, set `OPENCLAW_GATEWAY_TOKEN` to a long random secret (or use the auto-generated value; generate one with `openssl rand -hex 32` if needed).
 2. Save changes; Render will redeploy.
 
 ### Access the Control UI
 
-The web dashboard is at `https://<your-service>.onrender.com/moltbot`. Open a tokenized URL (e.g. from the service logs or your own link that includes the token) or paste the token into the Control UI settings to authenticate.
+The web dashboard is available at `https://<your-service>.onrender.com/openclaw`.
 
 ## Render Dashboard features
 
@@ -147,7 +137,7 @@ The service will automatically redeploy with the new environment variable.
 
 **Alternative: Config file method**
 
-You can also configure API keys in the `moltbot.json` config file (under `MOLTBOT_STATE_DIR` or `~/.moltbot`) using the `env` block, though environment variables are preferred for security:
+You can also configure API keys in the `openclaw.json` config file (under `OPENCLAW_STATE_DIR` or `~/.openclaw`) using the `env` block, though environment variables are preferred for security:
 
 ```json5
 {
@@ -178,7 +168,7 @@ Render supports horizontal and vertical scaling:
 - **Vertical**: Change the plan to get more CPU/RAM
 - **Horizontal**: Increase instance count (Standard plan and above)
 
-For Moltbot, vertical scaling is usually sufficient. Horizontal scaling requires sticky sessions or external state management.
+For OpenClaw, vertical scaling is usually sufficient. Horizontal scaling requires sticky sessions or external state management.
 
 ## Backups and migration
 
@@ -188,7 +178,7 @@ If your deployment exposes a setup/export endpoint, you can export configuration
 https://<your-service>.onrender.com/setup/export
 ```
 
-Otherwise, backup the persistent disk contents (e.g. under `/data/.moltbot`) via Render Shell or your own backup process.
+This downloads a portable backup you can restore on any OpenClaw host. Otherwise, backup the persistent disk contents (e.g. under `/data/.openclaw`) via Render Shell or your own backup process.
 
 ## Troubleshooting
 
@@ -196,7 +186,7 @@ Otherwise, backup the persistent disk contents (e.g. under `/data/.moltbot`) via
 
 Check the deploy logs in the Render Dashboard. Common issues:
 
-- Missing `MOLTBOT_GATEWAY_TOKEN` — set it in **Environment** (Dashboard → your service → Environment)
+- Missing `OPENCLAW_GATEWAY_TOKEN` — set it in **Environment** (Dashboard → your service → Environment)
 - Port mismatch — ensure `PORT=8080` matches the gateway port
 
 ### Slow cold starts (free tier)
@@ -210,4 +200,4 @@ regularly export your config via `/setup/export`.
 
 ### Health check failures
 
-If Render is configured with `healthCheckPath: /health`, it expects a 200 from `/health` within 30 seconds. This blueprint does not set a health check by default. If deploys fail, check deploy logs and that `scripts/render-start.sh` runs correctly (config written under `MOLTBOT_STATE_DIR` or `~/.moltbot`, then gateway started with the token).
+If Render is configured with `healthCheckPath: /health`, it expects a 200 from `/health` within 30 seconds. This blueprint does not set a health check by default. If deploys fail, check deploy logs and that `scripts/render-start.sh` runs correctly (config written under `OPENCLAW_STATE_DIR` or `~/.openclaw`, then gateway started with the token).
