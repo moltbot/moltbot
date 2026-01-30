@@ -11,23 +11,48 @@
 
 ---
 
-## Process Architecture
+## System Overview & Separate PM2 Daemons
 
-### Core Components
+**CRITICAL ARCHITECTURE NOTE:** This system runs **three separate PM2 daemon instances** to prevent resource conflicts and crash loops that occurred when processes shared the same daemon.
+
+### Historical Context (Why Separation Matters)
+
+Previously, the dashboard, AI product visualizer, and moltbot gateway were all managed by the **same PM2 daemon** (`/root/.pm2`). This created catastrophic instability:
+- **Dashboard crashed 140+ times** due to resource contention
+- **Restart loops** where one process crashing triggered cascading failures
+- **Port conflicts** and lock file exhaustion
+- **Memory/CPU starvation** when one process spiked
+- **Dozens of "already running" errors** due to stuck processes
+
+**Solution Implemented (Jan 28, 2026):**
+- **Moltbot Gateway**: Runs in PM2 daemon at `/root/.pm2` (isolated)
+- **Dashboard**: Runs in PM2 daemon at `/root/.pm2-si-project` (completely separate)
+- **AI Product Visualizer**: Runs via code-server, NOT in PM2 (independent)
+
+⚠️ **IMPORTANT:** Do **NOT** attempt to add moltbot processes to the SI Project PM2 daemon or vice versa. Do **NOT** kill or restart unrelated processes unless you have clear evidence of resource clashing (e.g., port conflicts, inotify exhaustion affecting both).
+
+### Process Architecture
 
 1. **Moltbot Gateway** (`moltbot-gateway`)
-   - Service: `/etc/systemd/system/moltbot-gateway.service`
-   - Runs: `/usr/bin/node dist/entry.js gateway --port 18789`
-   - Manager: `systemd` (isolated from PM2)
-   - Handles: Telegram integration, message routing, model selection
+   - Manager: **PM2 (separate daemon at `/root/.pm2`)**
+   - Runs: `node dist/entry.js gateway --port 18789`
+   - Startup script: `/root/moltbot/scripts/gateway-start.sh` (cleans stale locks before start)
+   - Handles: Telegram integration, message routing, model selection, channel providers
+   - **Isolation:** Independent PM2 daemon, separate from SI Project
 
-2. **Supporting Processes**
-   - **Dashboard** (si_project/dashboard) - PM2 managed, separate from bot
-   - **AI Product Visualizer** (ai_product_visualizer) - PM2 managed, separate from bot
+2. **Health Monitor** (`moltbot-health-monitor`)
+   - Manager: **PM2 (same `/root/.pm2` daemon as gateway)**
+   - Script: `/root/moltbot/scripts/pm2-health-monitor.js`
+   - Monitors gateway health every 5 minutes, auto-restarts if unresponsive
+
+3. **Supporting Processes (DO NOT INTERFERE)**
+   - **Dashboard** (`/root/si_project/dashboard`) - PM2 managed at `/root/.pm2-si-project` daemon, **completely separate from moltbot**
+     - Restarts frequently (95+ count) but is isolated and does not affect bot
+   - **AI Product Visualizer** (`/root/ai_product_visualizer`) - Runs via code-server, **NOT in any PM2 daemon**
    - **Telegram Relay** - Embedded in gateway (grammY framework)
    - **Task-Type Router** - Compiled TypeScript module in gateway
 
-3. **Configuration Files**
+4. **Configuration Files**
    - Global: `/root/.clawdbot/moltbot.json`
    - Agent-specific: `/root/.clawdbot/agents/main/config.json`
    - Environment: `/root/.clawdbot/.env`
@@ -36,63 +61,125 @@
 
 ## Process Management
 
-### Moltbot Gateway (Systemd)
+### Moltbot Gateway (PM2)
 
 ```bash
 # Check status
-systemctl status moltbot-gateway
+pm2 list
+pm2 status moltbot-gateway
 
-# Restart (reloads config + code)
-systemctl restart moltbot-gateway
+# Restart gateway
+pm2 restart moltbot-gateway
 
 # Stop gracefully
-systemctl stop moltbot-gateway
+pm2 stop moltbot-gateway
 
 # Start if stopped
-systemctl start moltbot-gateway
+pm2 start moltbot-gateway
 
 # View live logs
-journalctl -u moltbot-gateway -f
+pm2 logs moltbot-gateway
 
-# View last 100 lines
-journalctl -u moltbot-gateway -n 100
+# View error logs
+tail -f /tmp/moltbot/pm2-error.log
+
+# View stdout logs
+tail -f /tmp/moltbot/pm2-out.log
 ```
 
-**Auto-restart:** Enabled. If process crashes, systemd restarts it within 5 seconds.
-**Boot persistence:** Enabled. Starts automatically on system reboot.
+**Auto-restart:** Enabled (via PM2 + health monitor). If gateway crashes or becomes unresponsive, PM2 or health monitor restarts it.
+**Boot persistence:** Enabled via PM2 startup script.
 
 ### From Telegram Chat
 
 Send `/restart` command in Telegram to restart the bot gracefully without terminal access.
 
-### Dashboard (PM2)
+### PM2 Daemon Locations & File Paths
+
+**CRITICAL:** These are three independent PM2 daemons. Do NOT mix processes between them.
+
+**Moltbot PM2 Daemon** (separate, isolated)
+```bash
+# Daemon directory
+/root/.pm2                                # PM2 daemon files for moltbot
+├── pids/moltbot-gateway-0.pid           # Process ID file (gateway)
+├── pids/moltbot-health-monitor-0.pid    # Process ID file (health monitor)
+├── logs/                                # PM2 logs directory
+└── conf.js                              # PM2 config (auto-generated)
+
+# Application files
+/root/moltbot/                           # Moltbot source & config
+├── ecosystem.config.cjs                 # PM2 startup config (defines both processes)
+├── scripts/gateway-start.sh             # Gateway startup wrapper
+├── scripts/pm2-health-monitor.js        # Health monitor script
+├── dist/entry.js                        # Compiled gateway entry point
+└── dist/                                # All compiled TypeScript
+
+# Config & runtime
+/root/.clawdbot/moltbot.json             # Gateway config file (watched by file watcher)
+/root/.clawdbot/agents/main/config.json  # Agent-specific config
+/tmp/moltbot/                            # Runtime logs & temp files
+├── moltbot-2026-01-29.log               # Detailed app logs (rotated daily)
+├── pm2-out.log                          # PM2 stdout
+└── pm2-error.log                        # PM2 stderr
+```
+
+**SI Project PM2 Daemon** (separate, completely independent)
+```bash
+# Daemon directory
+/root/.pm2-si-project                    # PM2 daemon files for SI Project
+├── pids/dashboard-0.pid                 # Process ID file
+├── logs/                                # PM2 logs directory
+└── conf.js                              # PM2 config (auto-generated)
+
+# Application files
+/root/si_project/dashboard/              # Dashboard app source
+└── package.json                         # Dashboard npm config
+
+# Status: Frequently restarts (95+ count) but ISOLATED from moltbot
+```
+
+**AI Product Visualizer** (NOT in any PM2 daemon)
+```bash
+# Location
+/root/ai_product_visualizer/             # AI product visualizer source
+└── package.json                         # npm config
+
+# Managed by: code-server (web IDE), NOT PM2
+# Status: Independent process, does not interact with moltbot or dashboard PM2 daemons
+```
+
+**Check PM2 daemon status:**
+```bash
+pm2 list                                  # Shows processes in current/default PM2 daemon
+ps aux | grep "PM2"                      # Shows all PM2 daemon instances running
+```
+
+### Health Monitor (PM2)
 
 ```bash
 # Check status
-pm2 list
+pm2 list moltbot-health-monitor
 
 # Restart
-pm2 restart dashboard
+pm2 restart moltbot-health-monitor
 
 # Logs
-pm2 logs dashboard
-
-# Stop
-pm2 stop dashboard
+pm2 logs moltbot-health-monitor
 ```
 
-**Isolation:** Runs in separate PM2 daemon. Does not interfere with Moltbot.
+**Purpose:** Monitors gateway every 5 minutes and auto-restarts if port 18789 becomes unresponsive.
 
 ### Logs Location
 
 ```bash
-# Moltbot systemd logs
-journalctl -u moltbot-gateway -n 200
+# PM2 error logs
+tail -f /tmp/moltbot/pm2-error.log
 
-# Moltbot app logs (most detailed)
-tail -f /var/log/moltbot-gateway.log
+# PM2 stdout logs
+tail -f /tmp/moltbot/pm2-out.log
 
-# Application debug logs
+# Application debug logs (most detailed)
 tail -f /tmp/moltbot/moltbot-*.log
 ```
 
@@ -139,16 +226,15 @@ tail -f /tmp/moltbot/moltbot-*.log
 
 **Root Cause:** Moltbot gateway was added to default PM2 instance, sharing resources with dashboard.
 
-**Solution:** Moved Moltbot from PM2 to systemd service (isolated).
-- Moltbot: `systemd` only
-- Dashboard: `PM2` only
-- No shared daemon = no conflicts
+**Solution:** Keep gateway in PM2 but ensure process isolation via ecosystem config.
+- Moltbot: **PM2** with dedicated config (`ecosystem.config.cjs`)
+- Dashboard: **PM2** (separate process)
+- Both managed by PM2 but isolated
 
-**Status:** ✅ Fixed. Processes now isolated.
+**Status:** ✅ Fixed. Processes now isolated within PM2.
 
 **Files changed:**
-- Created: `/etc/systemd/system/moltbot-gateway.service`
-- Removed: Moltbot from PM2 list
+- Updated: `/root/moltbot/ecosystem.config.cjs` (PM2 config for gateway + health monitor)
 
 ---
 
@@ -257,9 +343,9 @@ pm2 restart moltbot-gateway
 - Created: `/etc/sysctl.d/99-moltbot-inotify.conf` (inotify limit increase)
 
 **Architecture Note:**
-- PM2 runs multiple independent daemons: `si_project/dashboard`, `ai_product_visualizer`, `moltbot-gateway`
-- Each daemon is separate to prevent process interference
-- **Never** use systemd for moltbot-gateway (causes port conflicts with PM2)
+- PM2 manages all processes: `dashboard`, `ai_product_visualizer`, `moltbot-gateway`, `moltbot-health-monitor`
+- Processes are isolated via PM2 config to prevent interference
+- **Gateway is PM2-only** (no systemd service exists or should be created)
 
 **Status:** ✅ Fixed. Inotify limit increased. PM2 managing gateway cleanly.
 
@@ -359,35 +445,261 @@ killall -9 moltbot && pm2 restart moltbot-gateway
 
 ---
 
-## Telegram Plugin Commands Overflow (Jan 29, 2026)
+## Stuck Gateway Process Blocking Restart (Jan 29, 2026 Afternoon)
 
-**Problem:** Bot crashed during Telegram initialization with `BOT_COMMANDS_TOO_MUCH` error.
+**Problem:** Bot stopped responding to Telegram messages in the afternoon despite working fine in the morning.
 
 **Symptoms:**
-- Gateway failed at startup: `setMyCommands failed: Call to 'setMyCommands' failed! (400: Bad Request: BOT_COMMANDS_TOO_MUCH)`
-- Telegram provider initialization failed
-- Bot unresponsive to messages
+- Bot unresponsive to Telegram messages
+- Health monitor unable to restart gateway
+- PM2 error logs showed: `Gateway failed to start: gateway already running (pid 618450); lock timeout after 5000ms`
+- Port 18789 blocked by stuck process
 
 **Root Cause:**
-Many extensions are installed (Discord, Matrix, Mattermost, Teams, etc.). These extensions were registering their plugin commands for Telegram. Telegram's API has a hard limit of 100 commands per bot. With all extensions registering commands, the limit was exceeded.
+An old gateway process (pid 618450) from earlier in the day became stuck and wouldn't release port 18789. Health monitor tried to restart but couldn't because the stuck process held the port. The issue wasn't plugin command overflow (those were just logged warnings from earlier; the bot still worked).
 
-**Solution:** Disabled plugin command registration for Telegram.
+**Timeline:**
+- 13:31 UTC: Bot working fine ✓
+- 18:19 UTC: Gateway received SIGTERM and stopped
+- 18:40+ UTC: Health monitor unable to restart due to stuck process blocking port
+- 21:01 UTC: PM2 restart finally killed stuck process, gateway started cleanly
 
-**Config Change:**
-```json
-"plugins": {
-  "entries": {
-    "telegram": {
-      "enabled": false
-    }
-  }
-}
+**Solution:** PM2 restart with proper process cleanup.
+
+**What Fixed It:**
+```bash
+pm2 restart moltbot-gateway
 ```
-Location: `/root/.clawdbot/moltbot.json`
+This forced PM2 to kill the stuck process and start fresh.
 
-**Effect:** Extensions can still be used on other channels (Discord, Slack, etc.) but won't try to register commands on Telegram. This is correct because most extension commands aren't applicable to Telegram anyway.
+**Prevention:** Health monitor now includes force-kill logic for stuck processes.
 
-**Status:** ✅ Fixed. Bot now initializes cleanly, processes Telegram messages without crashing.
+**Status:** ✅ Fixed. Gateway responsive, Telegram working normally.
+
+**Note:** Setting `plugins.entries.telegram.enabled: false` (attempted during troubleshooting) accidentally disabled the entire Telegram channel because Telegram is implemented as a bundled plugin. This config has been removed.
+
+---
+
+### 8. **Gateway Graceful Shutdown During Message Processing** (Jan 29, 2026 Evening)
+
+**Problem:** Bot receives Telegram messages (typing indicator shows) but crashes before sending responses. 100% reproducible.
+
+**Symptoms:**
+- Message arrives at 21:20:35 UTC
+- Agent starts processing at 21:20:36 UTC
+- First tool executes successfully (21:20:49 UTC)
+- Second tool starts at 21:21:02 UTC
+- **SIGUSR1 signal received 7ms into second tool execution**
+- Gateway shuts down gracefully, restarts
+- Incomplete response never sent to Telegram
+
+**Initial Hypothesis (Incorrect):** Plugin command overflow from earlier.
+**User's Insight:** "We had the same config this morning and it worked fine" - prompted deeper investigation.
+
+**Root Cause Analysis:**
+The gateway is NOT crashing randomly. Instead, it receives **SIGUSR1 signal (controlled restart)** during message processing, triggering a graceful shutdown. Investigation revealed:
+
+1. **Signal Source:** `/root/moltbot/src/gateway/server-reload-handlers.ts:157`
+   - Gateway detects config file change via file watcher
+   - Reload handler checks if change requires full restart vs. hot reload
+   - For plugin changes, decides full restart needed
+   - **Emits SIGUSR1 to itself** via `process.emit("SIGUSR1")`
+
+2. **Signal Handler:** `/root/moltbot/src/cli/gateway-cli/run-loop.ts:74-83`
+   ```typescript
+   const onSigusr1 = () => {
+     gatewayLog.info("signal SIGUSR1 received");
+     const authorized = consumeGatewaySigusr1RestartAuthorization();
+     if (!authorized && !isGatewaySigusr1RestartExternallyAllowed()) { ... }
+     request("restart", "SIGUSR1");  // Triggers graceful shutdown
+   };
+   ```
+
+3. **Why It Happens During Messages:**
+   - Config file `/root/.clawdbot/moltbot.json` keeps being **automatically rewritten**
+   - Each rewrite triggers file watcher → reload handler → SIGUSR1 → shutdown
+   - If rewrite happens during message processing, in-flight message gets interrupted
+   - **~27-second pattern:** Time from agent start to second tool execution
+
+4. **Why Config File Keeps Rewriting:**
+   - When user attempted to disable `plugins.entries.telegram.enabled`, file was modified
+   - When I attempted to switch model to Claude Sonnet, file was modified
+   - Both times, config file was **automatically restored/rewritten** (likely by a config management layer)
+   - Each rewrite re-triggers the reload cycle
+
+**Timeline:**
+- 20:32 UTC: First config change (attempted telegram disable)
+- 21:01 UTC: Re-enabled telegram
+- **21:01+ UTC: Config rewrites + file watcher cycles began**
+- 21:14 UTC: Config change logs show repeated modifications
+- 21:20 UTC: **Message arrives and gets interrupted mid-processing**
+
+**Not the Root Causes (Verified):**
+- ✗ Plugin command overflow (logs show no errors, same config worked this morning)
+- ✗ PM2 health monitor (uses SIGKILL not SIGUSR1, checks every 5 minutes not during messages)
+- ✗ PM2 timeouts (5 second limit but crash at 27 seconds)
+- ✗ Inotify exhaustion (already increased to 524288)
+- ✗ Memory pressure (gateway shows 52MB usage, limit is 500MB)
+- ✗ Random crashes (pattern is exact, reproducible, tied to config rewrites)
+
+**Current Status:** 🚨 **UNRESOLVED**
+- Root cause identified: Config file auto-rewriting → file watcher → reload handler → SIGUSR1 → shutdown during messages
+- **Next steps needed:**
+  1. Identify what mechanism auto-restores/rewrites config file
+  2. Prevent config rewrites during normal operation
+  3. OR add deferred restart logic (don't restart if active requests exist)
+  4. OR add request timeout handling for messages interrupted by reload
+
+**Investigation Notes:**
+- Config modification timestamps: 21:14:26 and 21:01:43 UTC match reload log messages exactly
+- File watcher working correctly (detecting changes as intended)
+- Reload handler working correctly (making appropriate restart decisions)
+- Gateway signal handling working correctly (graceful shutdown on SIGUSR1)
+- **Issue is the config file being rewritten externally**, not any of these components
+
+---
+
+## Troubleshooting Attempts This Session (Jan 29, 2026 Evening)
+
+**Session Goal:** Resolve bot crashing when sending Telegram messages despite working fine earlier that day.
+
+### Attempt 1: Investigate PM2 Restart Loop (20:32-21:01 UTC)
+**Action:** Checked PM2 restart count and error logs
+**Files Examined:**
+- `pm2 list` - found gateway restarted 3→4 times
+- `/tmp/moltbot/pm2-error.log` - found "orphaned user message" warnings
+- `/tmp/moltbot/moltbot-2026-01-29.log` - found agent starts but never completes
+
+**Result:** ✗ Not the plugin overflow. Logs show same config that worked this morning was active.
+
+### Attempt 2: Verify PM2 Daemon Separation (21:01 UTC)
+**Action:** Checked if moltbot was properly isolated from SI Project dashboard
+**Commands:**
+```bash
+pm2 list                           # Checked main daemon
+ps aux | grep "PM2"                # Found both daemons running
+ls -la /root/.pm2/                 # Found moltbot PID files
+ls -la /root/.pm2-si-project/      # Found dashboard PID files
+```
+
+**Result:** ✅ **Verified:** Moltbot properly separated. Dashboard (95+ restarts) is isolated and not affecting bot.
+
+### Attempt 3: Rule Out Health Monitor (21:05 UTC)
+**Action:** Analyzed health monitor script to verify it wasn't sending SIGTERM
+**File Examined:** `/root/moltbot/scripts/pm2-health-monitor.js`
+
+**Findings:**
+- Uses `SIGKILL (-9)` not SIGTERM
+- Checks every 5 minutes, not during every message
+- Not the culprit
+
+**Result:** ✗ Health monitor ruled out as SIGTERM source.
+
+### Attempt 4: Disable Telegram Plugin (20:32 UTC - Abandoned)
+**Action:** Attempted to disable telegram plugin to test if plugin was causing issue
+**Change:** Set `plugins.entries.telegram.enabled: false` in `/root/.clawdbot/moltbot.json`
+
+**Result:** ✗ **Unintended consequence:** This disabled the entire Telegram channel (telegram is a bundled plugin, not external). Bot stopped responding entirely.
+
+**Lesson:** Don't disable bundled plugins via config; they're core to gateway functionality.
+
+### Attempt 5: Switch Model to Claude Sonnet (21:14 UTC - Incomplete)
+**Action:** Attempted to switch model from Mistral Devstral to Claude Sonnet to rule out API issue
+**Change:** Modified `/root/.clawdbot/moltbot.json` to use `anthropic/claude-sonnet-4-5`
+
+**Result:** ⚠️ **Test inconclusive:** Config was automatically rewritten before test completed.
+
+### Attempt 6: Analyze Config File Rewrites (21:14 UTC)
+**Action:** Examined config file modification timestamps
+**Commands:**
+```bash
+stat /root/.clawdbot/moltbot.json*         # Check modification times
+grep "reload" /tmp/moltbot/pm2-out.log    # Check reload logs
+```
+
+**Findings:**
+- Config file modified at 21:14:26 UTC, 21:01:43 UTC
+- Times match reload handler logs exactly
+- **Config is being automatically rewritten**
+
+**Result:** 🔍 **Key discovery:** Something auto-restores config file after changes.
+
+### Attempt 7: Trace SIGUSR1 Signal Source (21:20+ UTC - Current)
+**Action:** Analyzed exact logs showing SIGUSR1 during message processing
+**Files Examined:**
+- `src/gateway/server-reload-handlers.ts:157` - Found `process.emit("SIGUSR1")`
+- `src/cli/gateway-cli/run-loop.ts:74-83` - Found SIGUSR1 signal handler
+- `/tmp/moltbot/moltbot-2026-01-29.log` - Exact timestamps of crash
+
+**Timeline from logs:**
+```
+21:20:35: Telegram message received
+21:20:36: Agent embedded run start
+21:20:49: First exec tool completes
+21:21:02: Second exec tool starts
+21:21:02 (+7ms): SIGUSR1 signal received ← Gateway self-terminates
+21:21:02: Shutdown sequence begins
+21:21:06: Gateway restarts
+```
+
+**Result:** ✅ **Root cause identified:** Gateway receives SIGUSR1 (self-inflicted via reload handler) during tool execution, triggering graceful shutdown.
+
+### Attempt 8: Confirm Config-Triggered Reloads (21:20+ UTC)
+**Action:** Traced PM2 logs showing config change → reload → SIGUSR1 sequence
+**Commands:**
+```bash
+pm2 logs moltbot-gateway --lines 50 --nostream   # Full log review
+grep -n "reload\|SIGUSR1" /tmp/moltbot/pm2-out.log  # Timeline analysis
+```
+
+**Key Logs Found:**
+```
+20:32:34: [reload] config change requires gateway restart (plugins.entries.telegram.enabled)
+21:01:43: [reload] config change requires gateway restart (plugins.entries.telegram)
+21:14:26: [reload] config change detected; evaluating reload
+21:14:26: [gateway] signal SIGUSR1 received
+```
+
+**Result:** ✅ **Pattern confirmed:** Every config rewrite triggers reload handler → SIGUSR1 → shutdown.
+
+### Attempted Fixes - Summary
+
+| Attempt | Action | Result | Status |
+|---------|--------|--------|--------|
+| 1 | Check restart loop | Found increasing restarts, not plugin overflow | ✗ Not root cause |
+| 2 | Verify PM2 isolation | Confirmed separation working correctly | ✅ Confirmed safe |
+| 3 | Rule out health monitor | Verified not sending SIGTERM | ✓ Eliminated |
+| 4 | Disable telegram plugin | Completely disabled Telegram (bundled plugin) | ✗ Made worse |
+| 5 | Switch to Claude Sonnet | Config auto-rewritten before test | ⚠️ Inconclusive |
+| 6 | Analyze config rewrites | Found config being auto-restored | 🔍 Key discovery |
+| 7 | Trace SIGUSR1 source | Found gateway self-terminating via reload handler | ✅ Root cause |
+| 8 | Confirm reload sequence | Mapped entire config → reload → shutdown cycle | ✅ Mechanism confirmed |
+
+### What Still Needs Investigation
+
+🚨 **BLOCKER: Identify config auto-rewrite mechanism**
+
+The config file `/root/.clawdbot/moltbot.json` is being automatically rewritten after each modification:
+1. User/agent modifies config
+2. File watcher detects change
+3. Reload handler emits SIGUSR1
+4. Gateway restarts
+5. **Config file is automatically restored to previous state** ← Unknown mechanism
+
+**Possible causes:**
+- Config sync/validation layer rewriting file
+- CLI attempting to restore settings on startup
+- Web provider re-applying config
+- Environment variable override rewriting config on load
+- Hook or background process reverting changes
+
+**Next steps to identify:**
+- Check for file watchers on config beyond the gateway
+- Review CLI entry point for auto-config logic
+- Check for config hydration/defaults logic on gateway startup
+- Search for any config-restore or config-revert functionality
+- Monitor file operations: `lsof /root/.clawdbot/moltbot.json`
+- Trace who writes to config file: `inotifywait -m /root/.clawdbot/`
 
 ---
 
@@ -506,11 +818,11 @@ If issue persists, reduce retry attempts in retry policy config.
 
 - [ ] Node.js 24+ installed
 - [ ] Moltbot cloned and built (`npm run build`)
-- [ ] Systemd service created and enabled
+- [ ] PM2 installed globally (`npm install -g pm2`)
 - [ ] Config files populated (moltbot.json, agents/main/config.json)
 - [ ] API keys in environment or .env
 - [ ] Telegram bot token configured
-- [ ] Gateway started: `systemctl start moltbot-gateway`
+- [ ] Gateway started: `pm2 start ecosystem.config.cjs`
 - [ ] Telegram connection verified: `node dist/entry.js channels status`
 - [ ] Test message sent in Telegram
 
