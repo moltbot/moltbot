@@ -49,7 +49,13 @@ describe("state + config path candidates", () => {
     const home = "/home/test";
     const candidates = resolveDefaultConfigCandidates({} as NodeJS.ProcessEnv, () => home);
     expect(candidates[0]).toBe(path.join(home, ".openclaw", "openclaw.json"));
-    expect(candidates).toHaveLength(1);
+    // Should include new .openclaw dir + legacy dirs (.clawdbot, .moltbot, .moldbot)
+    // with all config filenames (openclaw.json + clawdbot.json, moltbot.json, moldbot.json)
+    // = 4 dirs × 4 filenames = 16 candidates
+    expect(candidates).toHaveLength(16);
+    // Verify the candidates include expected legacy paths
+    expect(candidates).toContain(path.join(home, ".clawdbot", "clawdbot.json"));
+    expect(candidates).toContain(path.join(home, ".moltbot", "moltbot.json"));
   });
 
   it("prefers ~/.openclaw when it exists and legacy dir is missing", async () => {
