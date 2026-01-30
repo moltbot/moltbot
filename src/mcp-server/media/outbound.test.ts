@@ -37,7 +37,7 @@ describe("processOutboundMedia", () => {
   beforeEach(async () => {
     mockedFetchWithGuard.mockReset();
     mockedDetectMime.mockReset();
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawdbot-outbound-test-"));
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-outbound-test-"));
   });
 
   afterEach(async () => {

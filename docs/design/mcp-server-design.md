@@ -2,11 +2,11 @@
 
 ## Overview
 
-The Clawdbot MCP server exposes an `order_clawdbot` tool that allows external MCP clients (e.g., Claude Code) to send messages to Clawdbot and receive responses synchronously.
+The OpenClaw MCP server exposes an `order_openclaw` tool that allows external MCP clients (e.g., Claude Code) to send messages to OpenClaw and receive responses synchronously.
 
 ## Requirements
 
-1. Expose an `order_clawdbot` endpoint/tool via MCP protocol
+1. Expose an `order_openclaw` endpoint/tool via MCP protocol
 2. Accept messages from the caller **unmodified** (no prompt injection)
 3. Collect all responses (partial, block, final) via infrastructure-level aggregation
 4. Return a single combined response to the caller
@@ -15,7 +15,7 @@ The Clawdbot MCP server exposes an `order_clawdbot` tool that allows external MC
 
 ```
 ┌─────────────────┐     MCP Protocol      ┌─────────────────┐
-│   MCP Client    │ ◄──────────────────► │  Clawdbot MCP   │
+│   MCP Client    │ ◄──────────────────► │  OpenClaw MCP   │
 │ (Claude Code,   │    (stdio/HTTP)       │     Server      │
 │  other agents)  │                       │                 │
 └─────────────────┘                       └────────┬────────┘
@@ -30,13 +30,13 @@ The Clawdbot MCP server exposes an `order_clawdbot` tool that allows external MC
 
 ### Integration Point
 
-The MCP server integrates with Clawdbot's existing auto-reply system via `getReplyFromConfig()` in `src/auto-reply/reply/get-reply.ts`.
+The MCP server integrates with OpenClaw's existing auto-reply system via `getReplyFromConfig()` in `src/auto-reply/reply/get-reply.ts`.
 
 ### Source Files
 
 - `src/mcp-server/` - MCP server module
 - `src/mcp-server/server.ts` - Server setup and tool registration
-- `src/mcp-server/tools/order-clawdbot.ts` - Tool implementation with response aggregation
+- `src/mcp-server/tools/order-openclaw.ts` - Tool implementation with response aggregation
 - `src/mcp-server/context.ts` - Synthetic MsgContext builder
 - `src/cli/program/register.mcp.ts` - CLI command registration
 
@@ -46,7 +46,7 @@ The MCP server integrates with Clawdbot's existing auto-reply system via `getRep
 
 Instead of modifying the user's message with a prefix (unreliable, vulnerable to prompt injection), we guarantee a single MCP response through **infrastructure-level aggregation**:
 
-- User's message is passed to Clawdbot **unmodified**
+- User's message is passed to OpenClaw **unmodified**
 - `GetReplyOptions` callbacks collect intermediate outputs during agent execution
 - Final `ReplyPayload` is extracted from `getReplyFromConfig` return value
 - All parts are deduplicated and combined into a single response
@@ -75,10 +75,10 @@ This is an intentional design choice:
 
 ```bash
 # Start MCP server (stdio transport)
-clawdbot mcp-server
+openclaw mcp-server
 
 # Start with verbose logging
-clawdbot mcp-server --verbose
+openclaw mcp-server --verbose
 ```
 
 ### Claude Code Configuration
@@ -88,8 +88,8 @@ Add to `~/.config/claude-code/mcp.json`:
 ```json
 {
   "mcpServers": {
-    "clawdbot": {
-      "command": "clawdbot",
+    "openclaw": {
+      "command": "openclaw",
       "args": ["mcp-server"]
     }
   }

@@ -1,7 +1,7 @@
 /**
  * MCP Inbound Media Processing
  *
- * Handles media sent from MCP clients to Clawdbot.
+ * Handles media sent from MCP clients to OpenClaw.
  */
 
 import { promises as fs } from "node:fs";
@@ -60,7 +60,7 @@ export async function processInboundMedia(params: {
     };
   }
 
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawdbot-mcp-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-mcp-"));
   const paths: string[] = [];
   const mimeTypes: string[] = [];
   const placeholders: string[] = [];

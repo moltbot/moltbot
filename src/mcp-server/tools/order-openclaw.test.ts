@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deduplicateAndJoin } from "./order-clawdbot.js";
+import { deduplicateAndJoin } from "./order-openclaw.js";
 
 describe("deduplicateAndJoin", () => {
   describe("basic cases", () => {
@@ -102,13 +102,13 @@ describe("deduplicateAndJoin", () => {
   });
 });
 
-describe("orderClawdbotTool.definition", () => {
+describe("orderOpenClawTool.definition", () => {
   it("should have correct tool definition", async () => {
-    const { orderClawdbotTool } = await import("./order-clawdbot.js");
-    const def = orderClawdbotTool.definition;
+    const { orderOpenClawTool } = await import("./order-openclaw.js");
+    const def = orderOpenClawTool.definition;
 
-    expect(def.name).toBe("order_clawdbot");
-    expect(def.description).toContain("Send a message to Clawdbot");
+    expect(def.name).toBe("order_openclaw");
+    expect(def.description).toContain("Send a message to OpenClaw");
     expect(def.inputSchema.type).toBe("object");
     expect(def.inputSchema.properties.message.type).toBe("string");
     expect(def.inputSchema.properties.sessionKey.type).toBe("string");

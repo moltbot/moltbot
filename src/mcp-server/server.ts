@@ -1,7 +1,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { orderClawdbotTool } from "./tools/order-clawdbot.js";
+import { orderOpenClawTool } from "./tools/order-openclaw.js";
 import type { McpServerOptions } from "./types.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { createRequire } from "module";
@@ -14,7 +14,7 @@ const SERVER_VERSION = pkg.version;
 export async function createMcpServer(runtime: RuntimeEnv, opts: McpServerOptions) {
   const server = new Server(
     {
-      name: "clawdbot-mcp-server",
+      name: "openclaw-mcp-server",
       version: SERVER_VERSION,
     },
     {
@@ -26,12 +26,12 @@ export async function createMcpServer(runtime: RuntimeEnv, opts: McpServerOption
 
   // Register tools
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [orderClawdbotTool.definition],
+    tools: [orderOpenClawTool.definition],
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    if (request.params.name === "order_clawdbot") {
-      const args = request.params.arguments as Parameters<typeof orderClawdbotTool.handler>[0];
+    if (request.params.name === "order_openclaw") {
+      const args = request.params.arguments as Parameters<typeof orderOpenClawTool.handler>[0];
 
       if (opts.verbose) {
         runtime.log(
@@ -39,7 +39,7 @@ export async function createMcpServer(runtime: RuntimeEnv, opts: McpServerOption
         );
       }
 
-      const result = await orderClawdbotTool.handler(args);
+      const result = await orderOpenClawTool.handler(args);
 
       if (opts.verbose) {
         const firstBlock = result.content[0];

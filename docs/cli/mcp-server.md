@@ -1,34 +1,34 @@
 # MCP Server
 
-Clawdbot includes a built-in MCP (Model Context Protocol) server that allows external AI agents and tools to interact with Clawdbot programmatically. This enables powerful integrations where other AI systems can delegate tasks to Clawdbot.
+OpenClaw includes a built-in MCP (Model Context Protocol) server that allows external AI agents and tools to interact with OpenClaw programmatically. This enables powerful integrations where other AI systems can delegate tasks to OpenClaw.
 
 ## What is MCP?
 
 The [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) is an open standard for connecting AI models to external tools and data sources. MCP servers expose "tools" that AI clients can discover and invoke.
 
-Clawdbot's MCP server exposes an `order_clawdbot` tool that allows any MCP-compatible client to send messages to Clawdbot and receive responses.
+OpenClaw's MCP server exposes an `order_openclaw` tool that allows any MCP-compatible client to send messages to OpenClaw and receive responses.
 
 ## Quick Start
 
 ### 1. Start the MCP Server
 
 ```bash
-clawdbot mcp-server
+openclaw mcp-server
 ```
 
 The server uses stdio transport, meaning it communicates via stdin/stdout. This is the standard approach for local MCP tool servers.
 
 ### 2. Configure Your MCP Client
 
-Add Clawdbot to your MCP client's configuration. For example, in Claude Code:
+Add OpenClaw to your MCP client's configuration. For example, in Claude Code:
 
 **~/.claude/claude_desktop_config.json** (macOS/Linux) or **%APPDATA%\Claude\claude_desktop_config.json** (Windows):
 
 ```json
 {
   "mcpServers": {
-    "clawdbot": {
-      "command": "clawdbot",
+    "openclaw": {
+      "command": "openclaw",
       "args": ["mcp-server"]
     }
   }
@@ -37,12 +37,12 @@ Add Clawdbot to your MCP client's configuration. For example, in Claude Code:
 
 ### 3. Use the Tool
 
-Once configured, the MCP client can invoke the `order_clawdbot` tool to send messages to Clawdbot.
+Once configured, the MCP client can invoke the `order_openclaw` tool to send messages to OpenClaw.
 
 ## CLI Reference
 
 ```
-clawdbot mcp-server [options]
+openclaw mcp-server [options]
 
 Options:
   -v, --verbose  Enable verbose logging for debugging
@@ -54,31 +54,31 @@ Options:
 
 ```bash
 # Start MCP server (standard mode)
-clawdbot mcp-server
+openclaw mcp-server
 
 # Start with verbose logging (useful for debugging)
-clawdbot mcp-server --verbose
+openclaw mcp-server --verbose
 
 # Print version
-clawdbot mcp-server --version
+openclaw mcp-server --version
 ```
 
-## The `order_clawdbot` Tool
+## The `order_openclaw` Tool
 
-The MCP server exposes a single tool called `order_clawdbot`.
+The MCP server exposes a single tool called `order_openclaw`.
 
 ### Tool Definition
 
 ```json
 {
-  "name": "order_clawdbot",
-  "description": "Send a message to Clawdbot and receive a response. The message will be processed as if typed by a user. Supports sending images, files (PDF, text, markdown, CSV, JSON), audio, video, and archives (ZIP, TAR.GZ) via base64 encoding.",
+  "name": "order_openclaw",
+  "description": "Send a message to OpenClaw and receive a response. The message will be processed as if typed by a user. Supports sending images, files (PDF, text, markdown, CSV, JSON), audio, video, and archives (ZIP, TAR.GZ) via base64 encoding.",
   "inputSchema": {
     "type": "object",
     "properties": {
       "message": {
         "type": "string",
-        "description": "The message to send to Clawdbot"
+        "description": "The message to send to OpenClaw"
       },
       "sessionKey": {
         "type": "string",
@@ -120,7 +120,7 @@ The MCP server exposes a single tool called `order_clawdbot`.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `message` | string | Yes | The message to send to Clawdbot. Passed through unmodified. |
+| `message` | string | Yes | The message to send to OpenClaw. Passed through unmodified. |
 | `sessionKey` | string | No | Session identifier for conversation continuity. If not provided, a unique key is generated for each call. |
 | `images` | array | No | Base64-encoded images. See [Media Support](#media-support) for details. |
 | `files` | array | No | Base64-encoded files. See [Media Support](#media-support) for details. |
@@ -134,7 +134,7 @@ The tool returns a standard MCP tool result:
   "content": [
     {
       "type": "text",
-      "text": "Clawdbot's response here..."
+      "text": "OpenClaw's response here..."
     }
   ],
   "isError": false
@@ -159,7 +159,7 @@ On error:
 
 ### Default Behavior (Isolated Sessions)
 
-By default, each call to `order_clawdbot` generates a unique session key:
+By default, each call to `order_openclaw` generates a unique session key:
 
 ```
 mcp-{timestamp}-{random}
@@ -174,7 +174,7 @@ To maintain conversation history across multiple calls, provide a consistent `se
 ```json
 // First message
 {
-  "name": "order_clawdbot",
+  "name": "order_openclaw",
   "arguments": {
     "message": "Remember that my favorite color is blue.",
     "sessionKey": "user-123-conversation"
@@ -183,7 +183,7 @@ To maintain conversation history across multiple calls, provide a consistent `se
 
 // Later message (same session)
 {
-  "name": "order_clawdbot",
+  "name": "order_openclaw",
   "arguments": {
     "message": "What's my favorite color?",
     "sessionKey": "user-123-conversation"
@@ -191,7 +191,7 @@ To maintain conversation history across multiple calls, provide a consistent `se
 }
 ```
 
-Clawdbot will remember the conversation context and respond appropriately.
+OpenClaw will remember the conversation context and respond appropriately.
 
 ### Session Key Best Practices
 
@@ -201,7 +201,7 @@ Clawdbot will remember the conversation context and respond appropriately.
 
 ## Media Support
 
-The `order_clawdbot` tool supports sending and receiving media files via base64 encoding.
+The `order_openclaw` tool supports sending and receiving media files via base64 encoding.
 
 ### Sending Media
 
@@ -209,7 +209,7 @@ Attach images or files to your message using base64-encoded data:
 
 ```json
 {
-  "name": "order_clawdbot",
+  "name": "order_openclaw",
   "arguments": {
     "message": "What do you see in this image?",
     "images": [{
@@ -238,7 +238,7 @@ Send files using the `files` array:
 
 ```json
 {
-  "name": "order_clawdbot",
+  "name": "order_openclaw",
   "arguments": {
     "message": "Summarize this document",
     "files": [{
@@ -275,7 +275,7 @@ Send files using the `files` array:
 
 ### Receiving Media
 
-Responses may include multiple content blocks depending on what Clawdbot returns.
+Responses may include multiple content blocks depending on what OpenClaw returns.
 
 #### Text Content
 
@@ -322,7 +322,7 @@ Responses may include multiple content blocks depending on what Clawdbot returns
 
 All media is transferred as base64-encoded data. URL-based transfers are intentionally excluded because:
 
-- **Works offline**: MCP clients may not have network access to Clawdbot's media storage
+- **Works offline**: MCP clients may not have network access to OpenClaw's media storage
 - **Self-contained**: Base64 provides portable media that works across all MCP clients
 - **Secure**: Eliminates authentication and SSRF concerns for media delivery
 - **Consistent**: Aligns with MCP SDK's native content block types
@@ -336,8 +336,8 @@ Create or edit `~/.claude/claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "clawdbot": {
-      "command": "clawdbot",
+    "openclaw": {
+      "command": "openclaw",
       "args": ["mcp-server"]
     }
   }
@@ -349,8 +349,8 @@ Create or edit `~/.claude/claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "clawdbot": {
-      "command": "clawdbot",
+    "openclaw": {
+      "command": "openclaw",
       "args": ["mcp-server", "--verbose"]
     }
   }
@@ -359,13 +359,13 @@ Create or edit `~/.claude/claude_desktop_config.json`:
 
 ### With Custom Path
 
-If Clawdbot is installed in a non-standard location:
+If OpenClaw is installed in a non-standard location:
 
 ```json
 {
   "mcpServers": {
-    "clawdbot": {
-      "command": "/usr/local/bin/clawdbot",
+    "openclaw": {
+      "command": "/usr/local/bin/openclaw",
       "args": ["mcp-server"]
     }
   }
@@ -379,9 +379,9 @@ If you prefer to run via npx:
 ```json
 {
   "mcpServers": {
-    "clawdbot": {
+    "openclaw": {
       "command": "npx",
-      "args": ["clawdbot", "mcp-server"]
+      "args": ["openclaw", "mcp-server"]
     }
   }
 }
@@ -393,7 +393,7 @@ If you prefer to run via npx:
 
 ```
 ┌─────────────────┐     MCP Protocol      ┌─────────────────┐
-│   MCP Client    │ ◄──────────────────► │  Clawdbot MCP   │
+│   MCP Client    │ ◄──────────────────► │  OpenClaw MCP   │
 │ (Claude Code,   │    (stdio JSON-RPC)   │     Server      │
 │  other agents)  │                       │                 │
 └─────────────────┘                       └────────┬────────┘
@@ -419,7 +419,7 @@ The MCP server uses stdio transport exclusively. This is an intentional design c
 
 The MCP server uses infrastructure-level response aggregation to ensure a single, complete response is returned:
 
-1. User's message is passed to Clawdbot **unmodified** (no prompt injection)
+1. User's message is passed to OpenClaw **unmodified** (no prompt injection)
 2. Intermediate outputs (block replies, tool results) are collected via callbacks
 3. Final response is extracted from `getReplyFromConfig`
 4. All parts are deduplicated and combined
@@ -441,7 +441,7 @@ Design documentation:
 | `src/mcp-server/server.ts` | MCP server setup and tool registration |
 | `src/mcp-server/types.ts` | Type definitions |
 | `src/mcp-server/context.ts` | Synthetic message context builder |
-| `src/mcp-server/tools/order-clawdbot.ts` | The `order_clawdbot` tool implementation |
+| `src/mcp-server/tools/order-openclaw.ts` | The `order_openclaw` tool implementation |
 | `src/mcp-server/media/` | Media processing (inbound/outbound, validation, constants) |
 | `src/cli/program/register.mcp.ts` | CLI command registration |
 
@@ -450,7 +450,7 @@ Design documentation:
 | File | Coverage |
 |------|----------|
 | `src/mcp-server/context.test.ts` | Context builder tests |
-| `src/mcp-server/tools/order-clawdbot.test.ts` | Tool handler and deduplication tests |
+| `src/mcp-server/tools/order-openclaw.test.ts` | Tool handler and deduplication tests |
 | `src/mcp-server/media/helpers.test.ts` | Media validation and utility tests |
 | `src/mcp-server/media/inbound.test.ts` | Inbound media processing tests |
 | `src/mcp-server/media/outbound.test.ts` | Outbound media processing tests |
@@ -459,36 +459,36 @@ Design documentation:
 
 ### Server Won't Start
 
-**Check that Clawdbot is properly installed:**
+**Check that OpenClaw is properly installed:**
 ```bash
-clawdbot --version
+openclaw --version
 ```
 
 **Check for configuration issues:**
 ```bash
-clawdbot doctor
+openclaw doctor
 ```
 
 ### No Response from Tool
 
 **Enable verbose logging:**
 ```bash
-clawdbot mcp-server --verbose
+openclaw mcp-server --verbose
 ```
 
 This will show request/response details in the server's stderr output.
 
-**Check Clawdbot configuration:**
+**Check OpenClaw configuration:**
 Ensure you have valid API credentials configured:
 ```bash
-clawdbot status
+openclaw status
 ```
 
 ### MCP Client Can't Find Server
 
 **Verify the command path:**
 ```bash
-which clawdbot
+which openclaw
 ```
 
 Use the full path in your MCP configuration if needed.
@@ -503,7 +503,7 @@ Without a consistent session key, each call creates a new isolated session.
 
 **Check session storage:**
 ```bash
-clawdbot sessions --store file
+openclaw sessions --store file
 ```
 
 ## Security Considerations
@@ -529,19 +529,19 @@ The stdio transport ensures:
 
 ### Current Limitations
 
-1. **Synchronous only**: The tool waits for Clawdbot to complete before returning
+1. **Synchronous only**: The tool waits for OpenClaw to complete before returning
 2. **No streaming**: Responses are aggregated and returned as a single block
-3. **Single tool**: Only `order_clawdbot` is exposed (individual Clawdbot tools are not exposed)
+3. **Single tool**: Only `order_openclaw` is exposed (individual OpenClaw tools are not exposed)
 
 ### Not Supported (By Design)
 
 - HTTP/SSE transport: Would require authentication and state management
 - Multiple concurrent clients per server: Each client spawns its own process
-- Long-running daemon mode: Use the Clawdbot gateway for that use case
+- Long-running daemon mode: Use the OpenClaw gateway for that use case
 
 ## Related Documentation
 
 - [MCP Protocol Specification](https://modelcontextprotocol.io/)
-- [Clawdbot CLI Reference](/cli)
-- [Clawdbot Configuration](/gateway/configuration)
+- [OpenClaw CLI Reference](/cli)
+- [OpenClaw Configuration](/gateway/configuration)
 - [Sessions](/concepts/sessions)

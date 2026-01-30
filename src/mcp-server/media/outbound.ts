@@ -1,7 +1,7 @@
 /**
  * MCP Outbound Media Processing
  *
- * Handles media sent from Clawdbot to MCP clients.
+ * Handles media sent from OpenClaw to MCP clients.
  */
 
 import { promises as fs } from "node:fs";

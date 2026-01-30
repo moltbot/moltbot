@@ -7,7 +7,7 @@
 import type { InputImageContent } from "../../media/input-files.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
-// INPUT TYPES (MCP Client → Clawdbot)
+// INPUT TYPES (MCP Client → OpenClaw)
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** Base64-encoded image input from MCP client */
@@ -50,7 +50,7 @@ export type McpExtractedContent = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// OUTPUT TYPES (Clawdbot → MCP Client)
+// OUTPUT TYPES (OpenClaw → MCP Client)
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** MCP response content block types */

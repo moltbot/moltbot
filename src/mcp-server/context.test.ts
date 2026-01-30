@@ -4,17 +4,17 @@ import { buildSyntheticContext } from "./context.js";
 describe("buildSyntheticContext", () => {
   it("should generate valid MsgContext with all required fields", () => {
     const ctx = buildSyntheticContext({
-      body: "Hello, Clawdbot!",
+      body: "Hello, OpenClaw!",
       sessionKey: "test-session-123",
       senderId: "mcp-client",
     });
 
     // Core message content
-    expect(ctx.Body).toBe("Hello, Clawdbot!");
-    expect(ctx.RawBody).toBe("Hello, Clawdbot!");
-    expect(ctx.CommandBody).toBe("Hello, Clawdbot!");
-    expect(ctx.BodyForCommands).toBe("Hello, Clawdbot!");
-    expect(ctx.BodyForAgent).toBe("Hello, Clawdbot!");
+    expect(ctx.Body).toBe("Hello, OpenClaw!");
+    expect(ctx.RawBody).toBe("Hello, OpenClaw!");
+    expect(ctx.CommandBody).toBe("Hello, OpenClaw!");
+    expect(ctx.BodyForCommands).toBe("Hello, OpenClaw!");
+    expect(ctx.BodyForAgent).toBe("Hello, OpenClaw!");
 
     // Session/routing
     expect(ctx.SessionKey).toBe("test-session-123");

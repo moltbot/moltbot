@@ -2,14 +2,14 @@
 
 ## Overview
 
-The Clawdbot MCP server supports bidirectional media exchange using **base64 encoding exclusively**. This enables MCP clients (like Claude Code) to send images, documents, audio, and video files to Clawdbot and receive media in responses.
+The OpenClaw MCP server supports bidirectional media exchange using **base64 encoding exclusively**. This enables MCP clients (like Claude Code) to send images, documents, audio, and video files to OpenClaw and receive media in responses.
 
 ## Design Decisions
 
 ### Base64 Only (No URLs)
 
 All media transfers use base64 encoding. URL-based transfers are intentionally excluded because:
-- MCP clients may not have network access to Clawdbot's media storage
+- MCP clients may not have network access to OpenClaw's media storage
 - Base64 provides self-contained, portable media that works across all MCP clients
 - Eliminates authentication/SSRF concerns for media delivery
 - Aligns with MCP SDK's native content block types (ImageContent, EmbeddedResource)
@@ -22,7 +22,7 @@ The MCP server assumes all users are fully trusted. Archive files (.zip, .tar.gz
 
 ```
 ┌─────────────────┐                              ┌─────────────────┐
-│   MCP Client    │         MCP Protocol         │  Clawdbot MCP   │
+│   MCP Client    │         MCP Protocol         │  OpenClaw MCP   │
 │ (Claude Code,   │ ◄────────────────────────►   │     Server      │
 │  other agents)  │      (stdio JSON-RPC)        │                 │
 └─────────────────┘                              └────────┬────────┘
@@ -110,7 +110,7 @@ Note: The MCP SDK's `AudioContent` type is not reliably supported across clients
 | `src/mcp-server/media/helpers.ts` | Validation and utility functions |
 | `src/mcp-server/media/inbound.ts` | Inbound media processing (base64 to temp files) |
 | `src/mcp-server/media/outbound.ts` | Outbound media processing (URLs to base64 blocks) |
-| `src/mcp-server/tools/order-clawdbot.ts` | Tool schema and handler integration |
+| `src/mcp-server/tools/order-openclaw.ts` | Tool schema and handler integration |
 | `src/mcp-server/context.ts` | Synthetic message context with media fields |
 
 ## Related Documentation

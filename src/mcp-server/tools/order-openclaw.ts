@@ -11,7 +11,7 @@ import {
 import type { ReplyPayload, GetReplyOptions, BlockReplyContext } from "../../auto-reply/types.js";
 
 // Tool argument type
-type OrderClawdbotArgs = {
+type OrderOpenClawArgs = {
   message: string;
   sessionKey?: string;
   images?: McpImageInput[];
@@ -24,17 +24,17 @@ type McpToolResult = {
   isError?: boolean;
 };
 
-export const orderClawdbotTool = {
+export const orderOpenClawTool = {
   definition: {
-    name: "order_clawdbot",
+    name: "order_openclaw",
     description:
-      "Send a message to Clawdbot and receive a response. The message will be processed as if typed by a user. Supports sending images, files (PDF, text, markdown, CSV, JSON), audio, video, and archives (ZIP, TAR.GZ) via base64 encoding.",
+      "Send a message to OpenClaw and receive a response. The message will be processed as if typed by a user. Supports sending images, files (PDF, text, markdown, CSV, JSON), audio, video, and archives (ZIP, TAR.GZ) via base64 encoding.",
     inputSchema: {
       type: "object" as const,
       properties: {
         message: {
           type: "string",
-          description: "The message to send to Clawdbot",
+          description: "The message to send to OpenClaw",
         },
         sessionKey: {
           type: "string",
@@ -71,7 +71,7 @@ export const orderClawdbotTool = {
     },
   },
 
-  async handler(args: OrderClawdbotArgs): Promise<McpToolResult> {
+  async handler(args: OrderOpenClawArgs): Promise<McpToolResult> {
     // Process inbound media (if any)
     let mediaResult: Awaited<ReturnType<typeof processInboundMedia>> | null = null;
 
