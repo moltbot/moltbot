@@ -9,6 +9,11 @@ overrides:
   hono: 4.11.4
   tar: 7.5.4
 
+patchedDependencies:
+  '@mariozechner/clipboard@0.3.0':
+    hash: uudcvs6o5uasebc7fqwj2zdl6m
+    path: patches/@mariozechner__clipboard@0.3.0.patch
+
 importers:
 
   .:
@@ -6959,7 +6964,7 @@ snapshots:
   '@mariozechner/clipboard-win32-x64-msvc@0.3.0':
     optional: true
 
-  '@mariozechner/clipboard@0.3.0':
+  '@mariozechner/clipboard@0.3.0(patch_hash=uudcvs6o5uasebc7fqwj2zdl6m)':
     optionalDependencies:
       '@mariozechner/clipboard-darwin-arm64': 0.3.0
       '@mariozechner/clipboard-darwin-universal': 0.3.0
@@ -7030,7 +7035,7 @@ snapshots:
 
   '@mariozechner/pi-coding-agent@0.49.3(ws@8.19.0)(zod@4.3.6)':
     dependencies:
-      '@mariozechner/clipboard': 0.3.0
+      '@mariozechner/clipboard': 0.3.0(patch_hash=uudcvs6o5uasebc7fqwj2zdl6m)
       '@mariozechner/jiti': 2.6.5
       '@mariozechner/pi-agent-core': 0.49.3(ws@8.19.0)(zod@4.3.6)
       '@mariozechner/pi-ai': 0.49.3(ws@8.19.0)(zod@4.3.6)

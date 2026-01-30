@@ -250,6 +250,9 @@
       "@sinclair/typebox": "0.34.47",
       "hono": "4.11.4",
       "tar": "7.5.4"
+    },
+    "patchedDependencies": {
+      "@mariozechner/clipboard@0.3.0": "patches/@mariozechner__clipboard@0.3.0.patch"
     }
   },
   "vitest": {
