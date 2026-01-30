@@ -216,6 +216,71 @@ node bin/server.js
             └───────────────┘           └───────────────┘           └───────────────┘
 ```
 
+## Using Cursor's Models with OpenClaw
+
+You can also use Cursor's AI models (Claude, GPT-4, etc.) as providers for OpenClaw. This enables bidirectional integration:
+
+- **OpenClaw → Cursor**: Use OpenClaw tools in Cursor (MCP server)
+- **Cursor → OpenClaw**: Use Cursor's models in OpenClaw
+
+### Setup Cursor Models
+
+1. **Install Copilot Proxy extension** in Cursor:
+   - Search for "Copilot Proxy" by AdrianGonz97 in Extensions
+   - Install and restart Cursor
+
+2. **Check the proxy is running**:
+   ```bash
+   openclaw mcp setup-models --check
+   ```
+
+3. **Configure OpenClaw** to use Cursor models:
+   ```bash
+   # Set a Cursor model as default
+   openclaw config set agents.defaults.model cursor/claude-sonnet-4
+   ```
+
+   Or manually add to `~/.clawdbot/config.yaml`:
+   ```yaml
+   models:
+     providers:
+       cursor:
+         baseUrl: "http://localhost:3000/v1"
+         apiKey: "cursor-proxy"
+         api: openai-completions
+         models:
+           - id: claude-sonnet-4
+             name: Claude Sonnet 4
+             contextWindow: 200000
+   ```
+
+### Available Cursor Models
+
+| Model ID | Description |
+|----------|-------------|
+| `cursor/claude-sonnet-4` | Claude Sonnet 4 |
+| `cursor/claude-sonnet-4-thinking` | Claude Sonnet 4 with extended thinking |
+| `cursor/gpt-4o` | GPT-4o |
+| `cursor/gpt-4o-mini` | GPT-4o Mini |
+| `cursor/o1` | OpenAI o1 (reasoning) |
+| `cursor/o1-mini` | OpenAI o1-mini |
+| `cursor/gemini-2.5-pro` | Gemini 2.5 Pro |
+
+> **Note**: Available models depend on your Cursor subscription tier.
+
+### Usage Examples
+
+```bash
+# Chat using Cursor's Claude
+openclaw agent --model cursor/claude-sonnet-4 "Explain this code"
+
+# Send message via channels using GPT-4
+openclaw message send --model cursor/gpt-4o "Hello from OpenClaw!"
+
+# Use in TUI
+openclaw tui --model cursor/claude-sonnet-4
+```
+
 ## License
 
 MIT - Part of the OpenClaw project.

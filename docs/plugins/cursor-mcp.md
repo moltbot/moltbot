@@ -207,6 +207,45 @@ Clear and restart a session using the `openclaw_clear_session` tool or:
 openclaw sessions clear agent:main:cursor
 ```
 
+## Using Cursor's Models in OpenClaw
+
+The integration is bidirectional - you can also use Cursor's AI models (Claude, GPT-4, etc.) as providers for OpenClaw.
+
+### Setup
+
+1. **Install Copilot Proxy extension** in Cursor (search for "Copilot Proxy" by AdrianGonz97)
+
+2. **Check the proxy**:
+   ```bash
+   openclaw mcp setup-models --check
+   ```
+
+3. **Configure OpenClaw**:
+   ```bash
+   openclaw config set agents.defaults.model cursor/claude-sonnet-4
+   ```
+
+### Available Models
+
+| Model | ID |
+|-------|-----|
+| Claude Sonnet 4 | `cursor/claude-sonnet-4` |
+| Claude Sonnet 4 (Thinking) | `cursor/claude-sonnet-4-thinking` |
+| GPT-4o | `cursor/gpt-4o` |
+| GPT-4o Mini | `cursor/gpt-4o-mini` |
+| o1 | `cursor/o1` |
+| Gemini 2.5 Pro | `cursor/gemini-2.5-pro` |
+
+### Usage
+
+```bash
+# Use Cursor's Claude in OpenClaw
+openclaw agent --model cursor/claude-sonnet-4 "Help me debug this"
+
+# In the TUI
+openclaw tui --model cursor/gpt-4o
+```
+
 ## See Also
 
 - [Gateway Configuration](/gateway/configuration)

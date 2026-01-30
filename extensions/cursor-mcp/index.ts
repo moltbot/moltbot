@@ -78,6 +78,64 @@ const cursorMcpPlugin = {
             await server.start();
           });
 
+        // Command to set up Cursor models as a provider
+        mcpCommand
+          .command("setup-models")
+          .description("Configure OpenClaw to use Cursor's AI models via Copilot Proxy")
+          .option("--url <url>", "Copilot Proxy base URL", "http://localhost:3000/v1")
+          .option("--check", "Only check if proxy is running, don't configure")
+          .action(async (opts) => {
+            const {
+              checkCursorProxyHealth,
+              generateCursorProviderConfig,
+              CURSOR_AVAILABLE_MODELS,
+              CURSOR_SETUP_INSTRUCTIONS,
+            } = await import("./src/cursor-models.js");
+
+            console.log("Checking Cursor Copilot Proxy...");
+            const health = await checkCursorProxyHealth(opts.url);
+
+            if (!health.ok) {
+              console.error(`\n❌ Copilot Proxy not accessible: ${health.error}`);
+              console.log(CURSOR_SETUP_INSTRUCTIONS);
+              process.exit(1);
+            }
+
+            console.log("✓ Copilot Proxy is running");
+
+            if (opts.check) {
+              console.log("\nAvailable models:");
+              for (const model of CURSOR_AVAILABLE_MODELS) {
+                console.log(`  - cursor/${model.id} (${model.name})`);
+              }
+              return;
+            }
+
+            // Generate and apply config
+            const configPatch = generateCursorProviderConfig({ baseUrl: opts.url });
+            console.log("\nTo use Cursor models, add this to your OpenClaw config:\n");
+            console.log("```yaml");
+            console.log("models:");
+            console.log("  providers:");
+            console.log("    cursor:");
+            console.log(`      baseUrl: "${opts.url}"`);
+            console.log('      apiKey: "cursor-proxy"');
+            console.log("      api: openai-completions");
+            console.log("      authHeader: false");
+            console.log("      models:");
+            for (const model of CURSOR_AVAILABLE_MODELS.slice(0, 4)) {
+              console.log(`        - id: ${model.id}`);
+              console.log(`          name: ${model.name}`);
+              console.log(`          contextWindow: ${model.contextWindow}`);
+            }
+            console.log("```");
+            console.log("\nOr run: openclaw config set agents.defaults.model cursor/claude-sonnet-4");
+            console.log("\nAvailable models:");
+            for (const model of CURSOR_AVAILABLE_MODELS) {
+              console.log(`  - cursor/${model.id}`);
+            }
+          });
+
         mcpCommand
           .command("info")
           .description("Show MCP server configuration information for Cursor")
