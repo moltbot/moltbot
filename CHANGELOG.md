@@ -2,6 +2,12 @@
 
 Docs: https://docs.molt.bot
 
+## 2026.1.30
+Status: unreleased.
+
+### Changes
+- Security: add interactive secret detection and redaction for API keys, tokens, and credentials in messages. Detects 25+ secret patterns using entropy analysis and regex matching; prompts users to redact/cancel/allow when secrets are detected; configurable thresholds and auto-redact mode.
+
 ## 2026.1.29
 Status: beta.
 
