@@ -176,6 +176,30 @@ export function handleMessageEnd(
   });
 
   const text = ctx.stripBlockTags(rawText, { thinking: false, final: false });
+  const { text: cleanedText, mediaUrls } = parseReplyDirectives(text);
+  const { text: previousCleanedText } = parseReplyDirectives(ctx.state.lastStreamedAssistant ?? "");
+  if (cleanedText && cleanedText !== previousCleanedText) {
+    const deltaText = cleanedText.startsWith(previousCleanedText)
+      ? cleanedText.slice(previousCleanedText.length)
+      : cleanedText;
+    emitAgentEvent({
+      runId: ctx.params.runId,
+      stream: "assistant",
+      data: {
+        text: cleanedText,
+        delta: deltaText,
+        mediaUrls: mediaUrls?.length ? mediaUrls : undefined,
+      },
+    });
+    void ctx.params.onAgentEvent?.({
+      stream: "assistant",
+      data: {
+        text: cleanedText,
+        delta: deltaText,
+        mediaUrls: mediaUrls?.length ? mediaUrls : undefined,
+      },
+    });
+  }
   const rawThinking =
     ctx.state.includeReasoning || ctx.state.streamReasoning
       ? extractAssistantThinking(assistantMessage) || extractThinkingFromTaggedText(rawText)

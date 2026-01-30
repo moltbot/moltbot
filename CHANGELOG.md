@@ -72,6 +72,7 @@ Status: stable.
 - **BREAKING:** Gateway auth mode "none" is removed; gateway now requires token/password (Tailscale Serve identity still allowed).
 
 ### Fixes
+- TUI: emit final assistant event when reply tags hide stream. (#4495) Thanks @ukeate.
 - Telegram: use undici fetch for per-account proxy dispatcher. (#4456) Thanks @spiceoogway.
 - Telegram: avoid silent empty replies by tracking normalization skips before fallback. (#3796)
 - Telegram: scope native skill commands to bound agent per bot. (#4360) Thanks @robhparker.
