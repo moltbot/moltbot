@@ -150,7 +150,7 @@ export async function startGatewayServer(
 ): Promise<GatewayServer> {
   // Install global unhandled rejection handler to prevent gateway crashes
   // from background promises (e.g., Telegram polling, network operations)
-  const handleUnhandledRejection = (reason: unknown, promise: Promise<unknown>) => {
+  const handleUnhandledRejection = (reason: unknown, _promise: Promise<unknown>) => {
     const formatted = reason instanceof Error ? reason.message : String(reason);
     log.error(`unhandled promise rejection: ${formatted}`);
     // Log additional details for debugging
@@ -587,7 +587,7 @@ export async function startGatewayServer(
     close: async (opts) => {
       // Remove unhandled rejection handler on shutdown
       process.off("unhandledRejection", handleUnhandledRejection);
-      
+
       if (diagnosticsEnabled) {
         stopDiagnosticHeartbeat();
       }

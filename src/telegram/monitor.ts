@@ -202,7 +202,7 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
       // Ensure runner is stopped to prevent lingering promises
       try {
         await runner.stop();
-      } catch (stopErr) {
+      } catch {
         // Suppress errors from runner.stop() in finally block
         // (already logged by stopOnAbort if abort-triggered)
       }
