@@ -617,7 +617,7 @@ export const buildTelegramMessageContext = async ({
     ctx: ctxPayload,
     updateLastRoute: !isGroup
       ? {
-          sessionKey: route.mainSessionKey,
+          sessionKey: route.sessionKey,
           channel: "telegram",
           to: String(chatId),
           accountId: route.accountId,

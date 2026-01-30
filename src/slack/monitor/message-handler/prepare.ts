@@ -533,7 +533,7 @@ export async function prepareSlackMessage(params: {
     ctx: ctxPayload,
     updateLastRoute: isDirectMessage
       ? {
-          sessionKey: route.mainSessionKey,
+          sessionKey: route.sessionKey,
           channel: "slack",
           to: `user:${message.user}`,
           accountId: route.accountId,

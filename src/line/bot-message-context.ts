@@ -282,7 +282,7 @@ export async function buildLineMessageContext(params: BuildLineMessageContextPar
   if (!isGroup) {
     await updateLastRoute({
       storePath,
-      sessionKey: route.mainSessionKey,
+      sessionKey: route.sessionKey,
       deliveryContext: {
         channel: "line",
         to: userId ?? peerId,
@@ -432,7 +432,7 @@ export async function buildLinePostbackContext(params: {
   if (!isGroup) {
     await updateLastRoute({
       storePath,
-      sessionKey: route.mainSessionKey,
+      sessionKey: route.sessionKey,
       deliveryContext: {
         channel: "line",
         to: userId ?? peerId,
