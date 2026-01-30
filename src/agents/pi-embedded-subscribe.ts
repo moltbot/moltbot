@@ -65,6 +65,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     messagingToolSentTargets: [],
     pendingMessagingTexts: new Map(),
     pendingMessagingTargets: new Map(),
+    consecutiveNullDeltas: 0,
   };
 
   const assistantTexts = state.assistantTexts;
@@ -96,6 +97,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     state.lastAssistantTextNormalized = undefined;
     state.lastAssistantTextTrimmed = undefined;
     state.assistantTextBaseline = nextAssistantTextBaseline;
+    state.consecutiveNullDeltas = 0; // Reset null delta counter (Issue #4143)
   };
 
   const rememberAssistantText = (text: string) => {

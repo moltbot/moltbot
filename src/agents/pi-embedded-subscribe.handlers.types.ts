@@ -58,6 +58,9 @@ export type EmbeddedPiSubscribeState = {
   messagingToolSentTargets: MessagingToolSend[];
   pendingMessagingTexts: Map<string, string>;
   pendingMessagingTargets: Map<string, MessagingToolSend>;
+
+  // Track consecutive null deltas for hang detection (Issue #4143)
+  consecutiveNullDeltas: number;
 };
 
 export type EmbeddedPiSubscribeContext = {
