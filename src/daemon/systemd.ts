@@ -3,10 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { colorize, isRich, theme } from "../terminal/theme.js";
-import {
-  formatGatewayServiceDescription,
-  resolveGatewaySystemdServiceName,
-} from "./constants.js";
+import { formatGatewayServiceDescription, resolveGatewaySystemdServiceName } from "./constants.js";
 import { parseKeyValueOutput } from "./runtime-parse.js";
 import type { GatewayServiceRuntime } from "./service-runtime.js";
 import { resolveHomeDir } from "./paths.js";
@@ -61,19 +58,29 @@ export function resolveSystemdUserUnitPath(env: Record<string, string | undefine
   return resolveSystemdUnitPath(env);
 }
 
+export type LegacySystemdUnit = {
+  name: string;
+  enabled: boolean;
+  exists: boolean;
+  unitPath: string;
+};
+
 export function findLegacySystemdUnits(
   _env: Record<string, string | undefined>,
-): Promise<string[]> {
+): Promise<LegacySystemdUnit[]> {
   // TODO: Implement search for legacy unit names
   return Promise.resolve([]);
 }
 
-export function uninstallLegacySystemdUnits(
-  _env: Record<string, string | undefined>,
-  _units: string[],
-): Promise<void> {
+export function uninstallLegacySystemdUnits({
+  env: _env,
+  stdout: _stdout,
+}: {
+  env: Record<string, string | undefined>;
+  stdout: NodeJS.WritableStream;
+}): Promise<LegacySystemdUnit[]> {
   // TODO: Implement removal of legacy units
-  return Promise.resolve();
+  return Promise.resolve([]);
 }
 
 export { enableSystemdUserLinger, readSystemdUserLingerStatus };
@@ -92,7 +99,7 @@ export async function readSystemdServiceExecStart(
   // Try user service first, then system service
   const userUnitPath = resolveSystemdUnitPath(env);
   const systemUnitPath = resolveSystemdSystemUnitPath(env);
-  
+
   for (const unitPath of [userUnitPath, systemUnitPath]) {
     try {
       const content = await fs.readFile(unitPath, "utf8");
@@ -278,21 +285,21 @@ export async function stopSystemdService({
   // Check if user service exists first, otherwise try system service
   const serviceName = resolveSystemdServiceName(env ?? {});
   const unitName = `${serviceName}.service`;
-  
+
   // Try user service first
   const userRes = await execSystemctl(["--user", "stop", unitName]);
   if (userRes.code === 0) {
     stdout.write(`${formatLine("Stopped systemd user service", unitName)}\n`);
     return;
   }
-  
+
   // Try system service
   const systemRes = await execSystemctl(["stop", unitName], { useSudo: true });
   if (systemRes.code === 0) {
     stdout.write(`${formatLine("Stopped systemd system service", unitName)}\n`);
     return;
   }
-  
+
   throw new Error(`systemctl stop failed: ${systemRes.stderr || systemRes.stdout}`.trim());
 }
 
@@ -305,21 +312,21 @@ export async function restartSystemdService({
 }): Promise<void> {
   const serviceName = resolveSystemdServiceName(env ?? {});
   const unitName = `${serviceName}.service`;
-  
+
   // Try user service first
   const userRes = await execSystemctl(["--user", "restart", unitName]);
   if (userRes.code === 0) {
     stdout.write(`${formatLine("Restarted systemd user service", unitName)}\n`);
     return;
   }
-  
+
   // Try system service
   const systemRes = await execSystemctl(["restart", unitName], { useSudo: true });
   if (systemRes.code === 0) {
     stdout.write(`${formatLine("Restarted systemd system service", unitName)}\n`);
     return;
   }
-  
+
   throw new Error(`systemctl restart failed: ${systemRes.stderr || systemRes.stdout}`.trim());
 }
 
@@ -328,11 +335,11 @@ export async function isSystemdServiceEnabled(args: {
 }): Promise<boolean> {
   const serviceName = resolveSystemdServiceName(args.env ?? {});
   const unitName = `${serviceName}.service`;
-  
+
   // Check user service
   const userRes = await execSystemctl(["--user", "is-enabled", unitName]);
   if (userRes.code === 0) return true;
-  
+
   // Check system service
   const systemRes = await execSystemctl(["is-enabled", unitName], { useSudo: true });
   return systemRes.code === 0;
@@ -373,7 +380,7 @@ export async function readSystemdServiceRuntime(
 ): Promise<GatewayServiceRuntime> {
   const serviceName = resolveSystemdServiceName(env);
   const unitName = `${serviceName}.service`;
-  
+
   // Try user service first
   const userRes = await execSystemctl([
     "--user",
@@ -383,7 +390,7 @@ export async function readSystemdServiceRuntime(
     "--property",
     "ActiveState,SubState,MainPID,ExecMainStatus,ExecMainCode",
   ]);
-  
+
   if (userRes.code === 0) {
     const parsed = parseSystemdShow(userRes.stdout || "");
     const activeState = parsed.activeState?.toLowerCase();
@@ -397,7 +404,7 @@ export async function readSystemdServiceRuntime(
       lastRunResult: parsed.execMainCode,
     };
   }
-  
+
   // Try system service
   const systemRes = await execSystemctl(
     [
@@ -409,7 +416,7 @@ export async function readSystemdServiceRuntime(
     ],
     { useSudo: true },
   );
-  
+
   if (systemRes.code === 0) {
     const parsed = parseSystemdShow(systemRes.stdout || "");
     const activeState = parsed.activeState?.toLowerCase();
@@ -423,7 +430,7 @@ export async function readSystemdServiceRuntime(
       lastRunResult: parsed.execMainCode,
     };
   }
-  
+
   const detail = (systemRes.stderr || systemRes.stdout).trim();
   const missing = detail.toLowerCase().includes("not found");
   return {
