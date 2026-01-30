@@ -11,7 +11,7 @@ A minimal subset of [Moltbot](https://github.com/moltbot/moltbot) containing all
 
 ## What's Included
 
-This is a **direct copy** of Moltbot source files with no modifications. All 1,428 TypeScript files preserve the original architecture patterns.
+This is a **direct copy** of Moltbot source files with no modifications. Includes **2,106 TypeScript files** (1,428 source + 665 tests + 13 test utilities) preserving the original architecture patterns.
 
 ### Core Components
 
@@ -69,6 +69,65 @@ npm run build
 npm start -- --help
 ```
 
+## Testing
+
+All important tests are included - security, functionality verification, and sandboxing.
+
+### Run Tests
+
+```bash
+# Run all unit tests
+npm test
+
+# Watch mode
+npm run test:watch
+
+# Coverage report
+npm run test:coverage
+
+# E2E tests
+npm run test:e2e
+
+# Live tests (requires API keys)
+CLAWDBOT_LIVE_TEST=1 npm run test:live
+```
+
+### Test Categories
+
+| Category | Count | Description |
+|----------|-------|-------------|
+| Unit tests | 603 | Core functionality verification |
+| E2E tests | 52 | End-to-end integration tests |
+| Live tests | 10 | Tests requiring live API access |
+
+### Security & Sandbox Tests
+
+The following critical test suites are included:
+
+- **Sandbox tests** (18 files): `src/agents/sandbox*.test.ts`, `src/commands/sandbox*.test.ts`
+  - Sandbox context resolution
+  - Docker container isolation
+  - Agent-specific sandbox configuration
+  - Workspace path restrictions
+
+- **Security tests**: `src/security/*.test.ts`
+  - File permission auditing
+  - External content sanitization
+  - Security fix verification
+
+- **Tool policy tests**: `src/agents/tool-policy*.test.ts`, `src/agents/sandbox/tool-policy.test.ts`
+  - Tool execution permissions
+  - Plugin allowlist enforcement
+
+- **Exec approval tests**: `src/infra/exec-approval*.test.ts`, `src/gateway/server-methods/exec-approval*.test.ts`
+  - Command execution approval flow
+  - Approval forwarding
+
+- **Bash execution tests**: `src/agents/bash-tools*.test.ts`
+  - Command execution safety
+  - PTY fallback handling
+  - Background process management
+
 ## Adding Features from Full Moltbot
 
 This subset is designed for progressive feature additions by copying more files from the full Moltbot repository.
@@ -117,8 +176,10 @@ moltbot-mini-copy/
 │   │   └── protocol/            # Protocol schemas
 │   ├── agents/                  # AI agent runtime
 │   │   ├── pi-embedded-runner/  # Pi agent integration
+│   │   ├── sandbox/             # Sandboxing (Docker, paths, policy)
 │   │   ├── model-catalog.ts     # Model definitions
-│   │   └── bash-tools.ts        # Tool definitions
+│   │   ├── bash-tools.ts        # Tool definitions
+│   │   └── tool-policy.ts       # Tool execution policy
 │   ├── cli/                     # Command-line interface
 │   │   ├── program.ts           # Main program builder
 │   │   ├── deps.ts              # createDefaultDeps()
@@ -141,6 +202,10 @@ moltbot-mini-copy/
 │   │   ├── ws.ts                # WebSocket utilities
 │   │   └── logging/             # Logging utilities
 │   └── ...
+├── test/                        # Test utilities
+├── vitest.config.ts             # Unit test config
+├── vitest.e2e.config.ts         # E2E test config
+├── vitest.live.config.ts        # Live test config
 ├── package.json
 ├── tsconfig.json
 └── moltbot.mjs
@@ -154,7 +219,6 @@ This minimal copy excludes:
 - **Other LLM providers**: Bedrock, Ollama, local models (via node-llama-cpp)
 - **Mobile apps**: iOS, Android, macOS
 - **Extensions**: MS Teams, Matrix, Zalo, Voice Call
-- **Test files**: All *.test.ts files excluded
 - **Browser automation**: Playwright (partial - basic browser code included)
 - **Voice/TTS**: node-edge-tts (dependency removed)
 
@@ -168,13 +232,16 @@ This minimal copy excludes:
 | Gateway | Full | Full |
 | Storage | Full | Full |
 | AI Engine | Full | Full |
-| Source Files | ~1,428 | ~2,500 |
+| Sandboxing | Full | Full |
+| Security Tests | Full | Full |
+| Source Files | 1,428 | ~2,500 |
+| Test Files | 665 | ~800 |
 | Dependencies | ~30 | ~60 |
 
 ## Notes
 
 - All code is unmodified from the source Moltbot repository
-- Test files (*.test.ts) are excluded to reduce size
+- All critical tests included (security, sandbox, functionality)
 - Some imports may need adjustment if not all dependencies are available
 - The full plugin architecture is preserved for easy feature additions
 

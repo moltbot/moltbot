@@ -16,7 +16,12 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/entry.js",
     "gateway": "node --import tsx src/entry.ts gateway run",
-    "gateway:dev": "node --import tsx src/entry.ts gateway run --dev"
+    "gateway:dev": "node --import tsx src/entry.ts gateway run --dev",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "test:live": "CLAWDBOT_LIVE_TEST=1 vitest run --config vitest.live.config.ts"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -58,8 +63,10 @@
     "@types/proper-lockfile": "^4.1.4",
     "@types/qrcode-terminal": "^0.12.2",
     "@types/ws": "^8.18.1",
+    "@vitest/coverage-v8": "^4.0.18",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   },
   "overrides": {
     "@sinclair/typebox": "0.34.47",
