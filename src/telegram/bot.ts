@@ -11,6 +11,7 @@ import {
   isNativeCommandsExplicitlyDisabled,
   resolveNativeCommandsEnabled,
   resolveNativeSkillsEnabled,
+  resolveNativeSkillsSetting,
 } from "../config/commands.js";
 import type { OpenClawConfig, ReplyToMode } from "../config/config.js";
 import { loadConfig } from "../config/config.js";
@@ -241,7 +242,7 @@ export function createTelegramBot(opts: TelegramBotOptions) {
     providerSetting: telegramCfg.commands?.native,
     globalSetting: cfg.commands?.native,
   });
-  const nativeSkillsEnabled = resolveNativeSkillsEnabled({
+  const nativeSkillsEnabled = resolveNativeSkillsSetting({
     providerId: "telegram",
     providerSetting: telegramCfg.commands?.nativeSkills,
     globalSetting: cfg.commands?.nativeSkills,

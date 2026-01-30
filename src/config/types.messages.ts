@@ -87,12 +87,13 @@ export type MessagesConfig = {
 };
 
 export type NativeCommandsSetting = boolean | "auto";
+export type NativeSkillsSetting = boolean | "auto" | string[];
 
 export type CommandsConfig = {
   /** Enable native command registration when supported (default: "auto"). */
   native?: NativeCommandsSetting;
   /** Enable native skill command registration when supported (default: "auto"). */
-  nativeSkills?: NativeCommandsSetting;
+  nativeSkills?: NativeSkillsSetting;
   /** Enable text command parsing (default: true). */
   text?: boolean;
   /** Allow bash chat command (`!`; `/bash` alias) (default: false). */
@@ -113,5 +114,5 @@ export type ProviderCommandsConfig = {
   /** Override native command registration for this provider (bool or "auto"). */
   native?: NativeCommandsSetting;
   /** Override native skill command registration for this provider (bool or "auto"). */
-  nativeSkills?: NativeCommandsSetting;
+  nativeSkills?: NativeSkillsSetting;
 };

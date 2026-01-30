@@ -78,7 +78,7 @@ type RegisterTelegramNativeCommandsParams = {
   textLimit: number;
   useAccessGroups: boolean;
   nativeEnabled: boolean;
-  nativeSkillsEnabled: boolean;
+  nativeSkillsEnabled: boolean | string[];
   nativeDisabledExplicit: boolean;
   resolveGroupPolicy: (chatId: string | number) => ChannelGroupPolicy;
   resolveTelegramGroupConfig: (
@@ -258,7 +258,13 @@ export const registerTelegramNativeCommands = ({
   opts,
 }: RegisterTelegramNativeCommandsParams) => {
   const skillCommands =
-    nativeEnabled && nativeSkillsEnabled ? listSkillCommandsForAgents({ cfg }) : [];
+    nativeEnabled && nativeSkillsEnabled
+      ? Array.isArray(nativeSkillsEnabled)
+        ? listSkillCommandsForAgents({ cfg }).filter((s) =>
+            nativeSkillsEnabled.includes(s.skillName),
+          )
+        : listSkillCommandsForAgents({ cfg })
+      : [];
   const nativeCommands = nativeEnabled
     ? listNativeCommandSpecsForConfig(cfg, { skillCommands, provider: "telegram" })
     : [];

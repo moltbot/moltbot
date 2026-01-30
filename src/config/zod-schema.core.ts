@@ -493,10 +493,17 @@ export const ToolsLinksSchema = z
 
 export const NativeCommandsSettingSchema = z.union([z.boolean(), z.literal("auto")]);
 
+// nativeSkills can be boolean/auto OR an array of skill names to whitelist
+export const NativeSkillsSettingSchema = z.union([
+  z.boolean(),
+  z.literal("auto"),
+  z.array(z.string()).describe("Whitelist of skill names to register as native commands"),
+]);
+
 export const ProviderCommandsSchema = z
   .object({
     native: NativeCommandsSettingSchema.optional(),
-    nativeSkills: NativeCommandsSettingSchema.optional(),
+    nativeSkills: NativeSkillsSettingSchema.optional(),
   })
   .strict()
   .optional();

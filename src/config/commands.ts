@@ -1,6 +1,6 @@
 import type { ChannelId } from "../channels/plugins/types.js";
 import { normalizeChannelId } from "../channels/plugins/index.js";
-import type { NativeCommandsSetting } from "./types.js";
+import type { NativeCommandsSetting, NativeSkillsSetting } from "./types.js";
 
 function resolveAutoDefault(providerId?: ChannelId): boolean {
   const id = normalizeChannelId(providerId);
@@ -17,6 +17,22 @@ export function resolveNativeSkillsEnabled(params: {
 }): boolean {
   const { providerId, providerSetting, globalSetting } = params;
   const setting = providerSetting === undefined ? globalSetting : providerSetting;
+  if (setting === true) return true;
+  if (setting === false) return false;
+  return resolveAutoDefault(providerId);
+}
+
+// Returns boolean (enable all/none) or string[] (whitelist of skill names)
+export function resolveNativeSkillsSetting(params: {
+  providerId: ChannelId;
+  providerSetting?: NativeSkillsSetting;
+  globalSetting?: NativeSkillsSetting;
+}): boolean | string[] {
+  const { providerId, providerSetting, globalSetting } = params;
+  const setting = providerSetting === undefined ? globalSetting : providerSetting;
+  // If it is an array, return the whitelist
+  if (Array.isArray(setting)) return setting;
+  // Otherwise resolve as boolean
   if (setting === true) return true;
   if (setting === false) return false;
   return resolveAutoDefault(providerId);
