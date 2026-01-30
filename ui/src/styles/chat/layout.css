@@ -111,6 +111,12 @@
   z-index: 10;
 }
 
+.chat-compose--dragging {
+  outline: 2px dashed var(--accent);
+  outline-offset: 6px;
+  border-radius: 12px;
+}
+
 /* Image attachments preview */
 .chat-attachments {
   display: inline-flex;
@@ -268,6 +274,10 @@
   display: flex;
   align-items: stretch;
   gap: 8px;
+}
+
+.chat-compose__file-input {
+  display: none;
 }
 
 .chat-compose .chat-compose__actions .btn {
