@@ -38,8 +38,15 @@ describe("loadModelCatalog", () => {
         throw new Error("boom");
       }
       return {
-        discoverAuthStorage: () => ({}),
-        discoverModels: () => [{ id: "gpt-4.1", name: "GPT-4.1", provider: "openai" }],
+        AuthStorage: class {
+          constructor() {}
+        },
+        ModelRegistry: class {
+          constructor() {}
+          getAll() {
+            return [{ id: "gpt-4.1", name: "GPT-4.1", provider: "openai" }];
+          }
+        },
       } as unknown as PiSdkModule;
     });
 
@@ -59,19 +66,24 @@ describe("loadModelCatalog", () => {
     __setModelCatalogImportForTest(
       async () =>
         ({
-          discoverAuthStorage: () => ({}),
-          discoverModels: () => ({
-            getAll: () => [
-              { id: "gpt-4.1", name: "GPT-4.1", provider: "openai" },
-              {
-                get id() {
-                  throw new Error("boom");
+          AuthStorage: class {
+            constructor() {}
+          },
+          ModelRegistry: class {
+            constructor() {}
+            getAll() {
+              return [
+                { id: "gpt-4.1", name: "GPT-4.1", provider: "openai" },
+                {
+                  get id() {
+                    throw new Error("boom");
+                  },
+                  provider: "openai",
+                  name: "bad",
                 },
-                provider: "openai",
-                name: "bad",
-              },
-            ],
-          }),
+              ];
+            }
+          },
         }) as unknown as PiSdkModule,
     );
 

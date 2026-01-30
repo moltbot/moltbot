@@ -13,8 +13,8 @@ const resolveProfileUnusableUntilForDisplay = vi.fn().mockReturnValue(null);
 const resolveEnvApiKey = vi.fn().mockReturnValue(undefined);
 const resolveAwsSdkEnvVarName = vi.fn().mockReturnValue(undefined);
 const getCustomProviderApiKey = vi.fn().mockReturnValue(undefined);
-const discoverAuthStorage = vi.fn().mockReturnValue({});
-const discoverModels = vi.fn();
+const MockAuthStorage = vi.fn().mockImplementation(() => ({}));
+const MockModelRegistry = vi.fn();
 
 vi.mock("../config/config.js", () => ({
   CONFIG_PATH: "/tmp/openclaw.json",
@@ -45,8 +45,8 @@ vi.mock("../agents/model-auth.js", () => ({
 }));
 
 vi.mock("@mariozechner/pi-coding-agent", () => ({
-  discoverAuthStorage,
-  discoverModels,
+  AuthStorage: MockAuthStorage,
+  ModelRegistry: MockModelRegistry,
 }));
 
 function makeRuntime() {
