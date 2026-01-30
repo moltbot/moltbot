@@ -1,5 +1,5 @@
 import { resolveDefaultAgentId } from "../agents/agent-scope.js";
-import type { MoltbotConfig } from "../config/config.js";
+import type { OpenClawConfig } from "../config/config.js";
 import { listBindings } from "./bindings.js";
 import {
   buildAgentMainSessionKey,
@@ -18,7 +18,7 @@ export type RoutePeer = {
 };
 
 export type ResolveAgentRouteInput = {
-  cfg: MoltbotConfig;
+  cfg: OpenClawConfig;
   channel: string;
   accountId?: string | null;
   peer?: RoutePeer | null;
@@ -69,9 +69,10 @@ function matchesAccountId(match: string | undefined, actual: string): boolean {
 export function buildAgentSessionKey(params: {
   agentId: string;
   channel: string;
+  accountId?: string | null;
   peer?: RoutePeer | null;
   /** DM session scope. */
-  dmScope?: "main" | "per-peer" | "per-channel-peer";
+  dmScope?: "main" | "per-peer" | "per-channel-peer" | "per-account-channel-peer";
   identityLinks?: Record<string, string[]>;
 }): string {
   const channel = normalizeToken(params.channel) || "unknown";
@@ -80,6 +81,7 @@ export function buildAgentSessionKey(params: {
     agentId: params.agentId,
     mainKey: DEFAULT_MAIN_KEY,
     channel,
+    accountId: params.accountId,
     peerKind: peer?.kind ?? "dm",
     peerId: peer ? normalizeId(peer.id) || "unknown" : null,
     dmScope: params.dmScope,
@@ -87,12 +89,12 @@ export function buildAgentSessionKey(params: {
   });
 }
 
-function listAgents(cfg: MoltbotConfig) {
+function listAgents(cfg: OpenClawConfig) {
   const agents = cfg.agents?.list;
   return Array.isArray(agents) ? agents : [];
 }
 
-function pickFirstExistingAgentId(cfg: MoltbotConfig, agentId: string): string {
+function pickFirstExistingAgentId(cfg: OpenClawConfig, agentId: string): string {
   const trimmed = (agentId ?? "").trim();
   if (!trimmed) return sanitizeAgentId(resolveDefaultAgentId(cfg));
   const normalized = normalizeAgentId(trimmed);
@@ -160,6 +162,7 @@ export function resolveAgentRoute(input: ResolveAgentRouteInput): ResolvedAgentR
     const sessionKey = buildAgentSessionKey({
       agentId: resolvedAgentId,
       channel,
+      accountId,
       peer,
       dmScope,
       identityLinks,

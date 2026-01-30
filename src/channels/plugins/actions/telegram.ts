@@ -23,6 +23,7 @@ function readTelegramSendParams(params: Record<string, unknown>) {
   const buttons = params.buttons;
   const asVoice = typeof params.asVoice === "boolean" ? params.asVoice : undefined;
   const silent = typeof params.silent === "boolean" ? params.silent : undefined;
+  const quoteText = readStringParam(params, "quoteText");
   return {
     to,
     content,
@@ -32,6 +33,7 @@ function readTelegramSendParams(params: Record<string, unknown>) {
     buttons,
     asVoice,
     silent,
+    quoteText: quoteText ?? undefined,
   };
 }
 
@@ -83,7 +85,7 @@ export const telegramMessageActions: ChannelMessageActionAdapter = {
     }
 
     if (action === "react") {
-      const messageId = readStringParam(params, "messageId", {
+      const messageId = readStringOrNumberParam(params, "messageId", {
         required: true,
       });
       const emoji = readStringParam(params, "emoji", { allowEmpty: true });
@@ -92,7 +94,9 @@ export const telegramMessageActions: ChannelMessageActionAdapter = {
         {
           action: "react",
           chatId:
-            readStringParam(params, "chatId") ?? readStringParam(params, "to", { required: true }),
+            readStringOrNumberParam(params, "chatId") ??
+            readStringOrNumberParam(params, "channelId") ??
+            readStringParam(params, "to", { required: true }),
           messageId,
           emoji,
           remove,

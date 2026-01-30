@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { resolveDefaultAgentWorkspaceDir } from "../../agents/workspace.js";
 import { handleReset } from "../../commands/onboard-helpers.js";
-import { CONFIG_PATH, writeConfigFile } from "../../config/config.js";
+import { createConfigIO, writeConfigFile } from "../../config/config.js";
 import { defaultRuntime } from "../../runtime.js";
 import { resolveUserPath, shortenHomePath } from "../../utils.js";
 
@@ -32,7 +32,7 @@ async function loadDevTemplate(name: string, fallback: string): Promise<string> 
 
 const resolveDevWorkspaceDir = (env: NodeJS.ProcessEnv = process.env): string => {
   const baseDir = resolveDefaultAgentWorkspaceDir(env, os.homedir);
-  const profile = env.CLAWDBOT_PROFILE?.trim().toLowerCase();
+  const profile = env.OPENCLAW_PROFILE?.trim().toLowerCase();
   if (profile === "dev") return baseDir;
   return `${baseDir}-${DEV_AGENT_WORKSPACE_SUFFIX}`;
 };
@@ -56,7 +56,7 @@ async function ensureDevWorkspace(dir: string) {
   const [agents, soul, tools, identity, user] = await Promise.all([
     loadDevTemplate(
       "AGENTS.dev.md",
-      `# AGENTS.md - Moltbot Dev Workspace\n\nDefault dev workspace for moltbot gateway --dev.\n`,
+      `# AGENTS.md - OpenClaw Dev Workspace\n\nDefault dev workspace for openclaw gateway --dev.\n`,
     ),
     loadDevTemplate(
       "SOUL.dev.md",
@@ -89,7 +89,9 @@ export async function ensureDevGatewayConfig(opts: { reset?: boolean }) {
     await handleReset("full", workspace, defaultRuntime);
   }
 
-  const configExists = fs.existsSync(CONFIG_PATH);
+  const io = createConfigIO();
+  const configPath = io.configPath;
+  const configExists = fs.existsSync(configPath);
   if (!opts.reset && configExists) return;
 
   await writeConfigFile({
@@ -117,6 +119,6 @@ export async function ensureDevGatewayConfig(opts: { reset?: boolean }) {
     },
   });
   await ensureDevWorkspace(workspace);
-  defaultRuntime.log(`Dev config ready: ${shortenHomePath(CONFIG_PATH)}`);
+  defaultRuntime.log(`Dev config ready: ${shortenHomePath(configPath)}`);
   defaultRuntime.log(`Dev workspace ready: ${shortenHomePath(resolveUserPath(workspace))}`);
 }
