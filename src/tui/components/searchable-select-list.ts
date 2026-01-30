@@ -7,8 +7,8 @@ import {
   type SelectItem,
   type SelectListTheme,
   truncateToWidth,
+  visibleWidth,
 } from "@mariozechner/pi-tui";
-import { visibleWidth } from "../../terminal/ansi.js";
 import { findWordBoundaryIndex, fuzzyFilterLower, prepareSearchItems } from "./fuzzy-filter.js";
 
 export interface SearchableSelectListTheme extends SelectListTheme {
@@ -47,6 +47,8 @@ export class SearchableSelectList implements Component {
       regex = new RegExp(this.escapeRegex(pattern), "gi");
       this.regexCache.set(pattern, regex);
     }
+    // Reset lastIndex to ensure consistent behavior (defensive)
+    regex.lastIndex = 0;
     return regex;
   }
 
@@ -54,7 +56,7 @@ export class SearchableSelectList implements Component {
     const query = this.searchInput.getValue().trim();
 
     if (!query) {
-      this.filteredItems = this.items;
+      this.filteredItems = this.items ?? [];
     } else {
       this.filteredItems = this.smartFilter(query);
     }
@@ -139,8 +141,36 @@ export class SearchableSelectList implements Component {
     const uniqueTokens = Array.from(new Set(tokens)).sort((a, b) => b.length - a.length);
     let result = text;
     for (const token of uniqueTokens) {
+      // CRITICAL FIX: Skip ANSI escape sequences to avoid breaking color codes
+      // Split text into ANSI and visible parts, only highlight visible parts
+      const ansiRegex = /\x1b\[[0-9;]*m/g;
+      const parts: Array<{ text: string; isAnsi: boolean }> = [];
+      let lastIndex = 0;
+      let match: RegExpExecArray | null;
+      
+      while ((match = ansiRegex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+          parts.push({ text: text.slice(lastIndex, match.index), isAnsi: false });
+        }
+        parts.push({ text: match[0], isAnsi: true });
+        lastIndex = match.index + match[0].length;
+      }
+      if (lastIndex < text.length) {
+        parts.push({ text: text.slice(lastIndex), isAnsi: false });
+      }
+      
+      // Only highlight in non-ANSI parts
       const regex = this.getCachedRegex(token);
-      result = result.replace(regex, (match) => this.theme.matchHighlight(match));
+      result = parts
+        .map((part) => {
+          if (part.isAnsi) return part.text;
+          regex.lastIndex = 0;
+          return part.text.replace(regex, (m) => this.theme.matchHighlight(m));
+        })
+        .join("");
+      
+      // Update text for next token iteration
+      text = result;
     }
     return result;
   }
@@ -200,6 +230,18 @@ export class SearchableSelectList implements Component {
     return lines;
   }
 
+  private ensureLineWidth(text: string, width: number): string {
+    // Use pi-tui's visibleWidth for accurate measurement
+    const currentWidth = visibleWidth(text);
+    
+    if (currentWidth <= width) {
+      return text;
+    }
+
+    // Use pi-tui's truncateToWidth to properly handle ANSI codes
+    return truncateToWidth(text, width, "");
+  }
+
   private renderItemLine(
     item: SelectItem,
     isSelected: boolean,
@@ -211,20 +253,32 @@ export class SearchableSelectList implements Component {
     const displayValue = this.getItemLabel(item);
 
     if (item.description && width > 40) {
+      // Fixed column for description (column 32)
+      const valueColumn = 32;
       const maxValueWidth = Math.min(30, width - prefixWidth - 4);
       const truncatedValue = truncateToWidth(displayValue, maxValueWidth, "");
       const valueText = this.highlightMatch(truncatedValue, query);
-      const spacingWidth = Math.max(1, 32 - visibleWidth(valueText));
-      const spacing = " ".repeat(spacingWidth);
-      const descriptionStart = prefixWidth + visibleWidth(valueText) + spacing.length;
+
+      // Calculate spacing - value ends at column 32
+      let spacing = "";
+      const currentValueWidth = visibleWidth(valueText);
+      if (currentValueWidth < valueColumn - prefixWidth) {
+        spacing = " ".repeat(valueColumn - prefixWidth - currentValueWidth);
+      }
+
+      // Description starts after value and spacing
+      const descriptionStart = prefixWidth + currentValueWidth + spacing.length;
       const remainingWidth = width - descriptionStart - 2;
       if (remainingWidth > 10) {
         const truncatedDesc = truncateToWidth(item.description, remainingWidth, "");
+        // Highlight first, then apply theme - avoids breaking ANSI codes
+        const highlightedDesc = this.highlightMatch(truncatedDesc, query);
         const descText = isSelected
-          ? this.highlightMatch(truncatedDesc, query)
-          : this.highlightMatch(this.theme.description(truncatedDesc), query);
+          ? highlightedDesc
+          : this.theme.description(highlightedDesc);
         const line = `${prefix}${valueText}${spacing}${descText}`;
-        return isSelected ? this.theme.selectedText(line) : line;
+        const rendered = isSelected ? this.theme.selectedText(line) : line;
+        return this.ensureLineWidth(rendered, width);
       }
     }
 
@@ -232,7 +286,8 @@ export class SearchableSelectList implements Component {
     const truncatedValue = truncateToWidth(displayValue, maxWidth, "");
     const valueText = this.highlightMatch(truncatedValue, query);
     const line = `${prefix}${valueText}`;
-    return isSelected ? this.theme.selectedText(line) : line;
+    const rendered = isSelected ? this.theme.selectedText(line) : line;
+    return this.ensureLineWidth(rendered, width);
   }
 
   handleInput(keyData: string): void {
@@ -246,8 +301,11 @@ export class SearchableSelectList implements Component {
       matchesKey(keyData, "ctrl+p") ||
       (allowVimNav && keyData === "k")
     ) {
-      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-      this.notifySelectionChange();
+      // Guard against empty list
+      if (this.filteredItems.length > 0) {
+        this.selectedIndex = Math.max(0, this.selectedIndex - 1);
+        this.notifySelectionChange();
+      }
       return;
     }
 
@@ -256,8 +314,11 @@ export class SearchableSelectList implements Component {
       matchesKey(keyData, "ctrl+n") ||
       (allowVimNav && keyData === "j")
     ) {
-      this.selectedIndex = Math.min(this.filteredItems.length - 1, this.selectedIndex + 1);
-      this.notifySelectionChange();
+      // Guard against empty list: ensure selectedIndex stays non-negative
+      if (this.filteredItems.length > 0) {
+        this.selectedIndex = Math.min(this.filteredItems.length - 1, this.selectedIndex + 1);
+        this.notifySelectionChange();
+      }
       return;
     }
 
@@ -271,7 +332,12 @@ export class SearchableSelectList implements Component {
 
     const kb = getEditorKeybindings();
     if (kb.matches(keyData, "selectCancel")) {
-      if (this.onCancel) {
+      // First Escape clears the search filter, second Escape cancels
+      const hasFilter = this.searchInput.getValue().trim().length > 0;
+      if (hasFilter) {
+        this.searchInput.setValue("");
+        this.updateFilter();
+      } else if (this.onCancel) {
         this.onCancel();
       }
       return;
