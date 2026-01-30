@@ -1,0 +1,58 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "name": "AssureBot",
+  "description": "Lean, secure, self-hosted AI assistant with Telegram, document analysis, and scheduled tasks",
+  "services": [
+    {
+      "name": "assurebot",
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "secure/Dockerfile",
+        "watchPatterns": ["secure/**"]
+      },
+      "deploy": {
+        "startCommand": "node dist/index.js",
+        "healthcheckPath": "/health",
+        "healthcheckTimeout": 60,
+        "restartPolicyType": "ON_FAILURE",
+        "restartPolicyMaxRetries": 3
+      },
+      "variables": {
+        "DATABASE_URL": "${{Postgres.DATABASE_URL}}",
+        "REDIS_URL": "${{Redis.REDIS_URL}}",
+        "TELEGRAM_BOT_TOKEN": {
+          "description": "Telegram bot token from @BotFather",
+          "required": true
+        },
+        "ALLOWED_USERS": {
+          "description": "Comma-separated Telegram user IDs",
+          "required": true
+        },
+        "ANTHROPIC_API_KEY": {
+          "description": "Anthropic API key (or use OPENAI_API_KEY or OPENROUTER_API_KEY)",
+          "required": false
+        },
+        "OPENAI_API_KEY": {
+          "description": "OpenAI API key",
+          "required": false
+        },
+        "OPENROUTER_API_KEY": {
+          "description": "OpenRouter API key (100+ models)",
+          "required": false
+        },
+        "AI_MODEL": {
+          "description": "Model override (e.g., claude-3-5-sonnet-20241022)",
+          "required": false
+        }
+      }
+    },
+    {
+      "name": "Postgres",
+      "plugin": "postgresql"
+    },
+    {
+      "name": "Redis",
+      "plugin": "redis"
+    }
+  ]
+}

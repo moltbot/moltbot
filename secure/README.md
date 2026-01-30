@@ -1,12 +1,12 @@
-# Moltbot Secure
+# AssureBot
 
 **Lean, secure, self-hosted AI assistant for Railway.**
 
 Your AI agent that runs on your infrastructure, answers only to you, and you can actually audit.
 
-## Why Secure Edition?
+## Why AssureBot?
 
-| Full Moltbot | Secure Edition |
+| Full Moltbot | AssureBot |
 |--------------|----------------|
 | 12+ channels | Telegram only |
 | File-based config | Env vars only |
@@ -21,9 +21,16 @@ Your AI agent that runs on your infrastructure, answers only to you, and you can
 ```
 ┌─────────────────────────────────────────────────────┐
 │  TELEGRAM (your secure UI)                          │
-│  ├── Chat with AI (text, voice, images)             │
+│  ├── Chat with AI (text, images, documents)         │
+│  ├── Code execution (15+ languages)                 │
 │  ├── Forward anything → get analysis                │
 │  └── /commands for actions                          │
+├─────────────────────────────────────────────────────┤
+│  CODE EXECUTION                                     │
+│  ├── /js, /python, /ts, /bash - Quick execute       │
+│  ├── /run <lang> <code> - Any language              │
+│  ├── Docker (local) or Piston API (cloud)           │
+│  └── Isolated, no network, resource limits          │
 ├─────────────────────────────────────────────────────┤
 │  WEBHOOKS IN (authenticated)                        │
 │  ├── GitHub → "PR merged, here's the summary"       │
@@ -35,26 +42,46 @@ Your AI agent that runs on your infrastructure, answers only to you, and you can
 │  ├── Monitor RSS/sites                              │
 │  └── Recurring research                             │
 ├─────────────────────────────────────────────────────┤
-│  SANDBOX (isolated execution)                       │
-│  ├── Docker container                               │
-│  ├── No network by default                          │
-│  └── Resource limits                                │
+│  PERSISTENCE (optional)                             │
+│  ├── PostgreSQL - Tasks, user profiles              │
+│  ├── Redis - Conversations, cache                   │
+│  └── Personality learning per user                  │
 └─────────────────────────────────────────────────────┘
 ```
 
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `/js <code>` | Run JavaScript |
+| `/python <code>` | Run Python |
+| `/ts <code>` | Run TypeScript |
+| `/bash <code>` | Run shell commands |
+| `/run <lang> <code>` | Run any language |
+| `/status` | Bot & sandbox status |
+| `/clear` | Clear conversation |
+| `/schedule` | Schedule AI tasks |
+| `/tasks` | List scheduled tasks |
+| `/help` | Full command list |
+
+**Supported Languages**: python, javascript, typescript, bash, rust, go, c, cpp, java, ruby, php
+
 ## Deploy to Railway
 
-### One-Click
+### One-Click (Recommended)
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/moltbot-secure)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/TNovs1/moltbot/tree/main&envs=TELEGRAM_BOT_TOKEN,ALLOWED_USERS,ANTHROPIC_API_KEY)
+
+This auto-provisions PostgreSQL and Redis for persistence.
 
 ### Manual
 
 1. Fork this repo
 2. Create Railway project from GitHub
-3. Set environment variables (see below)
-4. Add volume at `/data`
-5. Deploy
+3. **Set Root Directory to `secure`**
+4. Set environment variables (see below)
+5. Optionally add PostgreSQL and Redis services
+6. Deploy
 
 ## Configuration
 
@@ -65,22 +92,33 @@ Your AI agent that runs on your infrastructure, answers only to you, and you can
 ```bash
 TELEGRAM_BOT_TOKEN=123456:ABC-DEF...    # From @BotFather
 ALLOWED_USERS=123456789,987654321       # Telegram user IDs
-ANTHROPIC_API_KEY=sk-ant-...            # Or OPENAI_API_KEY
+
+# Pick ONE AI provider:
+ANTHROPIC_API_KEY=sk-ant-...            # Claude
+OPENAI_API_KEY=sk-...                   # GPT-4
+OPENROUTER_API_KEY=sk-or-...            # 100+ models
 ```
 
 ### Optional
 
 ```bash
-# Webhooks
-WEBHOOK_SECRET=random-32-chars          # Auto-generated if missing
-WEBHOOK_BASE_PATH=/hooks                # Default: /hooks
+# AI Model (optional - uses sensible defaults)
+AI_MODEL=claude-sonnet-4-20250514       # or gpt-4o, etc.
 
-# Sandbox
-SANDBOX_ENABLED=true                    # Default: true
+# Storage (auto-wired on Railway template)
+DATABASE_URL=postgres://...             # PostgreSQL
+REDIS_URL=redis://...                   # Redis
+
+# Sandbox (enabled by default)
+SANDBOX_ENABLED=true                    # Auto-detects Docker or Piston API
 SANDBOX_NETWORK=none                    # none | bridge
 SANDBOX_MEMORY=512m
 SANDBOX_CPUS=1
 SANDBOX_TIMEOUT_MS=60000
+
+# Webhooks
+WEBHOOK_SECRET=random-32-chars          # Auto-generated if missing
+WEBHOOK_BASE_PATH=/hooks                # Default: /hooks
 
 # Scheduler
 SCHEDULER_ENABLED=true                  # Default: true
@@ -102,9 +140,17 @@ HOST=0.0.0.0
 |---------|----------------|
 | **Access** | Telegram user ID allowlist |
 | **Auth** | Timing-safe token comparison |
-| **Sandbox** | Docker: no network, read-only root, caps dropped |
+| **Sandbox** | Docker (local) or Piston API (cloud), isolated |
 | **Secrets** | Env-only, auto-redacted in logs |
 | **Audit** | Every interaction logged |
+
+### Sandbox Backends
+
+AssureBot auto-detects the best available backend:
+
+1. **Docker** - Full isolation, no network, caps dropped (requires Docker socket)
+2. **Piston API** - Free cloud execution, 15+ languages (works on Railway/Render/Fly)
+3. **None** - Sandbox disabled if neither available
 
 ### What's NOT Included
 
@@ -121,17 +167,17 @@ Intentionally removed:
 
 ```bash
 cd secure
-pnpm install
+npm install
 
 # Dev mode
 TELEGRAM_BOT_TOKEN=xxx \
 ANTHROPIC_API_KEY=xxx \
 ALLOWED_USERS=123456789 \
-pnpm dev
+npm run dev
 
 # Production
-pnpm build
-pnpm start
+npm run build
+npm start
 ```
 
 ## Endpoints
@@ -162,24 +208,27 @@ All webhooks are:
 ```jsonl
 {"ts":"2024-01-15T10:30:00Z","type":"message","userId":123,"text":"Hello","response":"Hi!"}
 {"ts":"2024-01-15T10:30:05Z","type":"webhook","path":"/hooks/github","status":200}
-{"ts":"2024-01-15T10:30:10Z","type":"sandbox","command":"python -c 'print(1)'","exitCode":0}
+{"ts":"2024-01-15T10:30:10Z","type":"sandbox","command":"[python] print(1)","exitCode":0}
 ```
 
 ## Architecture
 
 ```
 ┌────────────────────┐     ┌────────────────────┐
-│   moltbot-secure   │────▶│     sandbox        │
-│   (main container) │     │  (Docker sidecar)  │
+│   AssureBot        │────▶│   Sandbox          │
+│   (main container) │     │  (Docker/Piston)   │
 │                    │     │                    │
-│  • Telegram bot    │     │  • Isolated exec   │
-│  • Webhook recv    │     │  • No network      │
-│  • Scheduler       │     │  • Resource limits │
-│  • Allowlist auth  │     │  • Ephemeral       │
+│  • Telegram bot    │     │  • Code execution  │
+│  • Webhook recv    │     │  • 15+ languages   │
+│  • Scheduler       │     │  • Isolated        │
+│  • Personality     │     │  • No network      │
 └────────────────────┘     └────────────────────┘
          │
+         ├────▶ [PostgreSQL] - Tasks, profiles
+         ├────▶ [Redis] - Conversations, cache
+         │
          ▼
-    [Anthropic/OpenAI]
+    [Anthropic/OpenAI/OpenRouter]
     (Direct API calls)
 ```
 

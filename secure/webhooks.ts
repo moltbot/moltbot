@@ -1,5 +1,5 @@
 /**
- * Moltbot Secure - Webhook Receiver
+ * AssureBot - Webhook Receiver
  *
  * Authenticated webhook endpoint for external integrations.
  * Receives events from GitHub, Stripe, uptime monitors, etc.
@@ -48,8 +48,8 @@ function extractToken(req: IncomingMessage, url: URL): { token: string; fromQuer
     return { token: authHeader.slice(7), fromQuery: false };
   }
 
-  // Check X-Moltbot-Token header
-  const tokenHeader = req.headers["x-moltbot-token"];
+  // Check X-AssureBot-Token header
+  const tokenHeader = req.headers["x-assurebot-token"];
   if (typeof tokenHeader === "string") {
     return { token: tokenHeader, fromQuery: false };
   }

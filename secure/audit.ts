@@ -1,5 +1,5 @@
 /**
- * Moltbot Secure - Audit Logger
+ * AssureBot - Audit Logger
  *
  * Every interaction is logged for transparency and debugging.
  * Logs are append-only JSONL format.

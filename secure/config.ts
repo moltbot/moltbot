@@ -1,5 +1,5 @@
 /**
- * Moltbot Secure - Environment-only Configuration
+ * AssureBot - Environment-only Configuration
  *
  * All configuration via environment variables.
  * No config files, no filesystem secrets.
@@ -14,7 +14,7 @@ export type SecureConfig = {
 
   // AI Provider
   ai: {
-    provider: "anthropic" | "openai";
+    provider: "anthropic" | "openai" | "openrouter";
     apiKey: string;
     model?: string;
   };
@@ -53,6 +53,12 @@ export type SecureConfig = {
     host: string;
     gatewayToken: string;
   };
+
+  // Storage (optional)
+  storage: {
+    postgresUrl?: string;
+    redisUrl?: string;
+  };
 };
 
 function required(name: string): string {
@@ -89,9 +95,10 @@ function parseAllowedUsers(value: string): number[] {
     .filter((n) => Number.isFinite(n) && n > 0);
 }
 
-function detectAiProvider(): { provider: "anthropic" | "openai"; apiKey: string } {
+function detectAiProvider(): { provider: "anthropic" | "openai" | "openrouter"; apiKey: string } {
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
+  const openrouterKey = process.env.OPENROUTER_API_KEY;
 
   if (anthropicKey) {
     return { provider: "anthropic", apiKey: anthropicKey };
@@ -99,8 +106,11 @@ function detectAiProvider(): { provider: "anthropic" | "openai"; apiKey: string 
   if (openaiKey) {
     return { provider: "openai", apiKey: openaiKey };
   }
+  if (openrouterKey) {
+    return { provider: "openrouter", apiKey: openrouterKey };
+  }
 
-  throw new Error("Missing AI provider key. Set ANTHROPIC_API_KEY or OPENAI_API_KEY");
+  throw new Error("Missing AI provider key. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY");
 }
 
 function generateSecureToken(): string {
@@ -132,7 +142,7 @@ export function loadSecureConfig(): SecureConfig {
   const webhooksEnabled = optionalBool("WEBHOOKS_ENABLED", true);
   const webhookSecret = optional("WEBHOOK_SECRET", generateSecureToken());
 
-  // Optional: Sandbox
+  // Optional: Sandbox (enabled by default - auto-detects Docker or Piston API fallback)
   const sandboxEnabled = optionalBool("SANDBOX_ENABLED", true);
 
   // Optional: Scheduler
@@ -161,7 +171,7 @@ export function loadSecureConfig(): SecureConfig {
     },
     sandbox: {
       enabled: sandboxEnabled,
-      image: optional("SANDBOX_IMAGE", "moltbot/sandbox:latest"),
+      image: optional("SANDBOX_IMAGE", "node:22-slim"),
       network: (optional("SANDBOX_NETWORK", "none") as "none" | "bridge"),
       memory: optional("SANDBOX_MEMORY", "512m"),
       cpus: optional("SANDBOX_CPUS", "1"),
@@ -177,7 +187,11 @@ export function loadSecureConfig(): SecureConfig {
     server: {
       port,
       host: optional("HOST", "0.0.0.0"),
-      gatewayToken: optional("MOLTBOT_GATEWAY_TOKEN", generateSecureToken()),
+      gatewayToken: optional("ASSUREBOT_GATEWAY_TOKEN", generateSecureToken()),
+    },
+    storage: {
+      postgresUrl: process.env.DATABASE_URL || process.env.POSTGRES_URL,
+      redisUrl: process.env.REDIS_URL,
     },
   };
 }
@@ -230,6 +244,10 @@ export function redactConfig(config: SecureConfig): Record<string, unknown> {
       port: config.server.port,
       host: config.server.host,
       gatewayToken: "[REDACTED]",
+    },
+    storage: {
+      postgresUrl: config.storage.postgresUrl ? "[CONFIGURED]" : undefined,
+      redisUrl: config.storage.redisUrl ? "[CONFIGURED]" : undefined,
     },
   };
 }

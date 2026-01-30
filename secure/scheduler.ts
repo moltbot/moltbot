@@ -10,6 +10,7 @@ import type { SecureConfig } from "./config.js";
 import type { AuditLogger } from "./audit.js";
 import type { AgentCore } from "./agent.js";
 import type { Bot } from "grammy";
+import type { Storage } from "./storage.js";
 import { sendToUser } from "./telegram.js";
 
 export type ScheduledTask = {
@@ -29,7 +30,7 @@ export type Scheduler = {
   enableTask: (id: string, enabled: boolean) => boolean;
   listTasks: () => ScheduledTask[];
   runTask: (id: string) => Promise<void>;
-  start: () => void;
+  start: () => Promise<void>;
   stop: () => void;
 };
 
@@ -38,6 +39,7 @@ export type SchedulerDeps = {
   audit: AuditLogger;
   agent: AgentCore;
   telegramBot: Bot;
+  storage?: Storage;
 };
 
 function generateId(): string {
@@ -45,9 +47,9 @@ function generateId(): string {
 }
 
 export function createScheduler(deps: SchedulerDeps): Scheduler {
-  const { config, audit, agent, telegramBot } = deps;
+  const { config, audit, agent, telegramBot, storage } = deps;
   const tasks = new Map<string, ScheduledTask>();
-  const cronJobs = new Map<string, CronJob>();
+  const cronJobs = new Map<string, CronJob<null, unknown>>();
 
   async function executeTask(task: ScheduledTask): Promise<void> {
     const startTime = Date.now();
@@ -68,6 +70,11 @@ export function createScheduler(deps: SchedulerDeps): Scheduler {
       task.lastStatus = "ok";
       task.lastError = undefined;
 
+      // Save updated task status
+      if (storage) {
+        void storage.saveTask(task);
+      }
+
       audit.cron({
         jobId: task.id,
         jobName: task.name,
@@ -80,6 +87,11 @@ export function createScheduler(deps: SchedulerDeps): Scheduler {
       task.lastRun = new Date();
       task.lastStatus = "error";
       task.lastError = errorMsg;
+
+      // Save updated task status
+      if (storage) {
+        void storage.saveTask(task);
+      }
 
       audit.cron({
         jobId: task.id,
@@ -133,6 +145,10 @@ export function createScheduler(deps: SchedulerDeps): Scheduler {
       const task: ScheduledTask = { ...taskInput, id };
       tasks.set(id, task);
       scheduleTask(task);
+      // Persist to storage
+      if (storage) {
+        void storage.saveTask(task);
+      }
       return id;
     },
 
@@ -147,6 +163,10 @@ export function createScheduler(deps: SchedulerDeps): Scheduler {
       }
 
       tasks.delete(id);
+      // Remove from storage
+      if (storage) {
+        void storage.deleteTask(id);
+      }
       return true;
     },
 
@@ -171,13 +191,23 @@ export function createScheduler(deps: SchedulerDeps): Scheduler {
       await executeTask(task);
     },
 
-    start(): void {
+    async start(): Promise<void> {
       if (!config.scheduler.enabled) {
         console.log("[scheduler] Scheduler is disabled");
         return;
       }
 
       console.log("[scheduler] Starting scheduler...");
+
+      // Load tasks from storage
+      if (storage) {
+        const storedTasks = await storage.getAllTasks();
+        for (const task of storedTasks) {
+          tasks.set(task.id, task);
+        }
+        console.log(`[scheduler] Loaded ${storedTasks.length} tasks from storage`);
+      }
+
       for (const task of tasks.values()) {
         scheduleTask(task);
       }
