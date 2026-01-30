@@ -1,6 +1,6 @@
 import { lookup as dnsLookup } from "node:dns/promises";
 import { lookup as dnsLookupCb, type LookupAddress } from "node:dns";
-import { Agent, type Dispatcher } from "undici";
+import { Agent, ProxyAgent, type Dispatcher } from "undici";
 
 type LookupCallback = (
   err: NodeJS.ErrnoException | null,
@@ -210,7 +210,30 @@ export async function resolvePinnedHostname(
   };
 }
 
+export function createProxyAgent(): ProxyAgent | undefined {
+  const httpProxy = process.env.HTTP_PROXY || process.env.http_proxy;
+  const httpsProxy = process.env.HTTPS_PROXY || process.env.https_proxy;
+  const proxy = httpsProxy || httpProxy;
+
+  if (!proxy) return undefined;
+
+  try {
+    return new ProxyAgent(proxy);
+  } catch (error) {
+    console.error("Failed to create proxy agent:", error);
+    return undefined;
+  }
+}
+
 export function createPinnedDispatcher(pinned: PinnedHostname): Dispatcher {
+  // If proxy is configured, use ProxyAgent instead of pinned Agent
+  // Note: When using proxy, SSRF protection is bypassed as the proxy handles DNS
+  const proxyAgent = createProxyAgent();
+  if (proxyAgent) {
+    return proxyAgent;
+  }
+
+  // Otherwise, use Agent with pinned lookup for SSRF protection
   return new Agent({
     connect: {
       lookup: pinned.lookup,
