@@ -3,7 +3,7 @@ import { AuthStorage, ModelRegistry } from "@mariozechner/pi-coding-agent";
 
 import type { OpenClawConfig } from "../../config/config.js";
 import type { ModelDefinitionConfig } from "../../config/types.js";
-import { resolveOpenClawAgentDir } from "../agent-paths.js";
+// Note: resolveOpenClawAgentDir no longer needed - AuthStorage() doesn't take agentDir in pi-agent-core 0.50.4
 import { DEFAULT_CONTEXT_TOKENS } from "../defaults.js";
 import { normalizeModelCompat } from "../model-compat.js";
 import { normalizeProviderId } from "../model-selection.js";
@@ -56,7 +56,7 @@ export function resolveModel(
   authStorage: AuthStorage;
   modelRegistry: ModelRegistry;
 } {
-  const resolvedAgentDir = agentDir ?? resolveOpenClawAgentDir();
+  // Note: agentDir no longer needed - AuthStorage() doesn't take it as parameter in pi-agent-core 0.50.4
   const authStorage = new AuthStorage();
   const modelRegistry = new ModelRegistry(authStorage);
   const model = modelRegistry.find(provider, modelId) as Model<Api> | null;

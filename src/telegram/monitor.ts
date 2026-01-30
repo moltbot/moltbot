@@ -213,7 +213,7 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
       try {
         // runner.stop() is idempotent and safe to call multiple times
         await runner.stop();
-      } catch (stopErr) {
+      } catch {
         // Ignore errors during stop - we're cleaning up
         // This is expected if the runner already stopped
       }

@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import os from "node:os";
+// Note: os no longer needed - runtime info removed from system prompt in pi-agent-core 0.50.4
 
 import {
   createAgentSession,
@@ -8,24 +8,23 @@ import {
   SettingsManager,
 } from "@mariozechner/pi-coding-agent";
 
-import { resolveHeartbeatPrompt } from "../../auto-reply/heartbeat.js";
+// Note: resolveHeartbeatPrompt no longer needed - system prompt removed from CreateAgentSessionOptions in pi-agent-core 0.50.4
 import type { ReasoningLevel, ThinkLevel } from "../../auto-reply/thinking.js";
-import { listChannelSupportedActions, resolveChannelMessageToolHints } from "../channel-tools.js";
+// Note: listChannelSupportedActions, resolveChannelMessageToolHints no longer needed - system prompt removed in pi-agent-core 0.50.4
 import { resolveChannelCapabilities } from "../../config/channel-capabilities.js";
 import type { OpenClawConfig } from "../../config/config.js";
-import { getMachineDisplayName } from "../../infra/machine-name.js";
+// Note: getMachineDisplayName no longer needed - system prompt removed in pi-agent-core 0.50.4
 import { resolveTelegramInlineButtonsScope } from "../../telegram/inline-buttons.js";
-import { resolveTelegramReactionLevel } from "../../telegram/reaction-level.js";
-import { resolveSignalReactionLevel } from "../../signal/reaction-level.js";
+// Note: resolveTelegramReactionLevel, resolveSignalReactionLevel no longer needed - system prompt removed in pi-agent-core 0.50.4
 import { type enqueueCommand, enqueueCommandInLane } from "../../process/command-queue.js";
 import { normalizeMessageChannel } from "../../utils/message-channel.js";
-import { isSubagentSessionKey } from "../../routing/session-key.js";
-import { isReasoningTagProvider } from "../../utils/provider-utils.js";
+// Note: isSubagentSessionKey no longer needed - system prompt removed in pi-agent-core 0.50.4
+// Note: isReasoningTagProvider no longer needed - system prompt removed in pi-agent-core 0.50.4
 import { resolveUserPath } from "../../utils.js";
 import { resolveOpenClawAgentDir } from "../agent-paths.js";
-import { resolveSessionAgentIds } from "../agent-scope.js";
+// Note: resolveSessionAgentIds no longer needed - system prompt removed in pi-agent-core 0.50.4
 import { makeBootstrapWarn, resolveBootstrapContextForRun } from "../bootstrap-files.js";
-import { resolveOpenClawDocsPath } from "../docs-path.js";
+// Note: resolveOpenClawDocsPath no longer needed - system prompt removed in pi-agent-core 0.50.4
 import type { ExecElevatedDefaults } from "../bash-tools.js";
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from "../defaults.js";
 import { getApiKeyForModel, resolveModelAuthMode } from "../model-auth.js";
@@ -48,10 +47,10 @@ import {
   applySkillEnvOverrides,
   applySkillEnvOverridesFromSnapshot,
   loadWorkspaceSkillEntries,
-  resolveSkillsPromptForRun,
+  // Note: resolveSkillsPromptForRun no longer needed - system prompt removed in pi-agent-core 0.50.4
   type SkillSnapshot,
 } from "../skills.js";
-import { buildEmbeddedExtensionPaths } from "./extensions.js";
+// Note: buildEmbeddedExtensionPaths no longer needed - removed from CreateAgentSessionOptions in pi-agent-core 0.50.4
 import {
   logToolSchemasForGoogle,
   sanitizeSessionHistory,
@@ -60,15 +59,16 @@ import {
 import { getDmHistoryLimitFromSessionKey, limitHistoryTurns } from "./history.js";
 import { resolveGlobalLane, resolveSessionLane } from "./lanes.js";
 import { log } from "./logger.js";
-import { buildModelAliasLines, resolveModel } from "./model.js";
-import { buildEmbeddedSandboxInfo } from "./sandbox-info.js";
+import { resolveModel } from "./model.js";
+// Note: buildModelAliasLines no longer needed - system prompt removed from CreateAgentSessionOptions in pi-agent-core 0.50.4
+// Note: buildEmbeddedSandboxInfo no longer needed - system prompt removed in pi-agent-core 0.50.4
 import { prewarmSessionFile, trackSessionManagerAccess } from "./session-manager-cache.js";
-import { buildEmbeddedSystemPrompt, createSystemPromptOverride } from "./system-prompt.js";
+// Note: buildEmbeddedSystemPrompt and createSystemPromptOverride no longer needed - systemPrompt removed from CreateAgentSessionOptions in pi-agent-core 0.50.4
 import { splitSdkTools } from "./tool-split.js";
 import type { EmbeddedPiCompactResult } from "./types.js";
-import { formatUserTime, resolveUserTimeFormat, resolveUserTimezone } from "../date-time.js";
+// Note: formatUserTime, resolveUserTimeFormat, resolveUserTimezone no longer needed - system prompt removed in pi-agent-core 0.50.4
 import { describeUnknownError, mapThinkingLevel, resolveExecToolDefaults } from "./utils.js";
-import { buildTtsSystemPromptHint } from "../../tts/tts.js";
+// Note: buildTtsSystemPromptHint no longer needed - system prompt removed in pi-agent-core 0.50.4
 
 export type CompactEmbeddedPiSessionParams = {
   sessionId: string;
@@ -195,15 +195,17 @@ export async function compactEmbeddedPiSessionDirect(
           skills: skillEntries ?? [],
           config: params.config,
         });
-    const skillsPrompt = resolveSkillsPromptForRun({
-      skillsSnapshot: params.skillsSnapshot,
-      entries: shouldLoadSkillEntries ? skillEntries : undefined,
-      config: params.config,
-      workspaceDir: effectiveWorkspace,
-    });
+    // Note: Skills prompt no longer passed to createAgentSession in pi-agent-core 0.50.4
+    // const skillsPrompt = resolveSkillsPromptForRun({
+    //   skillsSnapshot: params.skillsSnapshot,
+    //   entries: shouldLoadSkillEntries ? skillEntries : undefined,
+    //   config: params.config,
+    //   workspaceDir: effectiveWorkspace,
+    // });
 
     const sessionLabel = params.sessionKey ?? params.sessionId;
-    const { contextFiles } = await resolveBootstrapContextForRun({
+    // Note: contextFiles no longer passed to createAgentSession in pi-agent-core 0.50.4
+    await resolveBootstrapContextForRun({
       workspaceDir: effectiveWorkspace,
       config: params.config,
       sessionKey: params.sessionKey,
@@ -234,7 +236,8 @@ export async function compactEmbeddedPiSessionDirect(
     });
     const tools = sanitizeToolsForGoogle({ tools: toolsRaw, provider });
     logToolSchemasForGoogle({ tools, provider });
-    const machineName = await getMachineDisplayName();
+    // Note: machineName no longer needed - system prompt removed in pi-agent-core 0.50.4
+    // const machineName = await getMachineDisplayName();
     const runtimeChannel = normalizeMessageChannel(params.messageChannel ?? params.messageProvider);
     let runtimeCapabilities = runtimeChannel
       ? (resolveChannelCapabilities({
@@ -257,97 +260,50 @@ export async function compactEmbeddedPiSessionDirect(
         }
       }
     }
-    const reactionGuidance =
-      runtimeChannel && params.config
-        ? (() => {
-            if (runtimeChannel === "telegram") {
-              const resolved = resolveTelegramReactionLevel({
-                cfg: params.config,
-                accountId: params.agentAccountId ?? undefined,
-              });
-              const level = resolved.agentReactionGuidance;
-              return level ? { level, channel: "Telegram" } : undefined;
-            }
-            if (runtimeChannel === "signal") {
-              const resolved = resolveSignalReactionLevel({
-                cfg: params.config,
-                accountId: params.agentAccountId ?? undefined,
-              });
-              const level = resolved.agentReactionGuidance;
-              return level ? { level, channel: "Signal" } : undefined;
-            }
-            return undefined;
-          })()
-        : undefined;
-    // Resolve channel-specific message actions for system prompt
-    const channelActions = runtimeChannel
-      ? listChannelSupportedActions({
-          cfg: params.config,
-          channel: runtimeChannel,
-        })
-      : undefined;
-    const messageToolHints = runtimeChannel
-      ? resolveChannelMessageToolHints({
-          cfg: params.config,
-          channel: runtimeChannel,
-          accountId: params.agentAccountId,
-        })
-      : undefined;
-
-    const runtimeInfo = {
-      host: machineName,
-      os: `${os.type()} ${os.release()}`,
-      arch: os.arch(),
-      node: process.version,
-      model: `${provider}/${modelId}`,
-      channel: runtimeChannel,
-      capabilities: runtimeCapabilities,
-      channelActions,
-    };
-    const sandboxInfo = buildEmbeddedSandboxInfo(sandbox, params.bashElevated);
-    const reasoningTagHint = isReasoningTagProvider(provider);
-    const userTimezone = resolveUserTimezone(params.config?.agents?.defaults?.userTimezone);
-    const userTimeFormat = resolveUserTimeFormat(params.config?.agents?.defaults?.timeFormat);
-    const userTime = formatUserTime(new Date(), userTimezone, userTimeFormat);
-    const { defaultAgentId, sessionAgentId } = resolveSessionAgentIds({
-      sessionKey: params.sessionKey,
-      config: params.config,
-    });
-    const isDefaultAgent = sessionAgentId === defaultAgentId;
-    const promptMode = isSubagentSessionKey(params.sessionKey) ? "minimal" : "full";
-    const docsPath = await resolveOpenClawDocsPath({
-      workspaceDir: effectiveWorkspace,
-      argv1: process.argv[1],
-      cwd: process.cwd(),
-      moduleUrl: import.meta.url,
-    });
-    const ttsHint = params.config ? buildTtsSystemPromptHint(params.config) : undefined;
-    const appendPrompt = buildEmbeddedSystemPrompt({
-      workspaceDir: effectiveWorkspace,
-      defaultThinkLevel: params.thinkLevel,
-      reasoningLevel: params.reasoningLevel ?? "off",
-      extraSystemPrompt: params.extraSystemPrompt,
-      ownerNumbers: params.ownerNumbers,
-      reasoningTagHint,
-      heartbeatPrompt: isDefaultAgent
-        ? resolveHeartbeatPrompt(params.config?.agents?.defaults?.heartbeat?.prompt)
-        : undefined,
-      skillsPrompt,
-      docsPath: docsPath ?? undefined,
-      ttsHint,
-      promptMode,
-      runtimeInfo,
-      reactionGuidance,
-      messageToolHints,
-      sandboxInfo,
-      tools,
-      modelAliasLines: buildModelAliasLines(params.config),
-      userTimezone,
-      userTime,
-      userTimeFormat,
-      contextFiles,
-    });
-    const systemPrompt = createSystemPromptOverride(appendPrompt);
+    // Note: The following variables were used for system prompt building, which has been
+    // removed from createAgentSession in pi-agent-core 0.50.4. System prompt is now
+    // handled internally by the pi-agent-core library.
+    // const reactionGuidance = ...
+    // const channelActions = ...
+    // const messageToolHints = ...
+    // const runtimeInfo = ...
+    // const sandboxInfo = ...
+    // const reasoningTagHint = ...
+    // const userTimezone = ...
+    // const userTimeFormat = ...
+    // const userTime = ...
+    // const isDefaultAgent = ...
+    // const promptMode = ...
+    // const docsPath = ...
+    // const ttsHint = ...
+    // Note: systemPrompt removed from CreateAgentSessionOptions in pi-agent-core 0.50.4
+    // System prompt is now set via different mechanism in pi-agent-core
+    // const appendPrompt = buildEmbeddedSystemPrompt({
+    //   workspaceDir: effectiveWorkspace,
+    //   defaultThinkLevel: params.thinkLevel,
+    //   reasoningLevel: params.reasoningLevel ?? "off",
+    //   extraSystemPrompt: params.extraSystemPrompt,
+    //   ownerNumbers: params.ownerNumbers,
+    //   reasoningTagHint,
+    //   heartbeatPrompt: isDefaultAgent
+    //     ? resolveHeartbeatPrompt(params.config?.agents?.defaults?.heartbeat?.prompt)
+    //     : undefined,
+    //   skillsPrompt,
+    //   docsPath: docsPath ?? undefined,
+    //   ttsHint,
+    //   promptMode,
+    //   runtimeInfo,
+    //   reactionGuidance,
+    //   messageToolHints,
+    //   sandboxInfo,
+    //   tools,
+    //   modelAliasLines: buildModelAliasLines(params.config),
+    //   userTimezone,
+    //   userTime,
+    //   userTimeFormat,
+    //   contextFiles,
+    // });
+    // const systemPrompt = createSystemPromptOverride(appendPrompt);
 
     const sessionLock = await acquireSessionWriteLock({
       sessionFile: params.sessionFile,
@@ -370,13 +326,14 @@ export async function compactEmbeddedPiSessionDirect(
         settingsManager,
         minReserveTokens: resolveCompactionReserveTokensFloor(params.config),
       });
-      const additionalExtensionPaths = buildEmbeddedExtensionPaths({
-        cfg: params.config,
-        sessionManager,
-        provider,
-        modelId,
-        model,
-      });
+      // Note: additionalExtensionPaths removed from CreateAgentSessionOptions in pi-agent-core 0.50.4
+      // const additionalExtensionPaths = buildEmbeddedExtensionPaths({
+      //   cfg: params.config,
+      //   sessionManager,
+      //   provider,
+      //   modelId,
+      //   model,
+      // });
 
       const { builtInTools, customTools } = splitSdkTools({
         tools,

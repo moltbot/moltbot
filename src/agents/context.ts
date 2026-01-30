@@ -2,7 +2,7 @@
 // the agent reports a model id. This includes custom models.json entries.
 
 import { loadConfig } from "../config/config.js";
-import { resolveOpenClawAgentDir } from "./agent-paths.js";
+// Note: resolveOpenClawAgentDir no longer needed - AuthStorage() doesn't take agentDir in pi-agent-core 0.50.4
 import { ensureOpenClawModelsJson } from "./models-config.js";
 
 type ModelEntry = { id: string; contextWindow?: number };
@@ -13,7 +13,7 @@ const loadPromise = (async () => {
     const { AuthStorage, ModelRegistry } = await import("@mariozechner/pi-coding-agent");
     const cfg = loadConfig();
     await ensureOpenClawModelsJson(cfg);
-    const agentDir = resolveOpenClawAgentDir();
+    // Note: agentDir no longer needed - AuthStorage() doesn't take it as parameter in pi-agent-core 0.50.4
     const authStorage = new AuthStorage();
     const modelRegistry = new ModelRegistry(authStorage);
     const models = modelRegistry.getAll() as ModelEntry[];

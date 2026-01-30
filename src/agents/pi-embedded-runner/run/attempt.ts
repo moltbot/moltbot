@@ -54,7 +54,7 @@ import { buildSystemPromptReport } from "../../system-prompt-report.js";
 import { resolveDefaultModelForAgent } from "../../model-selection.js";
 
 import { isAbortError } from "../abort.js";
-import { buildEmbeddedExtensionPaths } from "../extensions.js";
+// Note: buildEmbeddedExtensionPaths no longer needed - removed from CreateAgentSessionOptions in pi-agent-core 0.50.4
 import { applyExtraParamsToAgent } from "../extra-params.js";
 import { appendCacheTtlTimestamp, isCacheTtlEligibleProvider } from "../cache-ttl.js";
 import {
@@ -424,13 +424,14 @@ export async function runEmbeddedAttempt(
         minReserveTokens: resolveCompactionReserveTokensFloor(params.config),
       });
 
-      const additionalExtensionPaths = buildEmbeddedExtensionPaths({
-        cfg: params.config,
-        sessionManager,
-        provider: params.provider,
-        modelId: params.modelId,
-        model: params.model,
-      });
+      // Note: additionalExtensionPaths removed from CreateAgentSessionOptions in pi-agent-core 0.50.4
+      // const additionalExtensionPaths = buildEmbeddedExtensionPaths({
+      //   cfg: params.config,
+      //   sessionManager,
+      //   provider: params.provider,
+      //   modelId: params.modelId,
+      //   model: params.model,
+      // });
 
       const { builtInTools, customTools } = splitSdkTools({
         tools,
