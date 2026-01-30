@@ -8,21 +8,23 @@ export function normalizeSignalMessagingTarget(raw: string): string | undefined 
   if (!normalized) return undefined;
   const lower = normalized.toLowerCase();
   if (lower.startsWith("group:")) {
+    // Preserve case for group IDs - base64 is case-sensitive
     const id = normalized.slice("group:".length).trim();
-    return id ? `group:${id}`.toLowerCase() : undefined;
+    return id ? `group:${id}` : undefined;
   }
   if (lower.startsWith("username:")) {
     const id = normalized.slice("username:".length).trim();
-    return id ? `username:${id}`.toLowerCase() : undefined;
+    return id ? `username:${id.toLowerCase()}` : undefined;
   }
   if (lower.startsWith("u:")) {
     const id = normalized.slice("u:".length).trim();
-    return id ? `username:${id}`.toLowerCase() : undefined;
+    return id ? `username:${id.toLowerCase()}` : undefined;
   }
   if (lower.startsWith("uuid:")) {
     const id = normalized.slice("uuid:".length).trim();
     return id ? id.toLowerCase() : undefined;
   }
+  // Phone numbers and other targets can be lowercased
   return normalized.toLowerCase();
 }
 
