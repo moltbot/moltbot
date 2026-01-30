@@ -88,9 +88,10 @@ function createStreamFnWithExtraParams(
   }
 
   // Add enableMeta for Anthropic provider cache features
+  log.info(`enableMeta check: enableMeta=${enableMeta}, provider=${provider}`);
   if (enableMeta && provider === "anthropic") {
     streamParams.enableMeta = true;
-    log.debug(`enableMeta enabled for ${provider}/${modelId}`);
+    log.info(`enableMeta enabled for ${provider}/${modelId}`);
   }
 
   if (Object.keys(streamParams).length === 0) {
