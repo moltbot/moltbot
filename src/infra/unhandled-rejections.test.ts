@@ -100,6 +100,24 @@ describe("isTransientNetworkError", () => {
     expect(isTransientNetworkError(error)).toBe(true);
   });
 
+  it("returns true for MediaFetchError with fetch_failed code", () => {
+    const error = Object.assign(new Error("media fetch failed"), {
+      name: "MediaFetchError",
+      code: "fetch_failed",
+    });
+    expect(isTransientNetworkError(error)).toBe(true);
+  });
+
+  it("returns true for MediaFetchError that wraps a network cause", () => {
+    const cause = Object.assign(new Error("timeout"), { code: "ETIMEDOUT" });
+    const error = Object.assign(new Error("media fetch failed"), {
+      name: "MediaFetchError",
+      code: "fetch_failed",
+      cause,
+    });
+    expect(isTransientNetworkError(error)).toBe(true);
+  });
+
   it("returns false for regular errors without network codes", () => {
     expect(isTransientNetworkError(new Error("Something went wrong"))).toBe(false);
     expect(isTransientNetworkError(new TypeError("Cannot read property"))).toBe(false);

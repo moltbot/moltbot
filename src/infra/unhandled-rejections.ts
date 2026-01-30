@@ -78,6 +78,16 @@ function isConfigError(err: unknown): boolean {
 export function isTransientNetworkError(err: unknown): boolean {
   if (!err) return false;
 
+  if (err && typeof err === "object") {
+    const name = "name" in err ? String(err.name) : "";
+    const code = extractErrorCodeWithCause(err);
+    if (name === "MediaFetchError" && code === "fetch_failed") {
+      const cause = getErrorCause(err);
+      if (cause && cause !== err) return isTransientNetworkError(cause);
+      return true;
+    }
+  }
+
   const code = extractErrorCodeWithCause(err);
   if (code && TRANSIENT_NETWORK_CODES.has(code)) return true;
 
