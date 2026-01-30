@@ -160,7 +160,6 @@ export async function resolveSlackThreadHistory(params: {
     };
 
     const messages = response?.messages ?? [];
-    // Filter out the current message and empty messages
     return messages
       .filter((msg) => {
         if (!msg.text?.trim()) return false;

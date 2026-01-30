@@ -228,7 +228,6 @@ export async function runPreparedReply(
   });
   const threadStarterBody = ctx.ThreadStarterBody?.trim();
   const threadHistoryBody = ctx.ThreadHistoryBody?.trim();
-  // If we have full thread history, use it instead of just the starter
   const threadContextNote =
     isNewSession && threadHistoryBody
       ? `[Thread history - for context]\n${threadHistoryBody}`
