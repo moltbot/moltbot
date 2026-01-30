@@ -20,7 +20,7 @@ import { buildMentionRegexes, matchesMentionWithExplicit } from "../auto-reply/r
 import { formatLocationText, toLocationContext } from "../channels/location.js";
 import { recordInboundSession } from "../channels/session.js";
 import { readSessionUpdatedAt, resolveStorePath } from "../config/sessions.js";
-import type { MoltbotConfig } from "../config/config.js";
+import type { OpenClawConfig } from "../config/config.js";
 import type { DmPolicy, TelegramGroupConfig, TelegramTopicConfig } from "../config/types.js";
 import { logVerbose, shouldLogVerbose } from "../globals.js";
 import { recordChannelActivity } from "../infra/channel-activity.js";
@@ -109,7 +109,7 @@ type BuildTelegramMessageContextParams = {
   storeAllowFrom: string[];
   options?: TelegramMessageContextOptions;
   bot: Bot;
-  cfg: MoltbotConfig;
+  cfg: OpenClawConfig;
   account: { accountId: string };
   historyLimit: number;
   groupHistories: Map<string, HistoryEntry[]>;
@@ -124,7 +124,7 @@ type BuildTelegramMessageContextParams = {
 };
 
 async function resolveStickerVisionSupport(params: {
-  cfg: MoltbotConfig;
+  cfg: OpenClawConfig;
   agentId?: string;
 }): Promise<boolean> {
   try {
