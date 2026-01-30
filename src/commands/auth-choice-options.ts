@@ -17,6 +17,7 @@ export type AuthChoiceGroupId =
   | "moonshot"
   | "zai"
   | "xiaomi"
+  | "xai"
   | "opencode-zen"
   | "minimax"
   | "synthetic"
@@ -115,6 +116,12 @@ const AUTH_CHOICE_GROUP_DEFS: {
     choices: ["xiaomi-api-key"],
   },
   {
+    value: "xai",
+    label: "xAI",
+    hint: "Grok models",
+    choices: ["xai-api-key"],
+  },
+  {
     value: "opencode-zen",
     label: "OpenCode Zen",
     hint: "API key",
@@ -175,6 +182,7 @@ export function buildAuthChoiceOptions(params: {
     value: "xiaomi-api-key",
     label: "Xiaomi API key",
   });
+  options.push({ value: "xai-api-key", label: "xAI API key" });
   options.push({ value: "qwen-portal", label: "Qwen OAuth" });
   options.push({
     value: "copilot-proxy",

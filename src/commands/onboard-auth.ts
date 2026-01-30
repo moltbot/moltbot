@@ -3,6 +3,7 @@ export {
   SYNTHETIC_DEFAULT_MODEL_REF,
 } from "../agents/synthetic-models.js";
 export { VENICE_DEFAULT_MODEL_ID, VENICE_DEFAULT_MODEL_REF } from "../agents/venice-models.js";
+export { XAI_DEFAULT_MODEL_ID, XAI_DEFAULT_MODEL_REF } from "../agents/xai-models.js";
 export {
   applyAuthProfileConfig,
   applyKimiCodeConfig,
@@ -17,6 +18,8 @@ export {
   applyVeniceProviderConfig,
   applyVercelAiGatewayConfig,
   applyVercelAiGatewayProviderConfig,
+  applyXaiConfig,
+  applyXaiProviderConfig,
   applyXiaomiConfig,
   applyXiaomiProviderConfig,
   applyZaiConfig,
@@ -46,6 +49,7 @@ export {
   setSyntheticApiKey,
   setVeniceApiKey,
   setVercelAiGatewayApiKey,
+  setXaiApiKey,
   setXiaomiApiKey,
   setZaiApiKey,
   writeOAuthCredentials,

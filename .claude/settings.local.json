@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep:*)",
+      "Bash(npm install)",
+      "Bash(npm run lint)",
+      "Bash(npm run build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm test:*)",
+      "Bash(npx vitest:*)",
+      "Bash(git checkout:*)",
+      "Bash(bash scripts/committer:*)",
+      "Bash(git log:*)",
+      "WebSearch",
+      "WebFetch(domain:docs.x.ai)",
+      "WebFetch(domain:docs.aimlapi.com)",
+      "WebFetch(domain:aimlapi.com)",
+      "Bash(pnpm lint:*)"
+    ]
+  }
+}
