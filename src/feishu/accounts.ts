@@ -6,7 +6,7 @@
 import { existsSync, readFileSync } from "node:fs";
 
 import type { OpenClawConfig } from "../config/config.js";
-import { logVerbose, logWarn } from "../globals.js";
+import { logVerbose } from "../globals.js";
 
 import type {
   FeishuAccountConfig,
@@ -26,7 +26,7 @@ function readFileContent(filePath: string): string | undefined {
       return readFileSync(filePath, "utf-8").trim();
     }
   } catch (err) {
-    logWarn(`feishu: failed to read file ${filePath}: ${err}`);
+    console.warn(`feishu: failed to read file ${filePath}: ${err}`);
   }
   return undefined;
 }
@@ -151,8 +151,8 @@ export function resolveFeishuAccount(params: ResolveFeishuAccountParams): Resolv
   if (!appId || !appSecret) {
     throw new Error(
       `feishu: no credentials found for account "${accountId}". ` +
-        `Please set appId/appSecret in config, FEISHU_APP_ID/FEISHU_APP_SECRET env vars, ` +
-        `or appIdFile/appSecretFile in config.`,
+      `Please set appId/appSecret in config, FEISHU_APP_ID/FEISHU_APP_SECRET env vars, ` +
+      `or appIdFile/appSecretFile in config.`,
     );
   }
 

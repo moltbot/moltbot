@@ -5,7 +5,7 @@
 
 import * as lark from "@larksuiteoapi/node-sdk";
 
-import { logVerbose, logWarn } from "../globals.js";
+import { logVerbose } from "../globals.js";
 
 import type { FeishuProbeResult, ResolvedFeishuAccount } from "./types.js";
 
@@ -71,7 +71,7 @@ export async function probeFeishuBot(account: ResolvedFeishuAccount): Promise<Fe
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logWarn(`feishu: probe failed: ${errorMessage}`);
+    console.warn(`feishu: probe failed: ${errorMessage}`);
 
     return {
       ok: false,

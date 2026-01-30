@@ -5,7 +5,7 @@
 
 import type * as lark from "@larksuiteoapi/node-sdk";
 
-import { logVerbose, logWarn } from "../globals.js";
+import { logVerbose } from "../globals.js";
 
 import type {
   FeishuCardContent,
@@ -59,7 +59,7 @@ export async function sendMessage(params: SendMessageParams): Promise<FeishuSend
       chatId: receiveId,
     };
   } catch (error) {
-    logWarn(`feishu: failed to send message: ${error}`);
+    console.warn(`feishu: failed to send message: ${error}`);
     throw error;
   }
 }
@@ -224,7 +224,7 @@ export async function replyMessage(
       chatId: "", // Not available in reply response
     };
   } catch (error) {
-    logWarn(`feishu: failed to reply message: ${error}`);
+    console.warn(`feishu: failed to reply message: ${error}`);
     throw error;
   }
 }
@@ -260,7 +260,7 @@ export async function replyCardMessage(
       chatId: "",
     };
   } catch (error) {
-    logWarn(`feishu: failed to reply with card: ${error}`);
+    console.warn(`feishu: failed to reply with card: ${error}`);
     throw error;
   }
 }
@@ -291,7 +291,7 @@ export async function uploadImage(
     logVerbose(`feishu: image uploaded: ${imageKey}`);
     return imageKey;
   } catch (error) {
-    logWarn(`feishu: failed to upload image: ${error}`);
+    console.warn(`feishu: failed to upload image: ${error}`);
     throw error;
   }
 }
@@ -324,7 +324,7 @@ export async function uploadFile(
     logVerbose(`feishu: file uploaded: ${fileKey}`);
     return fileKey;
   } catch (error) {
-    logWarn(`feishu: failed to upload file: ${error}`);
+    console.warn(`feishu: failed to upload file: ${error}`);
     throw error;
   }
 }
@@ -353,7 +353,7 @@ export async function getUserInfo(
     });
 
     if (response.code !== 0) {
-      logWarn(`feishu: failed to get user info: ${response.msg}`);
+      console.warn(`feishu: failed to get user info: ${response.msg}`);
       return null;
     }
 
@@ -364,7 +364,7 @@ export async function getUserInfo(
       email: response.data?.user?.email,
     };
   } catch (error) {
-    logWarn(`feishu: failed to get user info: ${error}`);
+    console.warn(`feishu: failed to get user info: ${error}`);
     return null;
   }
 }

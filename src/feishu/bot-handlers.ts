@@ -6,7 +6,7 @@
 import type * as lark from "@larksuiteoapi/node-sdk";
 
 import type { OpenClawConfig } from "../config/config.js";
-import { logVerbose, logWarn } from "../globals.js";
+import { logVerbose } from "../globals.js";
 import type { RuntimeEnv } from "../runtime.js";
 
 import { isGroupAllowed, isUserAllowed } from "./accounts.js";
@@ -135,7 +135,7 @@ async function handleMessageEvent(
   const messageContext = await buildFeishuMessageContext(event, context);
 
   if (!messageContext) {
-    logWarn("feishu: failed to build message context");
+    console.warn("feishu: failed to build message context");
     return;
   }
 
@@ -143,7 +143,7 @@ async function handleMessageEvent(
   try {
     await processMessage(messageContext);
   } catch (error) {
-    logWarn(`feishu: error processing message: ${error}`);
+    console.warn(`feishu: error processing message: ${error}`);
   }
 }
 

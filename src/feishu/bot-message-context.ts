@@ -3,7 +3,7 @@
  * @module feishu/bot-message-context
  */
 
-import { logVerbose, logWarn } from "../globals.js";
+import { logVerbose } from "../globals.js";
 
 import type { FeishuHandlerContext } from "./bot-handlers.js";
 import type {
@@ -79,7 +79,7 @@ function parseMessageContent(
         return { content, text: undefined };
     }
   } catch (error) {
-    logWarn(`feishu: failed to parse message content: ${error}`);
+    console.warn(`feishu: failed to parse message content: ${error}`);
     return { content: contentStr, text: undefined };
   }
 }
@@ -239,12 +239,12 @@ export async function buildFeishuMessageContext(
 
     logVerbose(
       `feishu: built context for message ${message.message_id} ` +
-        `(type: ${message.message_type}, chat: ${message.chat_type})`,
+      `(type: ${message.message_type}, chat: ${message.chat_type})`,
     );
 
     return messageContext;
   } catch (error) {
-    logWarn(`feishu: failed to build message context: ${error}`);
+    console.warn(`feishu: failed to build message context: ${error}`);
     return null;
   }
 }

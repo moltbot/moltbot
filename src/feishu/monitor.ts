@@ -6,7 +6,7 @@
 import type * as lark from "@larksuiteoapi/node-sdk";
 
 import type { OpenClawConfig } from "../config/config.js";
-import { logError, logVerbose, logWarn } from "../globals.js";
+import { logVerbose } from "../globals.js";
 import type { RuntimeEnv } from "../runtime.js";
 
 import { listFeishuAccountIds, resolveFeishuAccount } from "./accounts.js";
@@ -112,10 +112,10 @@ export async function monitorFeishuProvider(
   if (accountIds.length === 0) {
     logVerbose("feishu: no accounts configured");
     return {
-      stop: () => {},
+      stop: () => { },
       getState: () => runtimeState!,
       getAccount: () => undefined,
-      probeAll: async () => {},
+      probeAll: async () => { },
     };
   }
 
@@ -161,7 +161,7 @@ export async function monitorFeishuProvider(
           runtimeState.accounts.get(accountId)!.connected = true;
           logVerbose(`feishu: long connection established for "${accountId}"`);
         } catch (error) {
-          logError(`feishu: failed to start long connection for "${accountId}": ${error}`);
+          console.error(`feishu: failed to start long connection for "${accountId}": ${error}`);
         }
       }
 
@@ -183,7 +183,7 @@ export async function monitorFeishuProvider(
 
       logVerbose(`feishu: account "${accountId}" initialized (connected: ${probeResult.ok})`);
     } catch (error) {
-      logError(`feishu: failed to initialize account "${accountId}": ${error}`);
+      console.error(`feishu: failed to initialize account "${accountId}": ${error}`);
       runtimeState.accounts.set(accountId, {
         accountId,
         enabled: true,
@@ -216,7 +216,7 @@ export async function monitorFeishuProvider(
           state.connected = result.ok;
         }
       } catch (error) {
-        logWarn(`feishu: probe failed for "${accountId}": ${error}`);
+        console.warn(`feishu: probe failed for "${accountId}": ${error}`);
       }
     }
   };
