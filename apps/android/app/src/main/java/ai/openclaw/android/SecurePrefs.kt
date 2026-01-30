@@ -71,6 +71,16 @@ class SecurePrefs(context: Context) {
     MutableStateFlow(prefs.getBoolean("gateway.manual.tls", true))
   val manualTls: StateFlow<Boolean> = _manualTls
 
+  // Gateway auth (used for both discovery + manual connects)
+  private val _gatewayToken = MutableStateFlow(loadGatewayToken().orEmpty())
+  val gatewayToken: StateFlow<String> = _gatewayToken
+
+  private val _gatewayPassword = MutableStateFlow(loadGatewayPassword().orEmpty())
+  val gatewayPassword: StateFlow<String> = _gatewayPassword
+
+  // NOTE: node pairing tokens are not valid gateway connect auth tokens.
+  // Keep node pairing state on the gateway; do not store a separate node token here.
+
   private val _lastDiscoveredStableId =
     MutableStateFlow(
       prefs.getString("gateway.lastDiscoveredStableID", "") ?: "",
@@ -143,6 +153,26 @@ class SecurePrefs(context: Context) {
     _manualTls.value = value
   }
 
+  fun setGatewayToken(value: String) {
+    val trimmed = value.trim()
+    val key = "gateway.token.${_instanceId.value}"
+    prefs.edit {
+      if (trimmed.isEmpty()) remove(key) else putString(key, trimmed)
+    }
+    _gatewayToken.value = trimmed
+  }
+
+  fun setGatewayPassword(value: String) {
+    val trimmed = value.trim()
+    val key = "gateway.password.${_instanceId.value}"
+    prefs.edit {
+      if (trimmed.isEmpty()) remove(key) else putString(key, trimmed)
+    }
+    _gatewayPassword.value = trimmed
+  }
+
+  // node token setter removed (see note above)
+
   fun setCanvasDebugStatusEnabled(value: Boolean) {
     prefs.edit { putBoolean("canvas.debugStatusEnabled", value) }
     _canvasDebugStatusEnabled.value = value
@@ -157,6 +187,7 @@ class SecurePrefs(context: Context) {
   fun saveGatewayToken(token: String) {
     val key = "gateway.token.${_instanceId.value}"
     prefs.edit { putString(key, token.trim()) }
+    _gatewayToken.value = token.trim()
   }
 
   fun loadGatewayPassword(): String? {
@@ -168,7 +199,10 @@ class SecurePrefs(context: Context) {
   fun saveGatewayPassword(password: String) {
     val key = "gateway.password.${_instanceId.value}"
     prefs.edit { putString(key, password.trim()) }
+    _gatewayPassword.value = password.trim()
   }
+
+  // node token loader removed (see note above)
 
   fun loadGatewayTlsFingerprint(stableId: String): String? {
     val key = "gateway.tls.$stableId"
