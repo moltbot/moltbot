@@ -32,6 +32,7 @@ import type {
 import type { ChatQueueItem, CronFormState } from "./ui-types";
 import { refreshChatAvatar } from "./app-chat";
 import { renderChat } from "./views/chat";
+import { renderTaskBoardView } from "./views/taskboard";
 import { renderConfig } from "./views/config";
 import { renderChannels } from "./views/channels";
 import { renderCron } from "./views/cron";
@@ -423,6 +424,23 @@ export function renderApp(state: AppViewState) {
                     : { kind: "gateway" as const };
                 return saveExecApprovals(state, target);
               },
+            })
+          : nothing}
+
+        ${state.tab === "taskboard"
+          ? renderTaskBoardView({
+              loading: state.taskBoardLoading,
+              saving: state.taskBoardSaving,
+              error: state.taskBoardError,
+              path: state.taskBoardPath,
+              board: state.taskBoard,
+              onRefresh: () => void state.refreshTaskBoard(),
+              onAdd: (column, payload) => state.addTask(column, payload),
+              onDelete: (taskId) => state.deleteTask(taskId),
+              onMove: (taskId, from, to) => state.moveTask(taskId, from, to),
+              onUpdate: (taskId, patch) => state.updateTask(taskId, patch),
+              onUpdateChecklist: (taskId, checklist) =>
+                state.updateTask(taskId, { checklist }),
             })
           : nothing}
 

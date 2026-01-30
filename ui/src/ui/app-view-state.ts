@@ -20,6 +20,7 @@ import type {
   StatusSummary,
 } from "./types";
 import type { ChatAttachment, ChatQueueItem, CronFormState } from "./ui-types";
+import type { TaskBoard, TaskColumnId } from "./types/task-board";
 import type { EventLogEntry } from "./app-events";
 import type { SkillMessage } from "./controllers/skills";
 import type {
@@ -57,6 +58,15 @@ export type AppViewState = {
   chatAvatarUrl: string | null;
   chatThinkingLevel: string | null;
   chatQueue: ChatQueueItem[];
+
+  // Task board
+  taskBoardOpen: boolean;
+  taskBoardLoading: boolean;
+  taskBoardSaving: boolean;
+  taskBoardError: string | null;
+  taskBoardPath: string | null;
+  taskBoard: TaskBoard;
+
   nodesLoading: boolean;
   nodes: Array<Record<string, unknown>>;
   devicesLoading: boolean;
@@ -202,6 +212,14 @@ export type AppViewState = {
   handleChatSelectQueueItem: (id: string) => void;
   handleChatDropQueueItem: (id: string) => void;
   handleChatClearQueue: () => void;
+
+  // Task board
+  toggleTaskBoard: () => void;
+  refreshTaskBoard: () => Promise<void>;
+  addTask: (column: TaskColumnId, payload: { name: string; description: string }) => void;
+  updateTask: (taskId: string, patch: unknown) => void;
+  deleteTask: (taskId: string) => void;
+  moveTask: (taskId: string, from: TaskColumnId, to: TaskColumnId) => void;
   handleLogsFilterChange: (next: string) => void;
   handleLogsLevelFilterToggle: (level: LogLevel) => void;
   handleLogsAutoFollowToggle: (next: boolean) => void;

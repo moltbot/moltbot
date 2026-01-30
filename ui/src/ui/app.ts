@@ -78,6 +78,14 @@ import {
 } from "./app-channels";
 import type { NostrProfileFormState } from "./views/channels.nostr-profile-form";
 import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity";
+import { loadTaskBoard, saveTaskBoard } from "./controllers/tasks";
+import {
+  DEFAULT_TASK_BOARD,
+  type TaskBoard,
+  type TaskColumnId,
+  type TaskEntity,
+} from "./types/task-board";
+import { generateUUID } from "./uuid";
 
 declare global {
   interface Window {
@@ -135,6 +143,16 @@ export class MoltbotApp extends LitElement {
   @state() sidebarContent: string | null = null;
   @state() sidebarError: string | null = null;
   @state() splitRatio = this.settings.splitRatio;
+
+  // Task board
+  @state() taskBoardOpen = true;
+  @state() taskBoardLoading = false;
+  @state() taskBoardSaving = false;
+  @state() taskBoardError: string | null = null;
+  @state() taskBoardPath: string | null = null;
+  @state() taskBoard: TaskBoard = { ...DEFAULT_TASK_BOARD };
+
+  private taskBoardSaveTimer: number | null = null;
 
   @state() nodesLoading = false;
   @state() nodes: Array<Record<string, unknown>> = [];
@@ -494,6 +512,118 @@ export class MoltbotApp extends LitElement {
     const newRatio = Math.max(0.4, Math.min(0.7, ratio));
     this.splitRatio = newRatio;
     this.applySettings({ ...this.settings, splitRatio: newRatio });
+  }
+
+  // --- Task board (Chat left sidebar) ---
+
+  toggleTaskBoard() {
+    this.taskBoardOpen = !this.taskBoardOpen;
+  }
+
+  private scheduleTaskBoardSave(next: TaskBoard) {
+    if (this.taskBoardSaveTimer != null) {
+      window.clearTimeout(this.taskBoardSaveTimer);
+    }
+    this.taskBoardSaveTimer = window.setTimeout(() => {
+      this.taskBoardSaveTimer = null;
+      void saveTaskBoard(this, next);
+    }, 400);
+  }
+
+  addTask(column: TaskColumnId, payload: { name: string; description: string }) {
+    const name = payload.name.trim();
+    const description = (payload.description ?? "").trim();
+    if (!name) return;
+    const now = Date.now();
+    const id = generateUUID();
+    const entity: TaskEntity = {
+      id,
+      name,
+      description,
+      createdAtMs: now,
+      updatedAtMs: now,
+      priority: 3,
+      dueAtMs: null,
+      tags: [],
+      links: [],
+      checklist: [],
+      blockReason: "",
+      extras: {},
+    };
+    const next: TaskBoard = {
+      ...this.taskBoard,
+      tasksById: { ...this.taskBoard.tasksById, [id]: entity },
+      columns: {
+        ...this.taskBoard.columns,
+        [column]: [id, ...(this.taskBoard.columns[column] ?? [])],
+      },
+    };
+    this.taskBoard = next;
+    this.scheduleTaskBoardSave(next);
+  }
+
+  updateTask(taskId: string, patch: Partial<TaskEntity>) {
+    const existing = this.taskBoard.tasksById[taskId];
+    if (!existing) return;
+    const now = Date.now();
+    const nextTask: TaskEntity = {
+      ...existing,
+      ...patch,
+      updatedAtMs: now,
+    };
+    const next: TaskBoard = {
+      ...this.taskBoard,
+      tasksById: { ...this.taskBoard.tasksById, [taskId]: nextTask },
+    };
+    this.taskBoard = next;
+    this.scheduleTaskBoardSave(next);
+  }
+
+  deleteTask(taskId: string) {
+    if (!this.taskBoard.tasksById[taskId]) return;
+    const nextTasksById = { ...this.taskBoard.tasksById };
+    delete nextTasksById[taskId];
+    const nextColumns = {
+      todo: (this.taskBoard.columns.todo ?? []).filter((id) => id !== taskId),
+      doing: (this.taskBoard.columns.doing ?? []).filter((id) => id !== taskId),
+      done: (this.taskBoard.columns.done ?? []).filter((id) => id !== taskId),
+      blocked: (this.taskBoard.columns.blocked ?? []).filter((id) => id !== taskId),
+    };
+    const next: TaskBoard = {
+      ...this.taskBoard,
+      tasksById: nextTasksById,
+      columns: nextColumns,
+    };
+    this.taskBoard = next;
+    this.scheduleTaskBoardSave(next);
+  }
+
+  moveTask(taskId: string, from: TaskColumnId, to: TaskColumnId) {
+    if (from === to) return;
+    if (!this.taskBoard.tasksById[taskId]) return;
+    const fromList = this.taskBoard.columns[from] ?? [];
+    const toList = this.taskBoard.columns[to] ?? [];
+    if (!fromList.includes(taskId)) return;
+    const now = Date.now();
+    const nextTasksById = {
+      ...this.taskBoard.tasksById,
+      [taskId]: { ...this.taskBoard.tasksById[taskId], updatedAtMs: now },
+    };
+    const next: TaskBoard = {
+      ...this.taskBoard,
+      tasksById: nextTasksById,
+      columns: {
+        ...this.taskBoard.columns,
+        [from]: fromList.filter((id) => id !== taskId),
+        [to]: [taskId, ...toList],
+      },
+    };
+    this.taskBoard = next;
+    this.scheduleTaskBoardSave(next);
+  }
+
+  async refreshTaskBoard() {
+    await loadTaskBoard(this);
   }
 
   render() {

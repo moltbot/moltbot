@@ -139,6 +139,7 @@ export function connectGateway(host: GatewayHost) {
       void loadAgents(host as unknown as MoltbotApp);
       void loadNodes(host as unknown as MoltbotApp, { quiet: true });
       void loadDevices(host as unknown as MoltbotApp, { quiet: true });
+      // TaskBoard loads on-demand when tab is active.
       void refreshActiveTab(host as unknown as Parameters<typeof refreshActiveTab>[0]);
     },
     onClose: ({ code, reason }) => {

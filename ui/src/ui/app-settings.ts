@@ -14,6 +14,7 @@ import { saveSettings, type UiSettings } from "./storage";
 import { resolveTheme, type ResolvedTheme, type ThemeMode } from "./theme";
 import { startThemeTransition, type ThemeTransitionContext } from "./theme-transition";
 import { scheduleChatScroll, scheduleLogsScroll } from "./app-scroll";
+import { loadTaskBoard } from "./controllers/tasks";
 import { startLogsPolling, stopLogsPolling, startDebugPolling, stopDebugPolling } from "./app-polling";
 import { refreshChat } from "./app-chat";
 import type { MoltbotApp } from "./app";
@@ -148,6 +149,7 @@ export async function refreshActiveTab(host: SettingsHost) {
   if (host.tab === "instances") await loadPresence(host as unknown as MoltbotApp);
   if (host.tab === "sessions") await loadSessions(host as unknown as MoltbotApp);
   if (host.tab === "cron") await loadCron(host);
+  if (host.tab === "taskboard") await loadTaskBoard(host as unknown as MoltbotApp);
   if (host.tab === "skills") await loadSkills(host as unknown as MoltbotApp);
   if (host.tab === "nodes") {
     await loadNodes(host as unknown as MoltbotApp);
