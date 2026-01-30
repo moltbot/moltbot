@@ -24,8 +24,11 @@ describe("resolveWhatsAppAuthDir", () => {
       cfg: stubCfg,
       accountId: "foo/bar\\baz",
     });
-    expect(authDir).not.toContain("foo/bar");
-    expect(authDir).not.toContain("\\");
+    // Sprawdzaj sanityzacje na segmencie accountId, nie na calej sciezce
+    // (Windows uzywa backslash jako separator katalogow).
+    const segment = path.basename(authDir);
+    expect(segment).not.toContain("/");
+    expect(segment).not.toContain("\\");
   });
 
   it("returns default directory for empty accountId", () => {
