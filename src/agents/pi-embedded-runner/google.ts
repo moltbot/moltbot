@@ -11,6 +11,7 @@ import {
   isGoogleModelApi,
   sanitizeGoogleTurnOrdering,
   sanitizeSessionMessagesImages,
+  sanitizeToolUseInput,
 } from "../pi-embedded-helpers.js";
 import { sanitizeToolUseResultPairing } from "../session-transcript-repair.js";
 import { log } from "./logger.js";
@@ -336,6 +337,9 @@ export async function sanitizeSessionHistory(params: {
     ? sanitizeToolUseResultPairing(sanitizedThinking)
     : sanitizedThinking;
 
+  // Ensure toolUse blocks have input field (fixes schema validation "Field required")
+  const sanitizedInputs = sanitizeToolUseInput(repairedTools);
+
   const isOpenAIResponsesApi =
     params.modelApi === "openai-responses" || params.modelApi === "openai-codex-responses";
   const hasSnapshot = Boolean(params.provider || params.modelApi || params.modelId);
@@ -350,8 +354,8 @@ export async function sanitizeSessionHistory(params: {
     : false;
   const sanitizedOpenAI =
     isOpenAIResponsesApi && modelChanged
-      ? downgradeOpenAIReasoningBlocks(repairedTools)
-      : repairedTools;
+      ? downgradeOpenAIReasoningBlocks(sanitizedInputs)
+      : sanitizedInputs;
 
   if (hasSnapshot && (!priorSnapshot || modelChanged)) {
     appendModelSnapshot(params.sessionManager, {

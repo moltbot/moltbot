@@ -1,0 +1,13 @@
+diff --git a/dist/providers/google-gemini-cli.js b/dist/providers/google-gemini-cli.js
+index 3741764906f41e87eda9259f567b1d5332551a63..41fc6a92fc4c1f6f503b92320248391013badfb0 100644
+--- a/dist/providers/google-gemini-cli.js
++++ b/dist/providers/google-gemini-cli.js
+@@ -22,7 +22,7 @@ const GEMINI_CLI_HEADERS = {
+ };
+ // Headers for Antigravity (sandbox endpoint) - requires specific User-Agent
+ const ANTIGRAVITY_HEADERS = {
+-    "User-Agent": "antigravity/1.11.5 darwin/arm64",
++    "User-Agent": "antigravity/1.15.8 darwin/arm64",
+     "X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
+     "Client-Metadata": JSON.stringify({
+         ideType: "IDE_UNSPECIFIED",

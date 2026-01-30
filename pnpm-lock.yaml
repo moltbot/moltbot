@@ -9,6 +9,11 @@ overrides:
   hono: 4.11.4
   tar: 7.5.4
 
+patchedDependencies:
+  '@mariozechner/pi-ai':
+    hash: a959dedd4f17a3a05dc9bfe16a6ad07d57d53abd992ee4526e451a80c4909c36
+    path: patches/@mariozechner__pi-ai.patch
+
 importers:
 
   .:
@@ -45,7 +50,7 @@ importers:
         version: 0.49.3(ws@8.19.0)(zod@4.3.6)
       '@mariozechner/pi-ai':
         specifier: 0.49.3
-        version: 0.49.3(ws@8.19.0)(zod@4.3.6)
+        version: 0.49.3(patch_hash=a959dedd4f17a3a05dc9bfe16a6ad07d57d53abd992ee4526e451a80c4909c36)(ws@8.19.0)(zod@4.3.6)
       '@mariozechner/pi-coding-agent':
         specifier: 0.49.3
         version: 0.49.3(ws@8.19.0)(zod@4.3.6)
@@ -6996,7 +7001,7 @@ snapshots:
 
   '@mariozechner/pi-agent-core@0.49.3(ws@8.19.0)(zod@4.3.6)':
     dependencies:
-      '@mariozechner/pi-ai': 0.49.3(ws@8.19.0)(zod@4.3.6)
+      '@mariozechner/pi-ai': 0.49.3(patch_hash=a959dedd4f17a3a05dc9bfe16a6ad07d57d53abd992ee4526e451a80c4909c36)(ws@8.19.0)(zod@4.3.6)
       '@mariozechner/pi-tui': 0.49.3
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
@@ -7007,7 +7012,7 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-ai@0.49.3(ws@8.19.0)(zod@4.3.6)':
+  '@mariozechner/pi-ai@0.49.3(patch_hash=a959dedd4f17a3a05dc9bfe16a6ad07d57d53abd992ee4526e451a80c4909c36)(ws@8.19.0)(zod@4.3.6)':
     dependencies:
       '@anthropic-ai/sdk': 0.71.2(zod@4.3.6)
       '@aws-sdk/client-bedrock-runtime': 3.972.0
@@ -7034,7 +7039,7 @@ snapshots:
       '@mariozechner/clipboard': 0.3.0
       '@mariozechner/jiti': 2.6.5
       '@mariozechner/pi-agent-core': 0.49.3(ws@8.19.0)(zod@4.3.6)
-      '@mariozechner/pi-ai': 0.49.3(ws@8.19.0)(zod@4.3.6)
+      '@mariozechner/pi-ai': 0.49.3(patch_hash=a959dedd4f17a3a05dc9bfe16a6ad07d57d53abd992ee4526e451a80c4909c36)(ws@8.19.0)(zod@4.3.6)
       '@mariozechner/pi-tui': 0.49.3
       '@silvia-odwyer/photon-node': 0.3.4
       chalk: 5.6.2
