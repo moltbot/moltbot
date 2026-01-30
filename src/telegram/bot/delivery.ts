@@ -105,7 +105,7 @@ export async function deliverReplies(params: {
       const chunks = chunkText(reply.text || "");
       for (let i = 0; i < chunks.length; i += 1) {
         const chunk = chunks[i];
-        if (!chunk) continue;
+        if (!chunk?.html?.trim()) continue;
         // Only attach buttons to the first chunk.
         const shouldAttachButtons = i === 0 && replyMarkup;
         await sendTelegramText(bot, chatId, chunk.html, runtime, {
@@ -501,6 +501,10 @@ async function sendTelegramText(
     replyMarkup?: ReturnType<typeof buildInlineKeyboard>;
   },
 ): Promise<number | undefined> {
+  if (!text?.trim()) {
+    logVerbose("sendTelegramText: skipping empty message");
+    return undefined;
+  }
   const baseParams = buildTelegramSendParams({
     replyToMessageId: opts?.replyToMessageId,
     replyQuoteText: opts?.replyQuoteText,
