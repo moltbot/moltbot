@@ -165,6 +165,12 @@ export type AgentDefaultsConfig = {
   heartbeat?: {
     /** Heartbeat interval (duration string, default unit: minutes; default: 30m). */
     every?: string;
+    /**
+     * Random jitter added to each heartbeat interval (duration string, default unit: minutes).
+     * The actual interval will be: every + random(-jitter, +jitter).
+     * Example: every="30m" jitter="5m" → heartbeat runs between 25-35 minutes.
+     */
+    jitter?: string;
     /** Optional active-hours window (local time); heartbeats run only inside this window. */
     activeHours?: {
       /** Start time (24h, HH:MM). Inclusive. */
