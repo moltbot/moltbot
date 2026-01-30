@@ -506,7 +506,7 @@ export async function runHeartbeatOnce(opts: {
   // Check if this is an exec event with pending exec completion system events.
   // If so, use a specialized prompt that instructs the model to relay the result
   // instead of the standard heartbeat prompt with "reply HEARTBEAT_OK".
-  const isExecEvent = opts.reason === "exec-event";
+  const _isExecEvent = opts.reason === "exec-event";
   const pendingEvents = peekSystemEvents(sessionKey);
   const hasExecCompletion = pendingEvents.some((evt) => evt.includes("Exec finished"));
   // Check for generic (non-exec) system events that may require action (e.g., from cron jobs).

@@ -8,10 +8,7 @@
  */
 
 import type { OpenClawConfig } from "../config/config.js";
-import type {
-  TelegramGramJSAccountConfig,
-  TelegramGramJSConfig,
-} from "../config/types.telegram-gramjs.js";
+import type { TelegramGramJSConfig } from "../config/types.telegram-gramjs.js";
 import type { ChannelConfigAdapter } from "../channels/plugins/types.adapters.js";
 import type { ResolvedGramJSAccount } from "./types.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";

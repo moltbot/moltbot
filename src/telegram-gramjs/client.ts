@@ -13,12 +13,7 @@ import { StringSession } from "telegram/sessions";
 import { NewMessage, type NewMessageEvent } from "telegram/events";
 import type { Api } from "telegram";
 import { createSubsystemLogger } from "../logging/subsystem.js";
-import type {
-  ConnectionState,
-  GramJSMessageContext,
-  SendMessageParams,
-  SessionOptions,
-} from "./types.js";
+import type { ConnectionState, GramJSMessageContext, SendMessageParams } from "./types.js";
 
 const log = createSubsystemLogger("telegram-gramjs:client");
 
@@ -45,7 +40,7 @@ export class GramJSClient {
       apiId,
       apiHash,
       sessionString = "",
-      proxy,
+      proxy: _proxy,
       connectionRetries = 5,
       timeout = 30,
     } = options;

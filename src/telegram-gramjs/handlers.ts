@@ -169,8 +169,8 @@ export function buildSessionKey(gramjsContext: GramJSMessageContext, accountId: 
  * - Checking message.entities for mentions
  */
 export function wasMessageMentioned(
-  gramjsContext: GramJSMessageContext,
-  botUsername?: string,
+  _gramjsContext: GramJSMessageContext,
+  _botUsername?: string,
 ): boolean {
   // TODO: Implement mention detection
   // For now, return false (rely on requireMention config)

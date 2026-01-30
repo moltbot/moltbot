@@ -3,7 +3,6 @@
  */
 
 import type { TelegramGramJSAccountConfig } from "../config/types.telegram-gramjs.js";
-import type { OpenClawConfig } from "../config/config.js";
 
 /**
  * Resolved account configuration with all necessary fields populated.

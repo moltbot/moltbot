@@ -4,7 +4,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthFlow, verifySession } from "./auth.js";
-import type { AuthState } from "./types.js";
 
 // Mock readline to avoid stdin/stdout in tests
 const mockPrompt = vi.fn();
