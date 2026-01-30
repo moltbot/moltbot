@@ -237,6 +237,68 @@ describe("sanitizeSessionHistory (google thinking)", () => {
     ]);
   });
 
+  it("strips non-base64 thought signatures for native Google models", async () => {
+    const sessionManager = SessionManager.inMemory();
+    const input = [
+      {
+        role: "user",
+        content: "hi",
+      },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "toolCall",
+            id: "call_1",
+            name: "exec",
+            arguments: { command: "ls" },
+            thoughtSignature:
+              '{"index":0,"type":"reasoning.encrypted","format":"google-gemini-v1"}',
+          },
+          {
+            type: "toolCall",
+            id: "call_2",
+            name: "read",
+            arguments: { path: "/tmp" },
+            thoughtSignature: "dGVzdA==", // valid base64
+          },
+        ],
+      },
+    ] satisfies AgentMessage[];
+
+    const out = await sanitizeSessionHistory({
+      messages: input,
+      modelApi: "google-generative-ai",
+      provider: "google",
+      modelId: "gemini-3-flash-preview",
+      sessionManager,
+      sessionId: "session:native-google-gemini",
+    });
+
+    const assistant = out.find((msg) => (msg as { role?: string }).role === "assistant") as {
+      content?: Array<{
+        type?: string;
+        thoughtSignature?: string;
+      }>;
+    };
+    // JSON signature should be stripped, base64 should be kept
+    expect(assistant.content).toEqual([
+      {
+        type: "toolCall",
+        id: expect.any(String),
+        name: "exec",
+        arguments: { command: "ls" },
+      },
+      {
+        type: "toolCall",
+        id: expect.any(String),
+        name: "read",
+        arguments: { path: "/tmp" },
+        thoughtSignature: "dGVzdA==",
+      },
+    ]);
+  });
+
   it("keeps mixed signed/unsigned thinking blocks for Google models", async () => {
     const sessionManager = SessionManager.inMemory();
     const input = [

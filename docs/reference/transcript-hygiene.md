@@ -60,6 +60,7 @@ Implementation:
 - Tool result pairing repair and synthetic tool results.
 - Turn validation (Gemini-style turn alternation).
 - Google turn ordering fixup (prepend a tiny user bootstrap if history starts with assistant).
+- Thought signature cleanup: strip non-base64 `thought_signature` and `thoughtSignature` values (keep base64).
 - Antigravity Claude: normalize thinking signatures; drop unsigned thinking blocks.
 
 **Anthropic / Minimax (Anthropic-compatible)**
@@ -70,7 +71,7 @@ Implementation:
 - Tool call id sanitization: strict9 (alphanumeric length 9).
 
 **OpenRouter Gemini**
-- Thought signature cleanup: strip non-base64 `thought_signature` values (keep base64).
+- Thought signature cleanup: strip non-base64 `thought_signature` and `thoughtSignature` values (keep base64).
 
 **Everything else**
 - Image sanitization only.

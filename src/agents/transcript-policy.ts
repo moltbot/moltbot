@@ -92,9 +92,11 @@ export function resolveTranscriptPolicy(params: {
       ? "strict"
       : undefined;
   const repairToolUseResultPairing = isGoogle || isAnthropic;
-  const sanitizeThoughtSignatures = isOpenRouterGemini
-    ? { allowBase64Only: true, includeCamelCase: true }
-    : undefined;
+  // Strip JSON-encoded thoughtSignature fields from tool calls for Gemini models.
+  // Gemini 3+ returns thoughtSignature as JSON objects (not base64), which cause
+  // "Thought signature is not valid" errors when sent back in conversation history.
+  const sanitizeThoughtSignatures =
+    isGoogle || isOpenRouterGemini ? { allowBase64Only: true, includeCamelCase: true } : undefined;
   const normalizeAntigravityThinkingBlocks = isAntigravityClaudeModel;
 
   return {
