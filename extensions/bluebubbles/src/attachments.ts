@@ -22,6 +22,7 @@ export type BlueBubblesAttachmentOpts = {
 const DEFAULT_ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024;
 const AUDIO_MIME_MP3 = new Set(["audio/mpeg", "audio/mp3"]);
 const AUDIO_MIME_CAF = new Set(["audio/x-caf", "audio/caf"]);
+const AUDIO_MIME_M4A = new Set(["audio/x-m4a", "audio/m4a", "audio/mp4", "audio/aac"]);
 
 function sanitizeFilename(input: string | undefined, fallback: string): string {
   const trimmed = input?.trim() ?? "";
@@ -41,8 +42,9 @@ function resolveVoiceInfo(filename: string, contentType?: string) {
   const extension = path.extname(filename).toLowerCase();
   const isMp3 = extension === ".mp3" || (normalizedType ? AUDIO_MIME_MP3.has(normalizedType) : false);
   const isCaf = extension === ".caf" || (normalizedType ? AUDIO_MIME_CAF.has(normalizedType) : false);
-  const isAudio = isMp3 || isCaf || Boolean(normalizedType?.startsWith("audio/"));
-  return { isAudio, isMp3, isCaf };
+  const isM4a = extension === ".m4a" || (normalizedType ? AUDIO_MIME_M4A.has(normalizedType) : false);
+  const isAudio = isMp3 || isCaf || isM4a || Boolean(normalizedType?.startsWith("audio/"));
+  return { isAudio, isMp3, isCaf, isM4a };
 }
 
 function resolveAccount(params: BlueBubblesAttachmentOpts) {
@@ -151,11 +153,12 @@ export async function sendBlueBubblesAttachment(params: {
   const { baseUrl, password } = resolveAccount(opts);
 
   // Validate voice memo format when requested (BlueBubbles converts MP3 -> CAF when isAudioMessage).
+  // M4A is the native iMessage voice message format (AAC in m4af container, 24kHz mono).
   const isAudioMessage = wantsVoice;
   if (isAudioMessage) {
     const voiceInfo = resolveVoiceInfo(filename, contentType);
     if (!voiceInfo.isAudio) {
-      throw new Error("BlueBubbles voice messages require audio media (mp3 or caf).");
+      throw new Error("BlueBubbles voice messages require audio media (mp3, caf, or m4a).");
     }
     if (voiceInfo.isMp3) {
       filename = ensureExtension(filename, ".mp3", fallbackName);
@@ -163,9 +166,13 @@ export async function sendBlueBubblesAttachment(params: {
     } else if (voiceInfo.isCaf) {
       filename = ensureExtension(filename, ".caf", fallbackName);
       contentType = contentType ?? "audio/x-caf";
+    } else if (voiceInfo.isM4a) {
+      // M4A is the native iMessage voice message format
+      filename = ensureExtension(filename, ".m4a", fallbackName);
+      contentType = contentType ?? "audio/x-m4a";
     } else {
       throw new Error(
-        "BlueBubbles voice messages require mp3 or caf audio (convert before sending).",
+        "BlueBubbles voice messages require mp3, caf, or m4a audio (convert before sending).",
       );
     }
   }
