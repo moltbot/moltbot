@@ -1,0 +1,14 @@
+FROM node:22-bookworm
+
+# Enable corepack (pnpm) as root
+RUN corepack enable
+
+# Create user matching host UID
+ARG HOST_UID=1001
+ARG HOST_GID=1001
+RUN groupadd -g $HOST_GID devuser || true && \
+    useradd -m -u $HOST_UID -g $HOST_GID -s /bin/bash devuser || true
+
+WORKDIR /app
+
+USER devuser

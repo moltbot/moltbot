@@ -1,0 +1,25 @@
+services:
+  openclaw-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        HOST_UID: 1001
+        HOST_GID: 1001
+    working_dir: /app
+    environment:
+      HOME: /home/devuser
+      TERM: xterm-256color
+      NODE_ENV: development
+    volumes:
+      # Mount source code (node_modules stays on host)
+      - .:/app
+      # Config and workspace
+      - ${OPENCLAW_CONFIG_DIR:-~/.openclaw}:/home/devuser/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR:-~/.openclaw/workspace}:/home/devuser/.openclaw/workspace
+    ports:
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+    stdin_open: true
+    tty: true
+    init: true
