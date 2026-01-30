@@ -184,4 +184,47 @@ describe("monitorTelegramProvider (grammY)", () => {
 
     await expect(monitorTelegramProvider({ token: "tok" })).rejects.toThrow("bad token");
   });
+
+  it("retries on getUpdates timeout errors", async () => {
+    const timeoutError = Object.assign(
+      new Error("Request to 'getUpdates' timed out after 30 seconds"),
+      {
+        method: "getUpdates",
+        description: "Request timed out",
+      },
+    );
+    runSpy
+      .mockImplementationOnce(() => ({
+        task: () => Promise.reject(timeoutError),
+        stop: vi.fn(),
+      }))
+      .mockImplementationOnce(() => ({
+        task: () => Promise.resolve(),
+        stop: vi.fn(),
+      }));
+
+    await monitorTelegramProvider({ token: "tok" });
+
+    expect(computeBackoff).toHaveBeenCalled();
+    expect(sleepWithAbort).toHaveBeenCalled();
+    expect(runSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("restarts when runner exhausts retries and stops normally", async () => {
+    runSpy
+      .mockImplementationOnce(() => ({
+        task: () => Promise.resolve(), // Runner stopped normally after exhausting retries
+        stop: vi.fn(),
+      }))
+      .mockImplementationOnce(() => ({
+        task: () => Promise.resolve(),
+        stop: vi.fn(),
+      }));
+
+    await monitorTelegramProvider({ token: "tok" });
+
+    expect(computeBackoff).toHaveBeenCalled();
+    expect(sleepWithAbort).toHaveBeenCalled();
+    expect(runSpy).toHaveBeenCalledTimes(2);
+  });
 });
