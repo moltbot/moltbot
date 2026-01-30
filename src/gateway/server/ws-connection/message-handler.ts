@@ -664,7 +664,7 @@ export function attachGatewayWsMessageHandler(params: {
                 requestId: pairing.request.requestId,
                 reason,
               });
-              const helpMessage = 
+              const helpMessage =
                 `Device pairing required. ` +
                 `On the OpenClaw server machine, run: ` +
                 `'openclaw devices list' to see pending requests, then ` +
@@ -675,13 +675,13 @@ export function attachGatewayWsMessageHandler(params: {
                 id: frame.id,
                 ok: false,
                 error: errorShape(ErrorCodes.NOT_PAIRED, helpMessage, {
-                  details: { 
+                  details: {
                     requestId: pairing.request.requestId,
                     deviceId: device.id,
                     instructions: {
                       list: "openclaw devices list",
                       approve: `openclaw devices approve ${pairing.request.requestId}`,
-                    }
+                    },
                   },
                 }),
               });
