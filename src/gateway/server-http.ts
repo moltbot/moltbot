@@ -13,7 +13,11 @@ import { loadConfig } from "../config/config.js";
 import type { createSubsystemLogger } from "../logging/subsystem.js";
 import { handleSlackHttpRequest } from "../slack/http/index.js";
 import { resolveAgentAvatar } from "../agents/identity-avatar.js";
-import { handleControlUiAvatarRequest, handleControlUiHttpRequest } from "./control-ui.js";
+import {
+  handleControlUiAvatarRequest,
+  handleControlUiHttpRequest,
+  handleWebUiHttpRequest,
+} from "./control-ui.js";
 import {
   extractHookToken,
   getHookChannelError,
@@ -29,6 +33,7 @@ import {
 import { applyHookMappings } from "./hooks-mapping.js";
 import { handleOpenAiHttpRequest } from "./openai-http.js";
 import { handleOpenResponsesHttpRequest } from "./openresponses-http.js";
+import { handleTitleHttpRequest } from "./title-http.js";
 import { handleToolsInvokeHttpRequest } from "./tools-invoke-http.js";
 
 type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
@@ -258,6 +263,8 @@ export function createGatewayHttpServer(opts: {
         )
           return;
       }
+      // Lightweight title generation — always available (no session creation)
+      if (await handleTitleHttpRequest(req, res, { auth: resolvedAuth, trustedProxies })) return;
       if (openAiChatCompletionsEnabled) {
         if (
           await handleOpenAiHttpRequest(req, res, {
@@ -271,6 +278,8 @@ export function createGatewayHttpServer(opts: {
         if (await handleA2uiHttpRequest(req, res)) return;
         if (await canvasHost.handleHttpRequest(req, res)) return;
       }
+      // Web UI (React chat) at /app/ — check before control UI since it's more specific.
+      if (handleWebUiHttpRequest(req, res)) return;
       if (controlUiEnabled) {
         if (
           handleControlUiAvatarRequest(req, res, {

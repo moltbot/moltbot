@@ -561,6 +561,7 @@ export function listSessionsFromStore(params: {
         entry,
         kind: classifySessionKey(key, entry),
         label: entry?.label,
+        icon: entry?.icon,
         displayName,
         channel,
         subject,

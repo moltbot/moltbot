@@ -36,6 +36,7 @@ export async function loadSessions(
     const params: Record<string, unknown> = {
       includeGlobal,
       includeUnknown,
+      includeDerivedTitles: true,
     };
     if (activeMinutes > 0) params.activeMinutes = activeMinutes;
     if (limit > 0) params.limit = limit;
@@ -55,6 +56,7 @@ export async function patchSession(
   key: string,
   patch: {
     label?: string | null;
+    icon?: string | null;
     thinkingLevel?: string | null;
     verboseLevel?: string | null;
     reasoningLevel?: string | null;
@@ -63,6 +65,7 @@ export async function patchSession(
   if (!state.client || !state.connected) return;
   const params: Record<string, unknown> = { key };
   if ("label" in patch) params.label = patch.label;
+  if ("icon" in patch) params.icon = patch.icon;
   if ("thinkingLevel" in patch) params.thinkingLevel = patch.thinkingLevel;
   if ("verboseLevel" in patch) params.verboseLevel = patch.verboseLevel;
   if ("reasoningLevel" in patch) params.reasoningLevel = patch.reasoningLevel;

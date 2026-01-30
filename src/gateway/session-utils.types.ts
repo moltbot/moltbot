@@ -12,6 +12,7 @@ export type GatewaySessionRow = {
   key: string;
   kind: "direct" | "group" | "global" | "unknown";
   label?: string;
+  icon?: string;
   displayName?: string;
   derivedTitle?: string;
   lastMessagePreview?: string;
