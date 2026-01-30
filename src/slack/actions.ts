@@ -1,5 +1,5 @@
 import type { WebClient } from "@slack/web-api";
-import emoji from "node-emoji";
+import { which as emojiWhich } from "node-emoji";
 
 import { loadConfig } from "../config/config.js";
 import { logVerbose } from "../globals.js";
@@ -58,13 +58,13 @@ function normalizeEmoji(raw: string) {
   if (!trimmed) {
     throw new Error("Emoji is required for Slack reactions");
   }
-  
+
   // Try Unicode → shortcode conversion first
-  const shortcode = emoji.which(trimmed);
+  const shortcode = emojiWhich(trimmed);
   if (shortcode) {
     return shortcode;
   }
-  
+
   // Fall back to stripping colons (for already-formatted shortcodes)
   return trimmed.replace(/^:+|:+$/g, "");
 }
