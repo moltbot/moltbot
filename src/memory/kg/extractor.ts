@@ -5,12 +5,10 @@ import { recordProvenance, getDefaultTrustScore } from "../trust/provenance.js";
 
 /**
  * Entity and relation extraction from text chunks.
- * Uses LLM-based extraction via OpenClaw's existing provider abstraction.
  *
- * TODO (Agent 1 - Phase 2):
- * - Implement LLM-based entity extraction
- * - Add relation extraction
- * - Consider GLiNER for faster local extraction
+ * Uses pattern-based extraction for fast, offline-capable entity recognition.
+ * Extracts entities (people, organizations, technologies, etc.) and relations
+ * from text using regex patterns and contextual analysis.
  */
 
 export interface ExtractionResult {
@@ -40,25 +38,450 @@ export interface ExtractorOptions {
   trustScore?: number;
 }
 
+// Common words to exclude from entity extraction
+const STOP_WORDS = new Set([
+  "the",
+  "a",
+  "an",
+  "and",
+  "or",
+  "but",
+  "in",
+  "on",
+  "at",
+  "to",
+  "for",
+  "of",
+  "with",
+  "by",
+  "from",
+  "as",
+  "is",
+  "was",
+  "are",
+  "were",
+  "been",
+  "be",
+  "have",
+  "has",
+  "had",
+  "do",
+  "does",
+  "did",
+  "will",
+  "would",
+  "could",
+  "should",
+  "may",
+  "might",
+  "must",
+  "shall",
+  "can",
+  "need",
+  "this",
+  "that",
+  "these",
+  "those",
+  "i",
+  "you",
+  "he",
+  "she",
+  "it",
+  "we",
+  "they",
+  "what",
+  "which",
+  "who",
+  "whom",
+  "when",
+  "where",
+  "why",
+  "how",
+  "all",
+  "each",
+  "every",
+  "both",
+  "few",
+  "more",
+  "most",
+  "other",
+  "some",
+  "such",
+  "no",
+  "not",
+  "only",
+  "same",
+  "so",
+  "than",
+  "too",
+  "very",
+  "just",
+  "also",
+  "now",
+  "here",
+  "there",
+  "then",
+  "if",
+  "else",
+  "etc",
+  "true",
+  "false",
+  "null",
+  "undefined",
+  "new",
+  "old",
+  "first",
+  "last",
+  "next",
+  "previous",
+]);
+
+// Technology keywords that indicate a technology entity
+const TECH_KEYWORDS = new Set([
+  "typescript",
+  "javascript",
+  "python",
+  "rust",
+  "go",
+  "java",
+  "kotlin",
+  "swift",
+  "ruby",
+  "php",
+  "sql",
+  "html",
+  "css",
+  "react",
+  "vue",
+  "angular",
+  "svelte",
+  "node",
+  "nodejs",
+  "deno",
+  "bun",
+  "npm",
+  "pnpm",
+  "yarn",
+  "webpack",
+  "vite",
+  "esbuild",
+  "rollup",
+  "docker",
+  "kubernetes",
+  "k8s",
+  "aws",
+  "azure",
+  "gcp",
+  "redis",
+  "mongodb",
+  "postgres",
+  "postgresql",
+  "mysql",
+  "sqlite",
+  "graphql",
+  "rest",
+  "api",
+  "git",
+  "github",
+  "gitlab",
+  "linux",
+  "macos",
+  "windows",
+  "openai",
+  "anthropic",
+  "claude",
+  "gpt",
+  "llm",
+  "ai",
+  "ml",
+  "tensorflow",
+  "pytorch",
+  "langchain",
+  "vitest",
+  "jest",
+  "mocha",
+  "cypress",
+  "playwright",
+]);
+
 /**
  * Extracts entities and relations from a text chunk.
- * Placeholder implementation - will be filled in Phase 2.
+ * Uses pattern-based extraction for offline-capable entity recognition.
  */
 export async function extractFromChunk(
-  _chunkId: string,
-  _text: string,
+  chunkId: string,
+  text: string,
   _options: ExtractorOptions,
 ): Promise<ExtractionResult> {
-  // TODO: Implement LLM-based extraction
-  // 1. Call LLM with structured output schema for entities/relations
-  // 2. Resolve entities against existing canonical names
-  // 3. Create entity mentions linking to chunk
-  // 4. Return extraction result
+  // Skip very short text
+  if (!text || text.length < 10) {
+    return { entities: [], relations: [] };
+  }
 
-  return {
-    entities: [],
-    relations: [],
+  return extractWithPatterns(text);
+}
+
+/**
+ * Pattern-based entity and relation extraction.
+ * Works without external API calls, suitable for offline use.
+ */
+export function extractWithPatterns(text: string): ExtractionResult {
+  const entities: ExtractedEntity[] = [];
+  const relations: ExtractedRelation[] = [];
+  const seenEntities = new Set<string>();
+
+  // Helper to add entity if not duplicate
+  const addEntity = (entity: ExtractedEntity) => {
+    const key = `${entity.type}:${entity.name.toLowerCase()}`;
+    if (!seenEntities.has(key) && !STOP_WORDS.has(entity.name.toLowerCase())) {
+      seenEntities.add(key);
+      entities.push(entity);
+    }
   };
+
+  // 1. Extract capitalized proper nouns (potential person/organization names)
+  // Matches sequences like "John Smith" or "Acme Corp"
+  const properNounPattern = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = properNounPattern.exec(text)) !== null) {
+    const name = match[1];
+    // Skip single short words or common words
+    if (name.length < 3 || STOP_WORDS.has(name.toLowerCase())) {
+      continue;
+    }
+
+    // Determine type based on context
+    const type = inferEntityType(name, text, match.index);
+    addEntity({
+      name,
+      type,
+      mentionText: match[0],
+      startOffset: match.index,
+      endOffset: match.index + match[0].length,
+      confidence: 0.6,
+    });
+  }
+
+  // 2. Extract technology keywords
+  const techPattern = new RegExp(`\\b(${Array.from(TECH_KEYWORDS).join("|")})\\b`, "gi");
+  while ((match = techPattern.exec(text)) !== null) {
+    addEntity({
+      name: match[1],
+      type: "technology",
+      mentionText: match[0],
+      startOffset: match.index,
+      endOffset: match.index + match[0].length,
+      confidence: 0.8,
+    });
+  }
+
+  // 3. Extract quoted strings (potential project names, concepts)
+  const quotedPattern = /["']([^"']{2,50})["']/g;
+  while ((match = quotedPattern.exec(text)) !== null) {
+    const name = match[1].trim();
+    if (name.length >= 2 && !STOP_WORDS.has(name.toLowerCase())) {
+      addEntity({
+        name,
+        type: "concept",
+        mentionText: match[0],
+        startOffset: match.index,
+        endOffset: match.index + match[0].length,
+        confidence: 0.5,
+      });
+    }
+  }
+
+  // 4. Extract code identifiers (CamelCase, snake_case, kebab-case)
+  // CamelCase: extractFromChunk, MemoryManager
+  const camelCasePattern = /\b([A-Z][a-z]+(?:[A-Z][a-z]+)+)\b/g;
+  while ((match = camelCasePattern.exec(text)) !== null) {
+    addEntity({
+      name: match[1],
+      type: "concept",
+      mentionText: match[0],
+      startOffset: match.index,
+      endOffset: match.index + match[0].length,
+      confidence: 0.5,
+    });
+  }
+
+  // snake_case: extract_from_chunk, memory_manager
+  const snakeCasePattern = /\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/g;
+  while ((match = snakeCasePattern.exec(text)) !== null) {
+    addEntity({
+      name: match[1],
+      type: "concept",
+      mentionText: match[0],
+      startOffset: match.index,
+      endOffset: match.index + match[0].length,
+      confidence: 0.5,
+    });
+  }
+
+  // 5. Extract file paths
+  const filePathPattern =
+    /(?:^|[\s,])((?:\.\/|\.\.\/|\/)?[\w\-./]+\.(?:ts|js|json|md|py|rs|go|java|sql|yml|yaml|toml))\b/g;
+  while ((match = filePathPattern.exec(text)) !== null) {
+    addEntity({
+      name: match[1],
+      type: "file",
+      mentionText: match[1],
+      startOffset: match.index,
+      endOffset: match.index + match[0].length,
+      confidence: 0.7,
+    });
+  }
+
+  // 6. Extract relations from common patterns
+  extractRelationPatterns(text, entities, relations);
+
+  return { entities, relations };
+}
+
+/**
+ * Infers entity type based on context clues in the surrounding text.
+ */
+function inferEntityType(name: string, text: string, offset: number): EntityType {
+  // Get surrounding context (100 chars before and after)
+  const start = Math.max(0, offset - 100);
+  const end = Math.min(text.length, offset + name.length + 100);
+  const context = text.slice(start, end).toLowerCase();
+
+  // Check for person indicators
+  if (
+    /\b(said|says|wrote|writes|created|author|developer|engineer|manager|lead|director|ceo|cto)\b/.test(
+      context,
+    )
+  ) {
+    return "person";
+  }
+
+  // Check for organization indicators
+  if (/\b(company|corp|inc|llc|ltd|organization|team|group|department)\b/.test(context)) {
+    return "organization";
+  }
+
+  // Check for project indicators
+  if (/\b(project|repo|repository|package|library|framework|app|application)\b/.test(context)) {
+    return "project";
+  }
+
+  // Check for location indicators
+  if (/\b(city|country|state|region|located|based in|headquarters)\b/.test(context)) {
+    return "location";
+  }
+
+  // Check for technology indicators
+  if (TECH_KEYWORDS.has(name.toLowerCase())) {
+    return "technology";
+  }
+
+  // Default to concept for unclassified entities
+  return "concept";
+}
+
+/**
+ * Extracts relations from common linguistic patterns.
+ */
+function extractRelationPatterns(
+  text: string,
+  entities: ExtractedEntity[],
+  relations: ExtractedRelation[],
+): void {
+  const entityNames = new Map<string, ExtractedEntity>();
+  for (const entity of entities) {
+    entityNames.set(entity.name.toLowerCase(), entity);
+  }
+
+  // Relation patterns: "X uses Y", "X works on Y", "X created Y", etc.
+  const relationPatterns: Array<{
+    pattern: RegExp;
+    relationType: RelationType;
+    confidence: number;
+  }> = [
+    {
+      pattern: /\b(\w+(?:\s+\w+)?)\s+uses\s+(\w+(?:\s+\w+)?)\b/gi,
+      relationType: "uses",
+      confidence: 0.7,
+    },
+    {
+      pattern: /\b(\w+(?:\s+\w+)?)\s+works\s+on\s+(\w+(?:\s+\w+)?)\b/gi,
+      relationType: "works_on",
+      confidence: 0.7,
+    },
+    {
+      pattern: /\b(\w+(?:\s+\w+)?)\s+created\s+(\w+(?:\s+\w+)?)\b/gi,
+      relationType: "created",
+      confidence: 0.7,
+    },
+    {
+      pattern: /\b(\w+(?:\s+\w+)?)\s+owns\s+(\w+(?:\s+\w+)?)\b/gi,
+      relationType: "owns",
+      confidence: 0.7,
+    },
+    {
+      pattern: /\b(\w+(?:\s+\w+)?)\s+prefers\s+(\w+(?:\s+\w+)?)\b/gi,
+      relationType: "prefers",
+      confidence: 0.7,
+    },
+    {
+      pattern: /\b(\w+(?:\s+\w+)?)\s+knows\s+(\w+(?:\s+\w+)?)\b/gi,
+      relationType: "knows",
+      confidence: 0.6,
+    },
+    {
+      pattern: /\b(\w+(?:\s+\w+)?)\s+depends\s+on\s+(\w+(?:\s+\w+)?)\b/gi,
+      relationType: "depends_on",
+      confidence: 0.7,
+    },
+    {
+      pattern: /\b(\w+(?:\s+\w+)?)\s+is\s+part\s+of\s+(\w+(?:\s+\w+)?)\b/gi,
+      relationType: "part_of",
+      confidence: 0.7,
+    },
+    {
+      pattern: /\b(\w+(?:\s+\w+)?)\s+is\s+related\s+to\s+(\w+(?:\s+\w+)?)\b/gi,
+      relationType: "related_to",
+      confidence: 0.5,
+    },
+  ];
+
+  for (const { pattern, relationType, confidence } of relationPatterns) {
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(text)) !== null) {
+      const sourceName = match[1].trim();
+      const targetName = match[2].trim();
+
+      // Only add relation if both entities exist or are valid
+      const sourceEntity = entityNames.get(sourceName.toLowerCase());
+      const targetEntity = entityNames.get(targetName.toLowerCase());
+
+      if (
+        (sourceEntity || isValidEntityName(sourceName)) &&
+        (targetEntity || isValidEntityName(targetName))
+      ) {
+        relations.push({
+          sourceEntityName: sourceName,
+          targetEntityName: targetName,
+          relationType,
+          confidence,
+        });
+      }
+    }
+  }
+}
+
+/**
+ * Checks if a string is a valid entity name.
+ */
+function isValidEntityName(name: string): boolean {
+  return (
+    name.length >= 2 &&
+    name.length <= 100 &&
+    !STOP_WORDS.has(name.toLowerCase()) &&
+    /^[A-Za-z]/.test(name)
+  );
 }
 
 /**
