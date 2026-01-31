@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildAgentPeerSessionKey } from "./session-key.js";
 
 describe("session-key", () => {
-  it("preserves case for Signal group peer IDs (Base64 is case-sensitive)", () => {
+  it("preserves case for Signal group peer IDs", () => {
     const groupId = "mb+09B3md7Tnu0/bLVJaOJUxtc/Zig83EwXvh3zmu3w=";
     expect(
       buildAgentPeerSessionKey({
