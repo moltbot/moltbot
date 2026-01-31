@@ -1,4 +1,4 @@
-import path from "node:path";
+gfimport path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { Api, Model } from "@mariozechner/pi-ai";
@@ -85,6 +85,7 @@ export function buildEmbeddedExtensionPaths(params: {
     const compactionCfg = params.cfg?.agents?.defaults?.compaction;
     setCompactionSafeguardRuntime(params.sessionManager, {
       maxHistoryShare: compactionCfg?.maxHistoryShare,
+      model: params.model,
     });
     paths.push(resolvePiExtensionPath("compaction-safeguard"));
   }
