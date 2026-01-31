@@ -10,6 +10,7 @@ import { resolveThinkingDefault } from "../../agents/model-selection.js";
 import { resolveAgentTimeoutMs } from "../../agents/timeout.js";
 import { dispatchInboundMessage } from "../../auto-reply/dispatch.js";
 import { createReplyDispatcher } from "../../auto-reply/reply/reply-dispatcher.js";
+import { registerAgentRunContext } from "../../infra/agent-events.js";
 import {
   extractShortModelName,
   type ResponsePrefixContext,
@@ -376,6 +377,7 @@ export const chatHandlers: GatewayRequestHandlers = {
     });
     const now = Date.now();
     const clientRunId = p.idempotencyKey;
+    registerAgentRunContext(clientRunId, { sessionKey: p.sessionKey });
 
     const sendPolicy = resolveSendPolicy({
       cfg,
@@ -436,6 +438,10 @@ export const chatHandlers: GatewayRequestHandlers = {
         sessionKey: p.sessionKey,
         startedAtMs: now,
         expiresAtMs: resolveChatRunExpiresAtMs({ now, timeoutMs }),
+      });
+      context.addChatRun(clientRunId, {
+        sessionKey: p.sessionKey,
+        clientRunId,
       });
 
       const ackPayload = {
