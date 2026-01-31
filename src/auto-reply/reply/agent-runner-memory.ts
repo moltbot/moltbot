@@ -50,7 +50,6 @@ async function readPromptTokensFromSessionLog(
     sessionEntry,
     agentId ? { agentId } : undefined,
   );
-  if (!fs.existsSync(logPath)) return undefined;
 
   try {
     const lines = (await fs.promises.readFile(logPath, "utf-8")).split(/\n+/);
