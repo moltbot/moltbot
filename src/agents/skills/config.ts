@@ -1,8 +1,27 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { OpenClawConfig, SkillConfig } from "../../config/config.js";
+import { ensureAuthProfileStore, listProfilesForProvider } from "../auth-profiles.js";
 import { resolveSkillKey } from "./frontmatter.js";
 import type { SkillEligibilityContext, SkillEntry } from "./types.js";
+
+/**
+ * Maps environment variable names to their corresponding provider IDs.
+ * Used to check auth profiles when env vars are not set directly.
+ */
+const ENV_VAR_TO_PROVIDER: Record<string, string> = {
+  OPENAI_API_KEY: "openai",
+  ANTHROPIC_API_KEY: "anthropic",
+  GEMINI_API_KEY: "google",
+  GROQ_API_KEY: "groq",
+  DEEPGRAM_API_KEY: "deepgram",
+  CEREBRAS_API_KEY: "cerebras",
+  XAI_API_KEY: "xai",
+  OPENROUTER_API_KEY: "openrouter",
+  MINIMAX_API_KEY: "minimax",
+  MISTRAL_API_KEY: "mistral",
+  BRAVE_API_KEY: "brave",
+};
 
 const DEFAULT_CONFIG_VALUES: Record<string, boolean> = {
   "browser.enabled": true,
@@ -173,6 +192,20 @@ export function shouldIncludeSkill(params: {
       }
       if (skillConfig?.apiKey && entry.metadata?.primaryEnv === envName) {
         continue;
+      }
+      // Check if there's an auth profile for the corresponding provider
+      const provider = ENV_VAR_TO_PROVIDER[envName];
+      if (provider) {
+        try {
+          const store = ensureAuthProfileStore(eligibility?.agentDir, {
+            allowKeychainPrompt: false,
+          });
+          if (listProfilesForProvider(store, provider).length > 0) {
+            continue;
+          }
+        } catch {
+          // Auth store not available, skip this check
+        }
       }
       return false;
     }

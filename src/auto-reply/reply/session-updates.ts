@@ -161,6 +161,8 @@ export async function ensureSkillSnapshot(params: {
   isFirstTurnInSession: boolean;
   workspaceDir: string;
   cfg: OpenClawConfig;
+  /** Agent directory for auth profile resolution. */
+  agentDir?: string;
   /** If provided, only load skills with these names (for per-channel skill filtering) */
   skillFilter?: string[];
 }): Promise<{
@@ -177,6 +179,7 @@ export async function ensureSkillSnapshot(params: {
     isFirstTurnInSession,
     workspaceDir,
     cfg,
+    agentDir,
     skillFilter,
   } = params;
 
@@ -199,7 +202,7 @@ export async function ensureSkillSnapshot(params: {
         ? buildWorkspaceSkillSnapshot(workspaceDir, {
             config: cfg,
             skillFilter,
-            eligibility: { remote: remoteEligibility },
+            eligibility: { agentDir, remote: remoteEligibility },
             snapshotVersion,
           })
         : current.skillsSnapshot;
@@ -223,7 +226,7 @@ export async function ensureSkillSnapshot(params: {
     ? buildWorkspaceSkillSnapshot(workspaceDir, {
         config: cfg,
         skillFilter,
-        eligibility: { remote: remoteEligibility },
+        eligibility: { agentDir, remote: remoteEligibility },
         snapshotVersion,
       })
     : (nextEntry?.skillsSnapshot ??
@@ -232,7 +235,7 @@ export async function ensureSkillSnapshot(params: {
         : buildWorkspaceSkillSnapshot(workspaceDir, {
             config: cfg,
             skillFilter,
-            eligibility: { remote: remoteEligibility },
+            eligibility: { agentDir, remote: remoteEligibility },
             snapshotVersion,
           })));
   if (

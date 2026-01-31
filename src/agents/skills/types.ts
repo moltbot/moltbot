@@ -71,6 +71,8 @@ export type SkillEntry = {
 };
 
 export type SkillEligibilityContext = {
+  /** Agent directory for auth profile resolution. */
+  agentDir?: string;
   remote?: {
     platforms: string[];
     hasBin: (bin: string) => boolean;

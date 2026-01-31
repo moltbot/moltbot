@@ -295,7 +295,7 @@ export async function runCronIsolatedAgentTurn(params: {
   const skillsSnapshot = needsSkillsSnapshot
     ? buildWorkspaceSkillSnapshot(workspaceDir, {
         config: cfgWithAgentDefaults,
-        eligibility: { remote: getRemoteSkillEligibility() },
+        eligibility: { agentDir, remote: getRemoteSkillEligibility() },
         snapshotVersion: skillsSnapshotVersion,
       })
     : cronSession.sessionEntry.skillsSnapshot;

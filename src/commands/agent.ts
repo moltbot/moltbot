@@ -190,7 +190,7 @@ export async function agentCommand(
     const skillsSnapshot = needsSkillsSnapshot
       ? buildWorkspaceSkillSnapshot(workspaceDir, {
           config: cfg,
-          eligibility: { remote: getRemoteSkillEligibility() },
+          eligibility: { agentDir, remote: getRemoteSkillEligibility() },
           snapshotVersion: skillsSnapshotVersion,
         })
       : sessionEntry?.skillsSnapshot;

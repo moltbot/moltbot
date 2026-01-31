@@ -240,6 +240,7 @@ export async function runPreparedReply(
     isFirstTurnInSession,
     workspaceDir,
     cfg,
+    agentDir,
     skillFilter: opts?.skillFilter,
   });
   sessionEntry = skillResult.sessionEntry ?? sessionEntry;
