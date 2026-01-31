@@ -38,4 +38,16 @@ describe("classifyFailoverReason", () => {
       "rate_limit",
     );
   });
+  it("classifies OpenRouter no-endpoints errors as provider_unavailable", () => {
+    expect(classifyFailoverReason("No endpoints found that support tool use")).toBe(
+      "provider_unavailable",
+    );
+    expect(classifyFailoverReason("No endpoints found that support this request")).toBe(
+      "provider_unavailable",
+    );
+  });
+  it("classifies model-unavailable errors as provider_unavailable", () => {
+    expect(classifyFailoverReason("model is currently unavailable")).toBe("provider_unavailable");
+    expect(classifyFailoverReason("model not available")).toBe("provider_unavailable");
+  });
 });

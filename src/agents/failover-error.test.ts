@@ -47,6 +47,38 @@ describe("failover-error", () => {
     expect(err?.status).toBe(400);
   });
 
+  it("infers provider_unavailable from OpenRouter no-endpoints error", () => {
+    expect(
+      resolveFailoverReasonFromError({
+        status: 404,
+        message: "No endpoints found that support tool use",
+      }),
+    ).toBe("provider_unavailable");
+  });
+
+  it("infers provider_unavailable from model-unavailable messages", () => {
+    expect(
+      resolveFailoverReasonFromError({
+        message: "model is currently unavailable",
+      }),
+    ).toBe("provider_unavailable");
+    expect(
+      resolveFailoverReasonFromError({
+        message: "model not available for this request",
+      }),
+    ).toBe("provider_unavailable");
+  });
+
+  it("coerces provider_unavailable errors with a 404 status", () => {
+    const err = coerceToFailoverError(
+      { message: "No endpoints found that support tool use", status: 404 },
+      { provider: "openrouter", model: "deepseek/deepseek-chat-v3-0324" },
+    );
+    expect(err?.reason).toBe("provider_unavailable");
+    expect(err?.status).toBe(404);
+    expect(err?.provider).toBe("openrouter");
+  });
+
   it("describes non-Error values consistently", () => {
     const described = describeFailoverError(123);
     expect(described.message).toBe("123");

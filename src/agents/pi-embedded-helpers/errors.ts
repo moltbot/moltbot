@@ -396,6 +396,12 @@ const ERROR_PATTERNS = {
     "messages.1.content.1.tool_use.id",
     "invalid request format",
   ],
+  providerUnavailable: [
+    "no endpoints found",
+    /no .* endpoints? available/,
+    "model is currently unavailable",
+    "model not available",
+  ],
 } as const;
 
 const IMAGE_DIMENSION_ERROR_RE =
@@ -496,6 +502,10 @@ export function isAuthAssistantError(msg: AssistantMessage | undefined): boolean
   return isAuthErrorMessage(msg.errorMessage ?? "");
 }
 
+export function isProviderUnavailableErrorMessage(raw: string): boolean {
+  return matchesErrorPatterns(raw, ERROR_PATTERNS.providerUnavailable);
+}
+
 export function classifyFailoverReason(raw: string): FailoverReason | null {
   if (isImageDimensionErrorMessage(raw)) return null;
   if (isImageSizeError(raw)) return null;
@@ -505,6 +515,7 @@ export function classifyFailoverReason(raw: string): FailoverReason | null {
   if (isBillingErrorMessage(raw)) return "billing";
   if (isTimeoutErrorMessage(raw)) return "timeout";
   if (isAuthErrorMessage(raw)) return "auth";
+  if (isProviderUnavailableErrorMessage(raw)) return "provider_unavailable";
   return null;
 }
 
