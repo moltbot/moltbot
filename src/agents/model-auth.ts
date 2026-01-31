@@ -297,6 +297,7 @@ export function resolveEnvApiKey(provider: string): EnvApiKeyResult | null {
     moonshot: "MOONSHOT_API_KEY",
     minimax: "MINIMAX_API_KEY",
     xiaomi: "XIAOMI_API_KEY",
+    zhipu: "ZHIPU_API_KEY",
     synthetic: "SYNTHETIC_API_KEY",
     venice: "VENICE_API_KEY",
     mistral: "MISTRAL_API_KEY",
