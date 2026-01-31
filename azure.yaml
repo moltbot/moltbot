@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: openclaw-aci
+metadata:
+  template: openclaw-az-aci@0.0.1
+
+infra:
+  provider: bicep
+  path: infra/azure
+
+hooks:
+  predeploy:
+    shell: sh
+    run: .azd/hooks/predeploy.sh

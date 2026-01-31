@@ -71,3 +71,6 @@ USER.md
 
 # local tooling
 .serena/
+
+# Azure Developer CLI
+.azure/
