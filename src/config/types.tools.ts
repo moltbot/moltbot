@@ -234,13 +234,13 @@ export type MemorySearchConfig = {
     sessionMemory?: boolean;
   };
   /** Embedding provider mode. */
-  provider?: "openai" | "gemini" | "local";
+  provider?: "openai" | "gemini" | "mistral" | "local";
   remote?: {
     baseUrl?: string;
     apiKey?: string;
     headers?: Record<string, string>;
     batch?: {
-      /** Enable batch API for embedding indexing (OpenAI/Gemini; default: true). */
+      /** Enable batch API for embedding indexing (OpenAI/Gemini/Mistral; default: true). */
       enabled?: boolean;
       /** Wait for batch completion (default: true). */
       wait?: boolean;
@@ -253,7 +253,7 @@ export type MemorySearchConfig = {
     };
   };
   /** Fallback behavior when embeddings fail. */
-  fallback?: "openai" | "gemini" | "local" | "none";
+  fallback?: "openai" | "gemini" | "mistral" | "local" | "none";
   /** Embedding model id (remote) or alias (local). */
   model?: string;
   /** Local embedding settings (node-llama-cpp). */

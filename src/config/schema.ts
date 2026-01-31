@@ -504,14 +504,15 @@ const FIELD_HELP: Record<string, string> = {
     "Extra paths to include in memory search (directories or .md files; relative paths resolved from workspace).",
   "agents.defaults.memorySearch.experimental.sessionMemory":
     "Enable experimental session transcript indexing for memory search (default: false).",
-  "agents.defaults.memorySearch.provider": 'Embedding provider ("openai", "gemini", or "local").',
+  "agents.defaults.memorySearch.provider":
+    'Embedding provider ("openai", "gemini", "mistral", or "local").',
   "agents.defaults.memorySearch.remote.baseUrl":
     "Custom base URL for remote embeddings (OpenAI-compatible proxies or Gemini overrides).",
   "agents.defaults.memorySearch.remote.apiKey": "Custom API key for the remote embedding provider.",
   "agents.defaults.memorySearch.remote.headers":
     "Extra headers for remote embeddings (merged; remote overrides OpenAI headers).",
   "agents.defaults.memorySearch.remote.batch.enabled":
-    "Enable batch API for memory embeddings (OpenAI/Gemini; default: true).",
+    "Enable batch API for memory embeddings (OpenAI/Gemini/Mistral; default: true).",
   "agents.defaults.memorySearch.remote.batch.wait":
     "Wait for batch completion when indexing (default: true).",
   "agents.defaults.memorySearch.remote.batch.concurrency":
@@ -523,7 +524,7 @@ const FIELD_HELP: Record<string, string> = {
   "agents.defaults.memorySearch.local.modelPath":
     "Local GGUF model path or hf: URI (node-llama-cpp).",
   "agents.defaults.memorySearch.fallback":
-    'Fallback provider when embeddings fail ("openai", "gemini", "local", or "none").',
+    'Fallback provider when embeddings fail ("openai", "gemini", "mistral", "local", or "none").',
   "agents.defaults.memorySearch.store.path":
     "SQLite index path (default: ~/.openclaw/memory/{agentId}.sqlite).",
   "agents.defaults.memorySearch.store.vector.enabled":
