@@ -161,6 +161,13 @@ export class CallManager {
         console.log(`[voice-call] Using inline TwiML for notify mode (voice: ${pollyVoice})`);
       }
 
+      // Mark call as realtime mode for Twilio provider
+      if (mode === "realtime" && this.provider.name === "twilio") {
+        const twilioProvider = this.provider as { markAsRealtimeCall?: (id: string) => void };
+        twilioProvider.markAsRealtimeCall?.(callId);
+        console.log(`[voice-call] Using realtime voice-to-voice mode for call ${callId}`);
+      }
+
       const result = await this.provider.initiateCall({
         callId,
         from,

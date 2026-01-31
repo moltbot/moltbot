@@ -66,6 +66,8 @@ export class TwilioProvider implements VoiceCallProvider {
   private readonly twimlStorage = new Map<string, string>();
   /** Track notify-mode calls to avoid streaming on follow-up callbacks */
   private readonly notifyCalls = new Set<string>();
+  /** Track realtime-mode calls to use voice-to-voice stream */
+  private readonly realtimeCalls = new Set<string>();
 
   /**
    * Delete stored TwiML for a given `callId`.
@@ -76,6 +78,31 @@ export class TwilioProvider implements VoiceCallProvider {
   private deleteStoredTwiml(callId: string): void {
     this.twimlStorage.delete(callId);
     this.notifyCalls.delete(callId);
+    this.realtimeCalls.delete(callId);
+  }
+
+  /**
+   * Mark a call as using realtime voice-to-voice mode.
+   */
+  markAsRealtimeCall(callId: string): void {
+    this.realtimeCalls.add(callId);
+  }
+
+  /**
+   * Check if a call is using realtime voice-to-voice mode.
+   */
+  isRealtimeCall(callId: string): boolean {
+    return this.realtimeCalls.has(callId);
+  }
+
+  /**
+   * Clean up all state for a call when it ends.
+   * Call this to prevent memory leaks in long-running processes.
+   */
+  cleanupCall(callId: string): void {
+    this.realtimeCalls.delete(callId);
+    this.notifyCalls.delete(callId);
+    this.twimlStorage.delete(callId);
   }
 
   /**
@@ -329,9 +356,10 @@ export class TwilioProvider implements VoiceCallProvider {
         return TwilioProvider.EMPTY_TWIML;
       }
 
-      // Conversation mode: return streaming TwiML immediately for outbound calls.
+      // Conversation/realtime mode: return streaming TwiML immediately for outbound calls.
       if (isOutbound) {
-        const streamUrl = this.getStreamUrl();
+        const isRealtime = this.isRealtimeCall(callIdFromQuery);
+        const streamUrl = this.getStreamUrl(isRealtime);
         return streamUrl ? this.getStreamConnectXml(streamUrl) : TwilioProvider.PAUSE_TWIML;
       }
     }
@@ -343,6 +371,7 @@ export class TwilioProvider implements VoiceCallProvider {
 
     // Handle subsequent webhook requests (status callbacks, etc.)
     // For inbound calls, answer immediately with stream
+    // TODO: Support realtime mode for inbound calls (need to pass mode in query param)
     if (direction === "inbound") {
       const streamUrl = this.getStreamUrl();
       return streamUrl ? this.getStreamConnectXml(streamUrl) : TwilioProvider.PAUSE_TWIML;
@@ -360,8 +389,10 @@ export class TwilioProvider implements VoiceCallProvider {
   /**
    * Get the WebSocket URL for media streaming.
    * Derives from the public URL origin + stream path.
+   *
+   * @param realtime - If true, appends /realtime for voice-to-voice mode
    */
-  private getStreamUrl(): string | null {
+  private getStreamUrl(realtime = false): string | null {
     if (!this.currentPublicUrl || !this.options.streamPath) {
       return null;
     }
@@ -374,9 +405,14 @@ export class TwilioProvider implements VoiceCallProvider {
     const wsOrigin = origin.replace(/^https:\/\//, "wss://").replace(/^http:\/\//, "ws://");
 
     // Append the stream path
-    const path = this.options.streamPath.startsWith("/")
+    let path = this.options.streamPath.startsWith("/")
       ? this.options.streamPath
       : `/${this.options.streamPath}`;
+
+    // Append /realtime for voice-to-voice mode
+    if (realtime) {
+      path = `${path}/realtime`;
+    }
 
     return `${wsOrigin}${path}`;
   }

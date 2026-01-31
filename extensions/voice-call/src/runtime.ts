@@ -7,6 +7,7 @@ import { MockProvider } from "./providers/mock.js";
 import { PlivoProvider } from "./providers/plivo.js";
 import { TelnyxProvider } from "./providers/telnyx.js";
 import { TwilioProvider } from "./providers/twilio.js";
+import { OpenAIRealtimeVoiceProvider } from "./providers/openai-realtime-voice.js";
 import type { TelephonyTtsRuntime } from "./telephony-tts.js";
 import { createTelephonyTtsProvider } from "./telephony-tts.js";
 import { startTunnel, type TunnelResult } from "./tunnel.js";
@@ -23,6 +24,8 @@ export type VoiceCallRuntime = {
   webhookServer: VoiceCallWebhookServer;
   webhookUrl: string;
   publicUrl: string | null;
+  /** OpenAI Realtime Voice provider (only set when realtime mode is available) */
+  realtimeVoiceProvider: OpenAIRealtimeVoiceProvider | null;
   stop: () => Promise<void>;
 };
 
@@ -46,6 +49,12 @@ function resolveProvider(config: VoiceCallConfig): VoiceCallProvider {
     isLoopbackBind(config.serve?.bind) &&
     (config.tunnel?.allowNgrokFreeTierLoopbackBypass || config.tunnel?.allowNgrokFreeTier || false);
 
+  // Enable streaming if realtime mode is configured (realtime requires media streams)
+  const needsStreaming =
+    config.streaming?.enabled ||
+    config.outbound?.defaultMode === "realtime" ||
+    config.realtime?.openaiApiKey;
+
   switch (config.provider) {
     case "telnyx":
       return new TelnyxProvider({
@@ -63,7 +72,7 @@ function resolveProvider(config: VoiceCallConfig): VoiceCallProvider {
           allowNgrokFreeTierLoopbackBypass,
           publicUrl: config.publicUrl,
           skipVerification: config.skipSignatureVerification,
-          streamPath: config.streaming?.enabled ? config.streaming.streamPath : undefined,
+          streamPath: needsStreaming ? config.streaming?.streamPath || "/voice/stream" : undefined,
         },
       );
     case "plivo":
@@ -147,6 +156,34 @@ export async function createVoiceCallRuntime(params: {
     (provider as TwilioProvider).setPublicUrl(publicUrl);
   }
 
+  // Initialize OpenAI Realtime Voice provider if realtime mode is configured
+  let realtimeVoiceProvider: OpenAIRealtimeVoiceProvider | null = null;
+  const realtimeApiKey =
+    config.realtime?.openaiApiKey || config.streaming?.openaiApiKey || process.env.OPENAI_API_KEY;
+
+  if (realtimeApiKey) {
+    try {
+      realtimeVoiceProvider = new OpenAIRealtimeVoiceProvider({
+        apiKey: realtimeApiKey,
+        model: config.realtime?.model,
+        voice: config.realtime?.voice,
+        systemPrompt: config.realtime?.systemPrompt || config.responseSystemPrompt,
+        temperature: config.realtime?.temperature,
+        maxResponseTokens: config.realtime?.maxResponseTokens,
+        vadThreshold: config.realtime?.vadThreshold,
+        silenceDurationMs: config.realtime?.silenceDurationMs,
+        prefixPaddingMs: config.realtime?.prefixPaddingMs,
+      });
+      log.info("[voice-call] OpenAI Realtime Voice provider configured");
+    } catch (err) {
+      log.warn(
+        `[voice-call] Failed to initialize Realtime Voice: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+
   if (provider.name === "twilio" && config.streaming?.enabled) {
     const twilioProvider = provider as TwilioProvider;
     if (ttsRuntime?.textToSpeechTelephony) {
@@ -174,6 +211,12 @@ export async function createVoiceCallRuntime(params: {
       twilioProvider.setMediaStreamHandler(mediaHandler);
       log.info("[voice-call] Media stream handler wired to provider");
     }
+
+    // Pass realtime voice provider to webhook server for realtime mode calls
+    if (realtimeVoiceProvider) {
+      webhookServer.setRealtimeVoiceProvider(realtimeVoiceProvider);
+      log.info("[voice-call] Realtime Voice provider wired to webhook server");
+    }
   }
 
   manager.initialize(provider, webhookUrl);
@@ -199,6 +242,7 @@ export async function createVoiceCallRuntime(params: {
     webhookServer,
     webhookUrl,
     publicUrl,
+    realtimeVoiceProvider,
     stop,
   };
 }

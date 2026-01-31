@@ -7,8 +7,13 @@ import type { CoreConfig } from "./core-bridge.js";
 import type { CallManager } from "./manager.js";
 import type { MediaStreamConfig } from "./media-stream.js";
 import { MediaStreamHandler } from "./media-stream.js";
+import {
+  RealtimeMediaStreamHandler,
+  type RealtimeMediaStreamConfig,
+} from "./media-stream-realtime.js";
 import type { VoiceCallProvider } from "./providers/base.js";
 import { OpenAIRealtimeSTTProvider } from "./providers/stt-openai-realtime.js";
+import type { OpenAIRealtimeVoiceProvider } from "./providers/openai-realtime-voice.js";
 import type { TwilioProvider } from "./providers/twilio.js";
 import type { NormalizedEvent, WebhookContext } from "./types.js";
 
@@ -26,6 +31,12 @@ export class VoiceCallWebhookServer {
   /** Media stream handler for bidirectional audio (when streaming enabled) */
   private mediaStreamHandler: MediaStreamHandler | null = null;
 
+  /** Realtime media stream handler for voice-to-voice mode */
+  private realtimeMediaStreamHandler: RealtimeMediaStreamHandler | null = null;
+
+  /** OpenAI Realtime Voice provider (set from runtime) */
+  private realtimeVoiceProvider: OpenAIRealtimeVoiceProvider | null = null;
+
   constructor(
     config: VoiceCallConfig,
     manager: CallManager,
@@ -37,8 +48,12 @@ export class VoiceCallWebhookServer {
     this.provider = provider;
     this.coreConfig = coreConfig ?? null;
 
-    // Initialize media stream handler if streaming is enabled
-    if (config.streaming?.enabled) {
+    // Initialize media stream handler if streaming or realtime mode is enabled
+    const needsStreaming =
+      config.streaming?.enabled ||
+      config.outbound?.defaultMode === "realtime" ||
+      config.realtime?.openaiApiKey;
+    if (needsStreaming) {
       this.initializeMediaStreaming();
     }
   }
@@ -48,6 +63,86 @@ export class VoiceCallWebhookServer {
    */
   getMediaStreamHandler(): MediaStreamHandler | null {
     return this.mediaStreamHandler;
+  }
+
+  /**
+   * Set the OpenAI Realtime Voice provider for voice-to-voice mode.
+   */
+  setRealtimeVoiceProvider(provider: OpenAIRealtimeVoiceProvider): void {
+    this.realtimeVoiceProvider = provider;
+    this.initializeRealtimeMediaStreaming();
+  }
+
+  /**
+   * Initialize realtime media streaming for voice-to-voice mode.
+   */
+  private initializeRealtimeMediaStreaming(): void {
+    if (!this.realtimeVoiceProvider) {
+      console.warn("[voice-call] Cannot initialize realtime streaming without voice provider");
+      return;
+    }
+
+    const streamConfig: RealtimeMediaStreamConfig = {
+      voiceProvider: this.realtimeVoiceProvider,
+      voiceConfig: {
+        systemPrompt: this.config.realtime?.systemPrompt || this.config.responseSystemPrompt,
+        voice: this.config.realtime?.voice,
+        temperature: this.config.realtime?.temperature,
+        vadThreshold: this.config.realtime?.vadThreshold,
+        silenceDurationMs: this.config.realtime?.silenceDurationMs,
+      },
+      onTranscript: (callId, transcript) => {
+        console.log(`[voice-call] [realtime] User said: ${transcript}`);
+        // Look up call and add to transcript
+        const call = this.manager.getCallByProviderCallId(callId);
+        if (call) {
+          const event: NormalizedEvent = {
+            id: `realtime-transcript-${Date.now()}`,
+            type: "call.speech",
+            callId: call.callId,
+            providerCallId: callId,
+            timestamp: Date.now(),
+            transcript,
+            isFinal: true,
+          };
+          this.manager.processEvent(event);
+        }
+      },
+      onResponse: (callId, text) => {
+        console.log(`[voice-call] [realtime] AI said: ${text}`);
+        // Add AI response to transcript
+        const call = this.manager.getCallByProviderCallId(callId);
+        if (call) {
+          // Bot responses are tracked in call transcript via manager
+        }
+      },
+      onConnect: (callId, streamSid) => {
+        console.log(`[voice-call] [realtime] Stream connected: ${callId} -> ${streamSid}`);
+        if (this.provider.name === "twilio") {
+          (this.provider as TwilioProvider).registerCallStream(callId, streamSid);
+        }
+      },
+      onDisconnect: (callId) => {
+        console.log(`[voice-call] [realtime] Stream disconnected: ${callId}`);
+        if (this.provider.name === "twilio") {
+          (this.provider as TwilioProvider).unregisterCallStream(callId);
+        }
+      },
+    };
+
+    this.realtimeMediaStreamHandler = new RealtimeMediaStreamHandler(streamConfig);
+    console.log("[voice-call] Realtime media streaming initialized");
+  }
+
+  /**
+   * Check if a call should use realtime mode based on its metadata.
+   */
+  private isRealtimeCall(callId: string): boolean {
+    const call = this.manager.getCallByProviderCallId(callId);
+    if (!call) {
+      return false;
+    }
+    return call.metadata?.mode === "realtime";
   }
 
   /**
@@ -158,18 +253,23 @@ export class VoiceCallWebhookServer {
       });
 
       // Handle WebSocket upgrades for media streams
-      if (this.mediaStreamHandler) {
-        this.server.on("upgrade", (request, socket, head) => {
-          const url = new URL(request.url || "/", `http://${request.headers.host}`);
+      const realtimeStreamPath = `${streamPath}/realtime`;
 
-          if (url.pathname === streamPath) {
-            console.log("[voice-call] WebSocket upgrade for media stream");
-            this.mediaStreamHandler?.handleUpgrade(request, socket, head);
-          } else {
-            socket.destroy();
-          }
-        });
-      }
+      this.server.on("upgrade", (request, socket, head) => {
+        const url = new URL(request.url || "/", `http://${request.headers.host}`);
+
+        if (url.pathname === realtimeStreamPath && this.realtimeMediaStreamHandler) {
+          // Realtime voice-to-voice mode
+          console.log("[voice-call] WebSocket upgrade for REALTIME media stream");
+          this.realtimeMediaStreamHandler.handleUpgrade(request, socket, head);
+        } else if (url.pathname === streamPath && this.mediaStreamHandler) {
+          // Regular conversation mode (STT → Claude → TTS)
+          console.log("[voice-call] WebSocket upgrade for media stream");
+          this.mediaStreamHandler.handleUpgrade(request, socket, head);
+        } else {
+          socket.destroy();
+        }
+      });
 
       this.server.on("error", reject);
 
@@ -178,6 +278,11 @@ export class VoiceCallWebhookServer {
         console.log(`[voice-call] Webhook server listening on ${url}`);
         if (this.mediaStreamHandler) {
           console.log(`[voice-call] Media stream WebSocket on ws://${bind}:${port}${streamPath}`);
+        }
+        if (this.realtimeMediaStreamHandler) {
+          console.log(
+            `[voice-call] Realtime stream WebSocket on ws://${bind}:${port}${realtimeStreamPath}`,
+          );
         }
         resolve(url);
       });

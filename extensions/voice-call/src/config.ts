@@ -229,8 +229,9 @@ export type VoiceCallTunnelConfig = z.infer<typeof VoiceCallTunnelConfigSchema>;
  * Call mode determines how outbound calls behave:
  * - "notify": Deliver message and auto-hangup after delay (one-way notification)
  * - "conversation": Stay open for back-and-forth until explicit end or timeout
+ * - "realtime": Full voice-to-voice using OpenAI Realtime API (<500ms latency)
  */
-export const CallModeSchema = z.enum(["notify", "conversation"]);
+export const CallModeSchema = z.enum(["notify", "conversation", "realtime"]);
 export type CallMode = z.infer<typeof CallModeSchema>;
 
 export const OutboundConfigSchema = z
@@ -275,6 +276,56 @@ export const VoiceCallStreamingConfigSchema = z
     streamPath: "/voice/stream",
   });
 export type VoiceCallStreamingConfig = z.infer<typeof VoiceCallStreamingConfigSchema>;
+
+// -----------------------------------------------------------------------------
+// Realtime Voice-to-Voice Configuration (OpenAI Realtime API)
+// -----------------------------------------------------------------------------
+
+export const RealtimeVoiceSchema = z.enum([
+  "alloy",
+  "ash",
+  "ballad",
+  "coral",
+  "echo",
+  "sage",
+  "shimmer",
+  "verse",
+  "nova",
+]);
+export type RealtimeVoice = z.infer<typeof RealtimeVoiceSchema>;
+
+export const VoiceCallRealtimeConfigSchema = z
+  .object({
+    /** OpenAI API key for Realtime API (uses streaming.openaiApiKey or OPENAI_API_KEY if not set) */
+    openaiApiKey: z.string().min(1).optional(),
+    /** Model to use for realtime voice (default: gpt-4o-realtime-preview-2024-12-17) */
+    model: z.string().min(1).default("gpt-4o-realtime-preview-2024-12-17"),
+    /** Voice for AI responses */
+    voice: RealtimeVoiceSchema.default("nova"),
+    /** System prompt for the AI personality */
+    systemPrompt: z.string().optional(),
+    /** Temperature for response generation (0-2) */
+    temperature: z.number().min(0).max(2).default(0.8),
+    /** Max response tokens */
+    maxResponseTokens: z.union([z.number().int().positive(), z.literal("inf")]).default(4096),
+    /** VAD threshold 0-1 (higher = less sensitive to speech) */
+    vadThreshold: z.number().min(0).max(1).default(0.5),
+    /** Silence duration in ms before AI responds (lower = faster, default: 500) */
+    silenceDurationMs: z.number().int().positive().default(500),
+    /** Prefix padding in ms (default: 300) */
+    prefixPaddingMs: z.number().int().positive().default(300),
+  })
+  .strict()
+  .default({
+    model: "gpt-4o-realtime-preview-2024-12-17",
+    voice: "nova",
+    temperature: 0.8,
+    maxResponseTokens: 4096,
+    vadThreshold: 0.5,
+    silenceDurationMs: 500,
+    prefixPaddingMs: 300,
+  });
+export type VoiceCallRealtimeConfig = z.infer<typeof VoiceCallRealtimeConfigSchema>;
 
 // -----------------------------------------------------------------------------
 // Main Voice Call Configuration
@@ -341,6 +392,9 @@ export const VoiceCallConfigSchema = z
 
     /** Real-time audio streaming configuration */
     streaming: VoiceCallStreamingConfigSchema,
+
+    /** Realtime voice-to-voice configuration (for mode: "realtime") */
+    realtime: VoiceCallRealtimeConfigSchema,
 
     /** Public webhook URL override (if set, bypasses tunnel auto-detection) */
     publicUrl: z.string().url().optional(),
