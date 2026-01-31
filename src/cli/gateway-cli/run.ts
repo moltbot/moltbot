@@ -48,6 +48,7 @@ type GatewayRunOpts = {
   rawStreamPath?: unknown;
   dev?: boolean;
   reset?: boolean;
+  bonjour?: boolean;
 };
 
 const gatewayLog = createSubsystemLogger("gateway");
@@ -87,6 +88,11 @@ async function runGatewayCommand(opts: GatewayRunOpts) {
   const rawStreamPath = toOptionString(opts.rawStreamPath);
   if (rawStreamPath) {
     process.env.OPENCLAW_RAW_STREAM_PATH = rawStreamPath;
+  }
+
+  // Handle --no-bonjour flag to disable mDNS/Bonjour advertising
+  if (opts.bonjour === false) {
+    process.env.OPENCLAW_DISABLE_BONJOUR = "1";
   }
 
   if (devMode) {
@@ -350,6 +356,7 @@ export function addGatewayRunCommand(cmd: Command): Command {
     .option("--compact", 'Alias for "--ws-log compact"', false)
     .option("--raw-stream", "Log raw model stream events to jsonl", false)
     .option("--raw-stream-path <path>", "Raw stream jsonl path")
+    .option("--no-bonjour", "Disable mDNS/Bonjour service advertising", false)
     .action(async (opts) => {
       await runGatewayCommand(opts);
     });

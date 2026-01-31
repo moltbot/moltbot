@@ -158,5 +158,32 @@ describe("installUnhandledRejectionHandler - fatal detection", () => {
       expect(exitCalls).toEqual([]);
       expect(consoleWarnSpy).toHaveBeenCalled();
     });
+
+    it("does NOT exit on mDNS/Bonjour IPv4 address change errors", () => {
+      const mdnsErr = Object.assign(
+        new Error("Reached illegal state! IPv4 address changed from undefined to defined!"),
+        {
+          name: "AssertionError",
+          code: "ERR_ASSERTION",
+        },
+      );
+
+      process.emit("unhandledRejection", mdnsErr, Promise.resolve());
+
+      expect(exitCalls).toEqual([]);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        "[openclaw] Non-fatal unhandled rejection (continuing):",
+        expect.stringContaining("IPv4 address changed"),
+      );
+    });
+
+    it("does NOT exit on mDNS MDNSServer illegal state errors", () => {
+      const mdnsErr = new Error("MDNSServer: Reached illegal state during network update");
+
+      process.emit("unhandledRejection", mdnsErr, Promise.resolve());
+
+      expect(exitCalls).toEqual([]);
+      expect(consoleWarnSpy).toHaveBeenCalled();
+    });
   });
 });

@@ -2,6 +2,16 @@
 
 Docs: https://docs.openclaw.ai
 
+## Unreleased
+
+### Fixes
+- Gateway: fix crash resilience for mDNS/Bonjour errors during network interface changes (sleep/wake, WiFi reconnect). (#3821)
+  - Added error patterns for "IPv4 address changed" and "illegal state" assertions from @homebridge/ciao.
+  - Added `--no-bonjour` CLI flag to disable mDNS advertising entirely.
+- Gateway: improve handling of transient network errors to prevent crashes. (#3815, #4501)
+  - Added ERR_ASSERTION to transient network error codes.
+  - Better detection of mDNS-related assertion errors.
+
 ## 2026.1.29
 Status: stable.
 

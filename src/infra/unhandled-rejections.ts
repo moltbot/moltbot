@@ -34,6 +34,8 @@ const TRANSIENT_NETWORK_CODES = new Set([
   "UND_ERR_SOCKET",
   "UND_ERR_HEADERS_TIMEOUT",
   "UND_ERR_BODY_TIMEOUT",
+  // mDNS/Bonjour errors from @homebridge/ciao
+  "ERR_ASSERTION", // IPv4 address changes during network interface churn
 ]);
 
 function getErrorCause(err: unknown): unknown {
@@ -113,6 +115,23 @@ export function isTransientNetworkError(err: unknown): boolean {
   // AggregateError may wrap multiple causes
   if (err instanceof AggregateError && err.errors?.length) {
     return err.errors.some((e) => isTransientNetworkError(e));
+  }
+
+  // Handle mDNS/Bonjour errors from @homebridge/ciao
+  // These are typically triggered by network interface changes (sleep/wake, WiFi reconnect)
+  if (err instanceof Error) {
+    const errorName = err.name?.toUpperCase() || "";
+    const message = err.message?.toUpperCase() || "";
+
+    // AssertionError from MDNServer during network interface changes
+    if (errorName === "ASSERTIONERROR" && message.includes("IPV4 ADDRESS CHANGED")) {
+      return true;
+    }
+
+    // Other mDNS-related transient errors
+    if (message.includes("MDNSSERVER") && message.includes("ILLEGAL STATE")) {
+      return true;
+    }
   }
 
   return false;
