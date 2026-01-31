@@ -311,6 +311,7 @@ ack reaction after the bot replies.
 - `guilds.<id>.channels`: channel rules (keys are channel slugs or ids).
 - `guilds.<id>.requireMention`: per-guild mention requirement (overridable per channel).
 - `guilds.<id>.reactionNotifications`: reaction system event mode (`off`, `own`, `all`, `allowlist`).
+- `guilds.<id>.reactionTrigger`: reaction trigger mode - invoke agent turn on reaction (`off`, `own`, `all`, `allowlist`). Default: `off`.
 - `textChunkLimit`: outbound text chunk size (chars). Default: 2000.
 - `chunkMode`: `length` (default) splits only when exceeding `textChunkLimit`; `newline` splits on blank lines (paragraph boundaries) before length chunking.
 - `maxLinesPerMessage`: soft max line count per message. Default: 17.
@@ -331,6 +332,29 @@ Reaction notifications use `guilds.<id>.reactionNotifications`:
 - `own`: reactions on the bot's own messages (default).
 - `all`: all reactions on all messages.
 - `allowlist`: reactions from `guilds.<id>.users` on all messages (empty list disables).
+
+### Reaction triggers
+
+Use `guilds.<id>.reactionTrigger` to invoke an agent turn when a user reacts to a message (instead of just queueing a system event):
+- `off`: no agent invocation on reactions (default).
+- `own`: trigger agent when reacting to the bot's own messages.
+- `all`: trigger agent on reactions to any message.
+- `allowlist`: trigger agent for reactions from `guilds.<id>.users` only.
+
+Additional options:
+- `guilds.<id>.reactionTriggerEmojis`: array of emojis that trigger (e.g., `["🤖", "👀"]`). Omit to allow all emojis.
+- `guilds.<id>.reactionTriggerCooldownMs`: cooldown between triggers per user per message. Default: 30000 (30 seconds). Set to 0 to disable.
+
+When triggered, the agent receives a synthetic message containing:
+- The reactor's user tag and the emoji they used
+- The content of the reacted-to message (if available)
+
+Notes:
+- Only reaction **adds** trigger the agent (removes do not)
+- Rate limiting prevents spam from rapid reactions
+- Uses the guild's `users` allowlist when mode is `allowlist`
+
+This is useful for interactive workflows where reactions serve as commands (e.g., 👀 to request analysis, 🤖 to trigger a response).
 
 ### Tool action defaults
 

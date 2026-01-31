@@ -18,13 +18,48 @@ import {
   resolveDiscordChannelConfigWithFallback,
   resolveDiscordGuildEntry,
   shouldEmitDiscordReactionNotification,
+  shouldTriggerDiscordReaction,
 } from "./allow-list.js";
 import { formatDiscordReactionEmoji, formatDiscordUserTag } from "./format.js";
 import { resolveDiscordChannelInfo } from "./message-utils.js";
+import { dispatchReactionTrigger } from "./reaction-trigger.js";
 
 type LoadedConfig = ReturnType<typeof import("../../config/config.js").loadConfig>;
 type RuntimeEnv = import("../../runtime.js").RuntimeEnv;
 type Logger = ReturnType<typeof import("../../logging/subsystem.js").createSubsystemLogger>;
+
+// Rate limiting for reaction triggers: Map<"messageId:userId", lastTriggerTimestamp>
+const reactionTriggerCooldowns = new Map<string, number>();
+const DEFAULT_REACTION_TRIGGER_COOLDOWN_MS = 30_000; // 30 seconds
+
+function checkReactionTriggerCooldown(params: {
+  messageId: string;
+  userId: string;
+  cooldownMs?: number;
+}): boolean {
+  const { messageId, userId, cooldownMs = DEFAULT_REACTION_TRIGGER_COOLDOWN_MS } = params;
+  if (cooldownMs <= 0) return true; // No cooldown
+
+  const key = `${messageId}:${userId}`;
+  const now = Date.now();
+  const lastTrigger = reactionTriggerCooldowns.get(key);
+
+  if (lastTrigger && now - lastTrigger < cooldownMs) {
+    return false; // Still in cooldown
+  }
+
+  reactionTriggerCooldowns.set(key, now);
+
+  // Cleanup old entries periodically (keep map from growing unbounded)
+  if (reactionTriggerCooldowns.size > 1000) {
+    const cutoff = now - cooldownMs * 2;
+    for (const [k, v] of reactionTriggerCooldowns) {
+      if (v < cutoff) reactionTriggerCooldowns.delete(k);
+    }
+  }
+
+  return true; // Allowed
+}
 
 export type DiscordMessageEvent = Parameters<MessageCreateListener["handle"]>[0];
 
@@ -97,6 +132,7 @@ export class DiscordReactionListener extends MessageReactionAddListener {
     private params: {
       cfg: LoadedConfig;
       accountId: string;
+      token: string;
       runtime: RuntimeEnv;
       botUserId?: string;
       guildEntries?: Record<string, import("./allow-list.js").DiscordGuildEntryResolved>;
@@ -115,6 +151,7 @@ export class DiscordReactionListener extends MessageReactionAddListener {
         action: "added",
         cfg: this.params.cfg,
         accountId: this.params.accountId,
+        token: this.params.token,
         botUserId: this.params.botUserId,
         guildEntries: this.params.guildEntries,
         logger: this.params.logger,
@@ -135,6 +172,7 @@ export class DiscordReactionRemoveListener extends MessageReactionRemoveListener
     private params: {
       cfg: LoadedConfig;
       accountId: string;
+      token: string;
       runtime: RuntimeEnv;
       botUserId?: string;
       guildEntries?: Record<string, import("./allow-list.js").DiscordGuildEntryResolved>;
@@ -153,6 +191,7 @@ export class DiscordReactionRemoveListener extends MessageReactionRemoveListener
         action: "removed",
         cfg: this.params.cfg,
         accountId: this.params.accountId,
+        token: this.params.token,
         botUserId: this.params.botUserId,
         guildEntries: this.params.guildEntries,
         logger: this.params.logger,
@@ -174,6 +213,7 @@ async function handleDiscordReactionEvent(params: {
   action: "added" | "removed";
   cfg: LoadedConfig;
   accountId: string;
+  token: string;
   botUserId?: string;
   guildEntries?: Record<string, import("./allow-list.js").DiscordGuildEntryResolved>;
   logger: Logger;
@@ -230,21 +270,58 @@ async function handleDiscordReactionEvent(params: {
 
     if (botUserId && user.id === botUserId) return;
 
-    const reactionMode = guildInfo?.reactionNotifications ?? "own";
+    const reactionNotifyMode = guildInfo?.reactionNotifications ?? "own";
+    const reactionTriggerMode = guildInfo?.reactionTrigger ?? "off";
     const message = await data.message.fetch().catch(() => null);
     const messageAuthorId = message?.author?.id ?? undefined;
-    const shouldNotify = shouldEmitDiscordReactionNotification({
-      mode: reactionMode,
-      botId: botUserId,
-      messageAuthorId,
-      userId: user.id,
-      userName: user.username,
-      userTag: formatDiscordUserTag(user),
-      allowlist: guildInfo?.users,
-    });
-    if (!shouldNotify) return;
 
     const emojiLabel = formatDiscordReactionEmoji(data.emoji);
+
+    // Check if we should trigger an agent turn (only on "added", not "removed")
+    let shouldTrigger = false;
+    if (action === "added") {
+      shouldTrigger = shouldTriggerDiscordReaction({
+        mode: reactionTriggerMode,
+        botId: botUserId,
+        messageAuthorId,
+        userId: user.id,
+        userName: user.username,
+        userTag: formatDiscordUserTag(user),
+        allowlist: guildInfo?.users,
+      });
+
+      // Check emoji filter if configured
+      if (shouldTrigger && guildInfo?.reactionTriggerEmojis?.length) {
+        const allowedEmojis = guildInfo.reactionTriggerEmojis;
+        shouldTrigger = allowedEmojis.includes(emojiLabel);
+      }
+
+      // Check rate limit
+      if (shouldTrigger) {
+        const cooldownMs =
+          guildInfo?.reactionTriggerCooldownMs ?? DEFAULT_REACTION_TRIGGER_COOLDOWN_MS;
+        shouldTrigger = checkReactionTriggerCooldown({
+          messageId: data.message_id,
+          userId: user.id,
+          cooldownMs,
+        });
+      }
+    }
+
+    // Check if we should notify via system event (only if not triggering)
+    const shouldNotify =
+      !shouldTrigger &&
+      shouldEmitDiscordReactionNotification({
+        mode: reactionNotifyMode,
+        botId: botUserId,
+        messageAuthorId,
+        userId: user.id,
+        userName: user.username,
+        userTag: formatDiscordUserTag(user),
+        allowlist: guildInfo?.users,
+      });
+
+    if (!shouldTrigger && !shouldNotify) return;
     const actorLabel = formatDiscordUserTag(user);
     const guildSlug =
       guildInfo?.slug || (data.guild?.name ? normalizeDiscordSlug(data.guild.name) : data.guild_id);
@@ -253,9 +330,7 @@ async function handleDiscordReactionEvent(params: {
       : channelName
         ? `#${normalizeDiscordSlug(channelName)}`
         : `#${data.channel_id}`;
-    const authorLabel = message?.author ? formatDiscordUserTag(message.author) : undefined;
-    const baseText = `Discord reaction ${action}: ${emojiLabel} by ${actorLabel} on ${guildSlug} ${channelLabel} msg ${data.message_id}`;
-    const text = authorLabel ? `${baseText} from ${authorLabel}` : baseText;
+
     const route = resolveAgentRoute({
       cfg: params.cfg,
       channel: "discord",
@@ -263,6 +338,33 @@ async function handleDiscordReactionEvent(params: {
       guildId: data.guild_id ?? undefined,
       peer: { kind: "channel", id: data.channel_id },
     });
+
+    // If trigger mode, dispatch to agent
+    if (shouldTrigger) {
+      await dispatchReactionTrigger({
+        cfg: params.cfg,
+        client,
+        accountId: params.accountId,
+        token: params.token,
+        logger: params.logger,
+        route,
+        emoji: emojiLabel,
+        action,
+        reactor: user,
+        message: message as import("@buape/carbon").Message<true> | null,
+        messageId: data.message_id,
+        channelId: data.channel_id,
+        guildId: data.guild_id,
+        guildSlug: typeof guildSlug === "string" ? guildSlug : undefined,
+        channelSlug: channelSlug || undefined,
+      });
+      return;
+    }
+
+    // Otherwise, queue system event for notification
+    const authorLabel = message?.author ? formatDiscordUserTag(message.author) : undefined;
+    const baseText = `Discord reaction ${action}: ${emojiLabel} by ${actorLabel} on ${guildSlug} ${channelLabel} msg ${data.message_id}`;
+    const text = authorLabel ? `${baseText} from ${authorLabel}` : baseText;
     enqueueSystemEvent(text, {
       sessionKey: route.sessionKey,
       contextKey: `discord:reaction:${action}:${data.message_id}:${user.id}:${emojiLabel}`,

@@ -41,6 +41,8 @@ export type DiscordGuildChannelConfig = {
 
 export type DiscordReactionNotificationMode = "off" | "own" | "all" | "allowlist";
 
+export type DiscordReactionTriggerMode = "off" | "own" | "all" | "allowlist";
+
 export type DiscordGuildEntry = {
   slug?: string;
   requireMention?: boolean;
@@ -49,6 +51,12 @@ export type DiscordGuildEntry = {
   toolsBySender?: GroupToolPolicyBySenderConfig;
   /** Reaction notification mode (off|own|all|allowlist). Default: own. */
   reactionNotifications?: DiscordReactionNotificationMode;
+  /** Reaction trigger mode: invoke agent turn on reaction (off|own|all|allowlist). Default: off. */
+  reactionTrigger?: DiscordReactionTriggerMode;
+  /** Only trigger on specific emojis (e.g., ["🤖", "👀"]). Empty/omitted = all emojis. */
+  reactionTriggerEmojis?: string[];
+  /** Cooldown in ms between reaction triggers per user per message. Default: 30000 (30s). */
+  reactionTriggerCooldownMs?: number;
   users?: Array<string | number>;
   channels?: Record<string, DiscordGuildChannelConfig>;
 };
