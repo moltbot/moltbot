@@ -62,6 +62,11 @@ export function randomToken(): string {
   return crypto.randomBytes(24).toString("hex");
 }
 
+export function normalizeGatewayTokenInput(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.trim();
+}
+
 export function printWizardHeader(runtime: RuntimeEnv) {
   const header = [
     "▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄",
