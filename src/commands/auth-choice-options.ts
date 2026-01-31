@@ -16,6 +16,7 @@ export type AuthChoiceGroupId =
   | "ai-gateway"
   | "moonshot"
   | "zai"
+  | "xiaomi"
   | "opencode-zen"
   | "minimax"
   | "synthetic"
@@ -105,7 +106,7 @@ const AUTH_CHOICE_GROUP_DEFS: {
   {
     value: "moonshot",
     label: "Moonshot AI",
-    hint: "Kimi K2 + Kimi Code",
+    hint: "Kimi K2 + Kimi Coding",
     choices: ["moonshot-api-key", "kimi-code-api-key"],
   },
   {
@@ -113,6 +114,12 @@ const AUTH_CHOICE_GROUP_DEFS: {
     label: "Z.AI (GLM 4.7)",
     hint: "API key",
     choices: ["zai-api-key"],
+  },
+  {
+    value: "xiaomi",
+    label: "Xiaomi",
+    hint: "API key",
+    choices: ["xiaomi-api-key"],
   },
   {
     value: "opencode-zen",
@@ -147,7 +154,7 @@ export function buildAuthChoiceOptions(params: {
     label: "Vercel AI Gateway API key",
   });
   options.push({ value: "moonshot-api-key", label: "Moonshot AI API key" });
-  options.push({ value: "kimi-code-api-key", label: "Kimi Code API key" });
+  options.push({ value: "kimi-code-api-key", label: "Kimi Coding API key" });
   options.push({ value: "synthetic-api-key", label: "Synthetic API key" });
   options.push({
     value: "venice-api-key",
@@ -176,6 +183,10 @@ export function buildAuthChoiceOptions(params: {
     hint: "Uses the bundled Gemini CLI auth plugin",
   });
   options.push({ value: "zai-api-key", label: "Z.AI (GLM 4.7) API key" });
+  options.push({
+    value: "xiaomi-api-key",
+    label: "Xiaomi API key",
+  });
   options.push({ value: "qwen-portal", label: "Qwen OAuth" });
   options.push({
     value: "copilot-proxy",

@@ -1,7 +1,7 @@
 import { upsertAuthProfile } from "../../../agents/auth-profiles.js";
 import { normalizeProviderId } from "../../../agents/model-selection.js";
 import { parseDurationMs } from "../../../cli/parse-duration.js";
-import type { MoltbotConfig } from "../../../config/config.js";
+import type { OpenClawConfig } from "../../../config/config.js";
 import { upsertSharedEnvVar } from "../../../infra/env-file.js";
 import type { RuntimeEnv } from "../../../runtime.js";
 import { buildTokenProfileId, validateAnthropicSetupToken } from "../../auth-token.js";
@@ -17,10 +17,11 @@ import {
   applySyntheticConfig,
   applyVeniceConfig,
   applyVercelAiGatewayConfig,
+  applyXiaomiConfig,
   applyZaiConfig,
   setAnthropicApiKey,
   setGeminiApiKey,
-  setKimiCodeApiKey,
+  setKimiCodingApiKey,
   setMinimaxApiKey,
   setMoonshotApiKey,
   setOpencodeZenApiKey,
@@ -28,6 +29,7 @@ import {
   setSyntheticApiKey,
   setVeniceApiKey,
   setVercelAiGatewayApiKey,
+  setXiaomiApiKey,
   setZaiApiKey,
 } from "../../onboard-auth.js";
 import type { AuthChoice, OnboardOptions } from "../../onboard-types.js";
@@ -35,12 +37,12 @@ import { resolveNonInteractiveApiKey } from "../api-keys.js";
 import { shortenHomePath } from "../../../utils.js";
 
 export async function applyNonInteractiveAuthChoice(params: {
-  nextConfig: MoltbotConfig;
+  nextConfig: OpenClawConfig;
   authChoice: AuthChoice;
   opts: OnboardOptions;
   runtime: RuntimeEnv;
-  baseConfig: MoltbotConfig;
-}): Promise<MoltbotConfig | null> {
+  baseConfig: OpenClawConfig;
+}): Promise<OpenClawConfig | null> {
   const { authChoice, opts, runtime, baseConfig } = params;
   let nextConfig = params.nextConfig;
 
@@ -177,6 +179,25 @@ export async function applyNonInteractiveAuthChoice(params: {
     return applyZaiConfig(nextConfig);
   }
 
+  if (authChoice === "xiaomi-api-key") {
+    const resolved = await resolveNonInteractiveApiKey({
+      provider: "xiaomi",
+      cfg: baseConfig,
+      flagValue: opts.xiaomiApiKey,
+      flagName: "--xiaomi-api-key",
+      envVar: "XIAOMI_API_KEY",
+      runtime,
+    });
+    if (!resolved) return null;
+    if (resolved.source !== "profile") await setXiaomiApiKey(resolved.key);
+    nextConfig = applyAuthProfileConfig(nextConfig, {
+      profileId: "xiaomi:default",
+      provider: "xiaomi",
+      mode: "api_key",
+    });
+    return applyXiaomiConfig(nextConfig);
+  }
+
   if (authChoice === "openai-api-key") {
     const resolved = await resolveNonInteractiveApiKey({
       provider: "openai",
@@ -254,18 +275,18 @@ export async function applyNonInteractiveAuthChoice(params: {
 
   if (authChoice === "kimi-code-api-key") {
     const resolved = await resolveNonInteractiveApiKey({
-      provider: "kimi-code",
+      provider: "kimi-coding",
       cfg: baseConfig,
       flagValue: opts.kimiCodeApiKey,
       flagName: "--kimi-code-api-key",
-      envVar: "KIMICODE_API_KEY",
+      envVar: "KIMI_API_KEY",
       runtime,
     });
     if (!resolved) return null;
-    if (resolved.source !== "profile") await setKimiCodeApiKey(resolved.key);
+    if (resolved.source !== "profile") await setKimiCodingApiKey(resolved.key);
     nextConfig = applyAuthProfileConfig(nextConfig, {
-      profileId: "kimi-code:default",
-      provider: "kimi-code",
+      profileId: "kimi-coding:default",
+      provider: "kimi-coding",
       mode: "api_key",
     });
     return applyKimiCodeConfig(nextConfig);

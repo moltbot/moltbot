@@ -1,8 +1,8 @@
 import type { OAuthCredentials } from "@mariozechner/pi-ai";
-import { resolveMoltbotAgentDir } from "../agents/agent-paths.js";
+import { resolveOpenClawAgentDir } from "../agents/agent-paths.js";
 import { upsertAuthProfile } from "../agents/auth-profiles.js";
 
-const resolveAuthAgentDir = (agentDir?: string) => agentDir ?? resolveMoltbotAgentDir();
+const resolveAuthAgentDir = (agentDir?: string) => agentDir ?? resolveOpenClawAgentDir();
 
 export async function writeOAuthCredentials(
   provider: string,
@@ -10,8 +10,9 @@ export async function writeOAuthCredentials(
   agentDir?: string,
 ): Promise<void> {
   // Write to resolved agent dir so gateway finds credentials on startup.
+  const email = typeof creds.email === "string" ? creds.email.trim() : "";
   upsertAuthProfile({
-    profileId: `${provider}:${creds.email ?? "default"}`,
+    profileId: `${provider}:${email || "default"}`,
     credential: {
       type: "oauth",
       provider,
@@ -73,13 +74,13 @@ export async function setMoonshotApiKey(key: string, agentDir?: string) {
   });
 }
 
-export async function setKimiCodeApiKey(key: string, agentDir?: string) {
+export async function setKimiCodingApiKey(key: string, agentDir?: string) {
   // Write to resolved agent dir so gateway finds credentials on startup.
   upsertAuthProfile({
-    profileId: "kimi-code:default",
+    profileId: "kimi-coding:default",
     credential: {
       type: "api_key",
-      provider: "kimi-code",
+      provider: "kimi-coding",
       key,
     },
     agentDir: resolveAuthAgentDir(agentDir),
@@ -126,6 +127,7 @@ export async function setPixelmlApiKey(key: string, agentDir?: string) {
 }
 
 export const ZAI_DEFAULT_MODEL_REF = "zai/glm-4.7";
+export const XIAOMI_DEFAULT_MODEL_REF = "xiaomi/mimo-v2-flash";
 export const OPENROUTER_DEFAULT_MODEL_REF = "openrouter/auto";
 export const VERCEL_AI_GATEWAY_DEFAULT_MODEL_REF = "vercel-ai-gateway/anthropic/claude-opus-4.5";
 
@@ -136,6 +138,18 @@ export async function setZaiApiKey(key: string, agentDir?: string) {
     credential: {
       type: "api_key",
       provider: "zai",
+      key,
+    },
+    agentDir: resolveAuthAgentDir(agentDir),
+  });
+}
+
+export async function setXiaomiApiKey(key: string, agentDir?: string) {
+  upsertAuthProfile({
+    profileId: "xiaomi:default",
+    credential: {
+      type: "api_key",
+      provider: "xiaomi",
       key,
     },
     agentDir: resolveAuthAgentDir(agentDir),

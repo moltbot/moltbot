@@ -1,8 +1,10 @@
-import MoltbotKit
+import OpenClawKit
+import AVFoundation
+import CoreLocation
 import Foundation
 import Testing
 import UIKit
-@testable import Moltbot
+@testable import OpenClaw
 
 private func withUserDefaults<T>(_ updates: [String: Any?], _ body: () throws -> T) rethrows -> T {
     let defaults = UserDefaults.standard
@@ -49,31 +51,68 @@ private func withUserDefaults<T>(_ updates: [String: Any?], _ body: () throws ->
             "node.instanceId": "ios-test",
             "node.displayName": "Test Node",
             "camera.enabled": true,
-            "location.enabledMode": MoltbotLocationMode.always.rawValue,
+            "location.enabledMode": OpenClawLocationMode.always.rawValue,
             VoiceWakePreferences.enabledKey: true,
         ]) {
             let appModel = NodeAppModel()
             let controller = GatewayConnectionController(appModel: appModel, startDiscovery: false)
             let caps = Set(controller._test_currentCaps())
 
-            #expect(caps.contains(MoltbotCapability.canvas.rawValue))
-            #expect(caps.contains(MoltbotCapability.screen.rawValue))
-            #expect(caps.contains(MoltbotCapability.camera.rawValue))
-            #expect(caps.contains(MoltbotCapability.location.rawValue))
-            #expect(caps.contains(MoltbotCapability.voiceWake.rawValue))
+            #expect(caps.contains(OpenClawCapability.canvas.rawValue))
+            #expect(caps.contains(OpenClawCapability.screen.rawValue))
+            #expect(caps.contains(OpenClawCapability.camera.rawValue))
+            #expect(caps.contains(OpenClawCapability.location.rawValue))
+            #expect(caps.contains(OpenClawCapability.voiceWake.rawValue))
         }
     }
 
     @Test @MainActor func currentCommandsIncludeLocationWhenEnabled() {
         withUserDefaults([
             "node.instanceId": "ios-test",
-            "location.enabledMode": MoltbotLocationMode.whileUsing.rawValue,
+            "location.enabledMode": OpenClawLocationMode.whileUsing.rawValue,
         ]) {
             let appModel = NodeAppModel()
             let controller = GatewayConnectionController(appModel: appModel, startDiscovery: false)
             let commands = Set(controller._test_currentCommands())
 
-            #expect(commands.contains(MoltbotLocationCommand.get.rawValue))
+            #expect(commands.contains(OpenClawLocationCommand.get.rawValue))
         }
+    }
+
+    @Test @MainActor func currentCommandsExcludeSystemExecButKeepNotify() {
+        withUserDefaults([
+            "node.instanceId": "ios-test",
+        ]) {
+            let appModel = NodeAppModel()
+            let controller = GatewayConnectionController(appModel: appModel, startDiscovery: false)
+            let commands = Set(controller._test_currentCommands())
+
+            #expect(commands.contains(OpenClawSystemCommand.notify.rawValue))
+            #expect(commands.contains(OpenClawSystemCommand.run.rawValue) == false)
+            #expect(commands.contains(OpenClawSystemCommand.which.rawValue) == false)
+            #expect(commands.contains(OpenClawSystemCommand.execApprovalsGet.rawValue) == false)
+            #expect(commands.contains(OpenClawSystemCommand.execApprovalsSet.rawValue) == false)
+        }
+    }
+
+    @Test @MainActor func currentPermissionsIncludeExpectedKeys() {
+        let provider = GatewayConnectionController.PermissionStatusProvider(
+            cameraStatus: { .authorized },
+            microphoneStatus: { .denied },
+            locationStatus: { .authorizedWhenInUse },
+            locationServicesEnabled: { true },
+            screenRecordingAvailable: { false })
+
+        let appModel = NodeAppModel()
+        let controller = GatewayConnectionController(
+            appModel: appModel,
+            startDiscovery: false,
+            permissionProvider: provider)
+        let permissions = controller._test_currentPermissions()
+
+        #expect(permissions["camera"] == true)
+        #expect(permissions["microphone"] == false)
+        #expect(permissions["location"] == true)
+        #expect(permissions["screenRecording"] == false)
     }
 }

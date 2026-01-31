@@ -1,7 +1,9 @@
-import type { Api, Model } from "@mariozechner/pi-ai";
-import { discoverAuthStorage, discoverModels } from "@mariozechner/pi-coding-agent";
+import { join } from "node:path";
 
-import { resolveMoltbotAgentDir } from "../../agents/agent-paths.js";
+import type { Api, Model } from "@mariozechner/pi-ai";
+import { AuthStorage, ModelRegistry } from "@mariozechner/pi-coding-agent";
+
+import { resolveOpenClawAgentDir } from "../../agents/agent-paths.js";
 import type { AuthProfileStore } from "../../agents/auth-profiles.js";
 import { listProfilesForProvider } from "../../agents/auth-profiles.js";
 import {
@@ -9,8 +11,8 @@ import {
   resolveAwsSdkEnvVarName,
   resolveEnvApiKey,
 } from "../../agents/model-auth.js";
-import { ensureMoltbotModelsJson } from "../../agents/models-config.js";
-import type { MoltbotConfig } from "../../config/config.js";
+import { ensureOpenClawModelsJson } from "../../agents/models-config.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import type { ModelRow } from "./list.types.js";
 import { modelKey } from "./shared.js";
 
@@ -30,7 +32,7 @@ const isLocalBaseUrl = (baseUrl: string) => {
   }
 };
 
-const hasAuthForProvider = (provider: string, cfg: MoltbotConfig, authStore: AuthProfileStore) => {
+const hasAuthForProvider = (provider: string, cfg: OpenClawConfig, authStore: AuthProfileStore) => {
   if (listProfilesForProvider(authStore, provider).length > 0) return true;
   if (provider === "amazon-bedrock" && resolveAwsSdkEnvVarName()) return true;
   if (resolveEnvApiKey(provider)) return true;
@@ -38,11 +40,11 @@ const hasAuthForProvider = (provider: string, cfg: MoltbotConfig, authStore: Aut
   return false;
 };
 
-export async function loadModelRegistry(cfg: MoltbotConfig) {
-  await ensureMoltbotModelsJson(cfg);
-  const agentDir = resolveMoltbotAgentDir();
-  const authStorage = discoverAuthStorage(agentDir);
-  const registry = discoverModels(authStorage, agentDir);
+export async function loadModelRegistry(cfg: OpenClawConfig) {
+  await ensureOpenClawModelsJson(cfg);
+  const agentDir = resolveOpenClawAgentDir();
+  const authStorage = new AuthStorage(join(agentDir, "auth.json"));
+  const registry = new ModelRegistry(authStorage, join(agentDir, "models.json"));
   const models = registry.getAll() as Model<Api>[];
   const availableModels = registry.getAvailable() as Model<Api>[];
   const availableKeys = new Set(availableModels.map((model) => modelKey(model.provider, model.id)));
@@ -55,7 +57,7 @@ export function toModelRow(params: {
   tags: string[];
   aliases?: string[];
   availableKeys?: Set<string>;
-  cfg?: MoltbotConfig;
+  cfg?: OpenClawConfig;
   authStore?: AuthProfileStore;
 }): ModelRow {
   const { model, key, tags, aliases = [], availableKeys, cfg, authStore } = params;

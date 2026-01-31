@@ -1,11 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@mariozechner/pi-coding-agent", () => ({
-  discoverAuthStorage: vi.fn(() => ({ mocked: true })),
-  discoverModels: vi.fn(() => ({ find: vi.fn(() => null) })),
+  AuthStorage: class {
+    mocked = true;
+  },
+  ModelRegistry: class {
+    find() {
+      return null;
+    }
+  },
 }));
 
-import type { MoltbotConfig } from "../../config/config.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { buildInlineProviderModels, resolveModel } from "./model.js";
 
 const makeModel = (id: string) => ({
@@ -119,7 +125,7 @@ describe("resolveModel", () => {
           },
         },
       },
-    } as MoltbotConfig;
+    } as OpenClawConfig;
 
     const result = resolveModel("custom", "missing-model", "/tmp/agent", cfg);
 
