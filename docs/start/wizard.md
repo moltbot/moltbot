@@ -259,6 +259,17 @@ openclaw onboard --non-interactive \
   --gateway-bind loopback
 ```
 
+NanoGPT example:
+
+```bash
+openclaw onboard --non-interactive \
+  --mode local \
+  --auth-choice nanogpt-api-key \
+  --nanogpt-api-key "$NANOGPT_API_KEY" \
+  --gateway-port 18789 \
+  --gateway-bind loopback
+```
+
 OpenCode Zen example:
 
 ```bash

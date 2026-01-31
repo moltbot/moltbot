@@ -16,6 +16,7 @@ export type AuthChoice =
   | "moonshot-api-key"
   | "kimi-code-api-key"
   | "synthetic-api-key"
+  | "nanogpt-api-key"
   | "venice-api-key"
   | "codex-cli"
   | "apiKey"
@@ -72,6 +73,7 @@ export type OnboardOptions = {
   xiaomiApiKey?: string;
   minimaxApiKey?: string;
   syntheticApiKey?: string;
+  nanogptApiKey?: string;
   veniceApiKey?: string;
   opencodeZenApiKey?: string;
   gatewayPort?: number;

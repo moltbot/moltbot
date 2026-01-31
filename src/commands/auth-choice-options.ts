@@ -20,6 +20,7 @@ export type AuthChoiceGroupId =
   | "opencode-zen"
   | "minimax"
   | "synthetic"
+  | "nanogpt"
   | "venice"
   | "qwen";
 
@@ -115,6 +116,12 @@ const AUTH_CHOICE_GROUP_DEFS: {
     choices: ["synthetic-api-key"],
   },
   {
+    value: "nanogpt",
+    label: "NanoGPT",
+    hint: "OpenAI-compatible API",
+    choices: ["nanogpt-api-key"],
+  },
+  {
     value: "venice",
     label: "Venice AI",
     hint: "Privacy-focused (uncensored models)",
@@ -153,6 +160,10 @@ export function buildAuthChoiceOptions(params: {
     value: "venice-api-key",
     label: "Venice AI API key",
     hint: "Privacy-focused inference (uncensored models)",
+  });
+  options.push({
+    value: "nanogpt-api-key",
+    label: "NanoGPT API key",
   });
   options.push({
     value: "github-copilot",
