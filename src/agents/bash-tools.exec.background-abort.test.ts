@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 test("background exec is not killed when tool signal aborts", async () => {
-  const tool = createExecTool({ allowBackground: true, backgroundMs: 0 });
+  const tool = createExecTool({ allowBackground: true, backgroundMs: 0, security: "full" });
   const abortController = new AbortController();
 
   const result = await tool.execute(
@@ -46,7 +46,7 @@ test("background exec is not killed when tool signal aborts", async () => {
 });
 
 test("background exec still times out after tool signal abort", async () => {
-  const tool = createExecTool({ allowBackground: true, backgroundMs: 0 });
+  const tool = createExecTool({ allowBackground: true, backgroundMs: 0, security: "full" });
   const abortController = new AbortController();
 
   const result = await tool.execute(
@@ -85,7 +85,7 @@ test("background exec still times out after tool signal abort", async () => {
 });
 
 test("yielded background exec is not killed when tool signal aborts", async () => {
-  const tool = createExecTool({ allowBackground: true, backgroundMs: 10 });
+  const tool = createExecTool({ allowBackground: true, backgroundMs: 10, security: "full" });
   const abortController = new AbortController();
 
   const result = await tool.execute(
@@ -116,7 +116,7 @@ test("yielded background exec is not killed when tool signal aborts", async () =
 });
 
 test("yielded background exec still times out", async () => {
-  const tool = createExecTool({ allowBackground: true, backgroundMs: 10 });
+  const tool = createExecTool({ allowBackground: true, backgroundMs: 10, security: "full" });
 
   const result = await tool.execute("toolcall", {
     command: 'node -e "setTimeout(() => {}, 5000)"',
