@@ -6,6 +6,7 @@ import {
   createPinnedDispatcher,
   resolvePinnedHostname,
   SsrFBlockedError,
+  isDomainBlocked,
 } from "../../infra/net/ssrf.js";
 import type { Dispatcher } from "undici";
 import { stringEnum } from "../schema/typebox.js";
@@ -193,6 +194,7 @@ async function fetchWithRedirects(params: {
   maxRedirects: number;
   timeoutSeconds: number;
   userAgent: string;
+  blockedDomains?: string[];
 }): Promise<{ response: Response; finalUrl: string; dispatcher: Dispatcher }> {
   const signal = withTimeout(undefined, params.timeoutSeconds * 1000);
   const visited = new Set<string>();
@@ -210,7 +212,7 @@ async function fetchWithRedirects(params: {
       throw new Error("Invalid URL: must be http or https");
     }
 
-    const pinned = await resolvePinnedHostname(parsedUrl.hostname);
+    const pinned = await resolvePinnedHostname(parsedUrl.hostname, undefined, params.blockedDomains);
     const dispatcher = createPinnedDispatcher(pinned);
     let res: Response;
     try {
@@ -368,6 +370,7 @@ async function runWebFetch(params: {
   firecrawlProxy: "auto" | "basic" | "stealth";
   firecrawlStoreInCache: boolean;
   firecrawlTimeoutSeconds: number;
+  blockedDomains?: string[];
 }): Promise<Record<string, unknown>> {
   const cacheKey = normalizeCacheKey(
     `fetch:${params.url}:${params.extractMode}:${params.maxChars}`,
@@ -387,6 +390,14 @@ async function runWebFetch(params: {
     throw new Error("Invalid URL: must be http or https");
   }
 
+  // Check if hostname is blocked by custom blocklist (DNS label boundary match)
+  if (params.blockedDomains && params.blockedDomains.length > 0) {
+    const hostname = parsedUrl.hostname.toLowerCase();
+    if (isDomainBlocked(hostname, params.blockedDomains)) {
+      throw new Error("URL blocked by tools.web.fetch.blockedDomains configuration");
+    }
+  }
+
   const start = Date.now();
   let res: Response;
   let dispatcher: Dispatcher | null = null;
@@ -397,6 +408,7 @@ async function runWebFetch(params: {
       maxRedirects: params.maxRedirects,
       timeoutSeconds: params.timeoutSeconds,
       userAgent: params.userAgent,
+      blockedDomains: params.blockedDomains,
     });
     res = result.response;
     finalUrl = result.finalUrl;
@@ -619,6 +631,10 @@ export function createWebFetchTool(options?: {
   const userAgent =
     (fetch && "userAgent" in fetch && typeof fetch.userAgent === "string" && fetch.userAgent) ||
     DEFAULT_FETCH_USER_AGENT;
+  const blockedDomains =
+    fetch && "blockedDomains" in fetch && Array.isArray(fetch.blockedDomains)
+      ? fetch.blockedDomains.filter((domain): domain is string => typeof domain === "string")
+      : undefined;
   return {
     label: "Web Fetch",
     name: "web_fetch",
@@ -647,6 +663,7 @@ export function createWebFetchTool(options?: {
         firecrawlProxy: "auto",
         firecrawlStoreInCache: true,
         firecrawlTimeoutSeconds,
+        blockedDomains,
       });
       return jsonResult(result);
     },

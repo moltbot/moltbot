@@ -128,7 +128,24 @@ export function isPrivateIpAddress(address: string): boolean {
   return isPrivateIpv4(ipv4);
 }
 
-export function isBlockedHostname(hostname: string): boolean {
+/**
+ * Check if a hostname matches any domain in the blocklist using DNS label
+ * boundary matching. Matches exact domain or any subdomain of it.
+ * e.g. "evil.com" blocks "evil.com" and "api.evil.com" but NOT "notevil.com".
+ */
+export function isDomainBlocked(hostname: string, blockedDomains: string[]): boolean {
+  const normalized = hostname.toLowerCase();
+  for (const raw of blockedDomains) {
+    const domain = raw?.toLowerCase().trim();
+    if (!domain) { continue; }
+    if (normalized === domain || normalized.endsWith(`.${domain}`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function isBlockedHostname(hostname: string, customBlockedDomains?: string[]): boolean {
   const normalized = normalizeHostname(hostname);
   if (!normalized) {
     return false;
@@ -136,6 +153,14 @@ export function isBlockedHostname(hostname: string): boolean {
   if (BLOCKED_HOSTNAMES.has(normalized)) {
     return true;
   }
+  
+  // Check custom blocked domains using DNS label boundary matching
+  if (customBlockedDomains && customBlockedDomains.length > 0) {
+    if (isDomainBlocked(normalized, customBlockedDomains)) {
+      return true;
+    }
+  }
+  
   return (
     normalized.endsWith(".localhost") ||
     normalized.endsWith(".local") ||
@@ -209,13 +234,15 @@ export type PinnedHostname = {
 export async function resolvePinnedHostname(
   hostname: string,
   lookupFn: LookupFn = dnsLookup,
+  customBlockedDomains?: string[],
 ): Promise<PinnedHostname> {
+  const resolve = lookupFn ?? dnsLookup;
   const normalized = normalizeHostname(hostname);
   if (!normalized) {
     throw new Error("Invalid hostname");
   }
 
-  if (isBlockedHostname(normalized)) {
+  if (isBlockedHostname(normalized, customBlockedDomains)) {
     throw new SsrFBlockedError(`Blocked hostname: ${hostname}`);
   }
 
@@ -223,7 +250,7 @@ export async function resolvePinnedHostname(
     throw new SsrFBlockedError("Blocked: private/internal IP address");
   }
 
-  const results = await lookupFn(normalized, { all: true });
+  const results = await resolve(normalized, { all: true });
   if (results.length === 0) {
     throw new Error(`Unable to resolve hostname: ${hostname}`);
   }
@@ -275,6 +302,7 @@ export async function closeDispatcher(dispatcher?: Dispatcher | null): Promise<v
 export async function assertPublicHostname(
   hostname: string,
   lookupFn: LookupFn = dnsLookup,
+  customBlockedDomains?: string[],
 ): Promise<void> {
-  await resolvePinnedHostname(hostname, lookupFn);
+  await resolvePinnedHostname(hostname, lookupFn, customBlockedDomains);
 }

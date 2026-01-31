@@ -196,6 +196,7 @@ export const ToolsWebFetchSchema = z
     cacheTtlMinutes: z.number().nonnegative().optional(),
     maxRedirects: z.number().int().nonnegative().optional(),
     userAgent: z.string().optional(),
+    blockedDomains: z.array(z.string()).optional(),
   })
   .strict()
   .optional();
