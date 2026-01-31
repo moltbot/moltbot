@@ -11,6 +11,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
+import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -30,6 +31,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -82,6 +85,7 @@ fun SettingsSheet(viewModel: MainViewModel) {
   val manualHost by viewModel.manualHost.collectAsState()
   val manualPort by viewModel.manualPort.collectAsState()
   val manualTls by viewModel.manualTls.collectAsState()
+  val gatewayToken by viewModel.gatewayToken.collectAsState()
   val canvasDebugStatusEnabled by viewModel.canvasDebugStatusEnabled.collectAsState()
   val statusText by viewModel.statusText.collectAsState()
   val serverName by viewModel.serverName.collectAsState()
@@ -92,6 +96,9 @@ fun SettingsSheet(viewModel: MainViewModel) {
   val listState = rememberLazyListState()
   val (wakeWordsText, setWakeWordsText) = remember { mutableStateOf("") }
   val (advancedExpanded, setAdvancedExpanded) = remember { mutableStateOf(false) }
+  var tokenText by remember { mutableStateOf(gatewayToken) }
+  var tokenVisible by remember { mutableStateOf(false) }
+  var tokenHadFocus by remember { mutableStateOf(false) }
   val focusManager = LocalFocusManager.current
   var wakeWordsHadFocus by remember { mutableStateOf(false) }
   val deviceModel =
@@ -110,6 +117,17 @@ fun SettingsSheet(viewModel: MainViewModel) {
         versionName
       }
     }
+
+  LaunchedEffect(gatewayToken) {
+    // Only sync from the backing flow when the user isn't actively editing.
+    if (!tokenHadFocus) tokenText = gatewayToken
+  }
+  val commitToken = {
+    val trimmed = tokenText.trim()
+    if (trimmed != gatewayToken) {
+      viewModel.setGatewayToken(trimmed)
+    }
+  }
 
   LaunchedEffect(wakeWords) { setWakeWordsText(wakeWords.joinToString(", ")) }
   val commitWakeWords = {
@@ -291,6 +309,47 @@ fun SettingsSheet(viewModel: MainViewModel) {
     if (remoteAddress != null) {
       item { ListItem(headlineContent = { Text("Address") }, supportingContent = { Text(remoteAddress!!) }) }
     }
+    item {
+      OutlinedTextField(
+        value = tokenText,
+        onValueChange = { tokenText = it },
+        label = { Text("Gateway Token") },
+        modifier =
+          Modifier.fillMaxWidth().onFocusChanged { focusState ->
+            if (focusState.isFocused) {
+              tokenHadFocus = true
+            } else if (tokenHadFocus) {
+              tokenHadFocus = false
+              commitToken()
+            }
+          },
+        singleLine = true,
+        visualTransformation = if (tokenVisible) VisualTransformation.None else PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions =
+          KeyboardActions(
+            onDone = {
+              commitToken()
+              focusManager.clearFocus()
+            },
+          ),
+        supportingText = {
+          Text(
+            if (tokenText.isBlank()) "Paste your gateway token to authenticate."
+            else "Token saved. Reconnect to apply changes.",
+          )
+        },
+        trailingIcon = {
+          TextButton(onClick = { tokenVisible = !tokenVisible }) {
+            Text(
+              if (tokenVisible) "Hide" else "Show",
+              style = MaterialTheme.typography.labelMedium,
+            )
+          }
+        },
+      )
+    }
+
     item {
       // UI sanity: "Disconnect" only when we have an active remote.
       if (isConnected && remoteAddress != null) {

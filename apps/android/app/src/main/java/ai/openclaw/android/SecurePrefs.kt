@@ -71,6 +71,10 @@ class SecurePrefs(context: Context) {
     MutableStateFlow(prefs.getBoolean("gateway.manual.tls", true))
   val manualTls: StateFlow<Boolean> = _manualTls
 
+  private val _gatewayToken =
+    MutableStateFlow(loadGatewayToken().orEmpty())
+  val gatewayToken: StateFlow<String> = _gatewayToken
+
   private val _lastDiscoveredStableId =
     MutableStateFlow(
       prefs.getString("gateway.lastDiscoveredStableID", "") ?: "",
@@ -156,7 +160,13 @@ class SecurePrefs(context: Context) {
 
   fun saveGatewayToken(token: String) {
     val key = "gateway.token.${_instanceId.value}"
-    prefs.edit { putString(key, token.trim()) }
+    val trimmed = token.trim()
+    if (trimmed.isEmpty()) {
+      prefs.edit { remove(key) }
+    } else {
+      prefs.edit { putString(key, trimmed) }
+    }
+    _gatewayToken.value = trimmed
   }
 
   fun loadGatewayPassword(): String? {
