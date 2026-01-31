@@ -1,3 +1,5 @@
+import { reverseGeocode, type GeocodingConfig, type GeocodingResult } from "./geocoding.js";
+
 export type LocationSource = "pin" | "place" | "live";
 
 export type NormalizedLocation = {
@@ -9,6 +11,8 @@ export type NormalizedLocation = {
   isLive?: boolean;
   source?: LocationSource;
   caption?: string;
+  /** Populated by enrichLocation when reverse geocoding succeeds */
+  geocoded?: GeocodingResult;
 };
 
 type ResolvedLocation = NormalizedLocation & {
@@ -22,6 +26,38 @@ function resolveLocation(location: NormalizedLocation): ResolvedLocation {
     (location.isLive ? "live" : location.name || location.address ? "place" : "pin");
   const isLive = Boolean(location.isLive ?? source === "live");
   return { ...location, source, isLive };
+}
+
+/**
+ * Enrich a location with reverse geocoding data if name/address are missing.
+ * This is async and makes a network call, so use sparingly.
+ */
+export async function enrichLocation(
+  location: NormalizedLocation,
+  geocodingConfig?: Partial<GeocodingConfig>,
+): Promise<NormalizedLocation> {
+  // Skip if we already have name/address/caption (user-provided place semantics)
+  if (location.name || location.address || location.caption) {
+    return location;
+  }
+
+  // Don't geocode live locations (update too frequently) or places (already labelled)
+  if (location.isLive || location.source === "live" || location.source === "place") {
+    return location;
+  }
+
+  const geocoded = await reverseGeocode(location.latitude, location.longitude, geocodingConfig);
+
+  if (!geocoded) {
+    return location;
+  }
+
+  return {
+    ...location,
+    name: geocoded.name,
+    address: geocoded.address,
+    geocoded,
+  };
 }
 
 function formatAccuracy(accuracy?: number): string {

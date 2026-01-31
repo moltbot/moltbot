@@ -1,6 +1,6 @@
 import type { AnyMessageContent, proto, WAMessage } from "@whiskeysockets/baileys";
 import { DisconnectReason, isJidGroup } from "@whiskeysockets/baileys";
-import { formatLocationText } from "../../channels/location.js";
+import { enrichLocation, formatLocationText } from "../../channels/location.js";
 import { logVerbose, shouldLogVerbose } from "../../globals.js";
 import { recordChannelActivity } from "../../infra/channel-activity.js";
 import { getChildLogger } from "../../logging/logger.js";
@@ -237,7 +237,11 @@ export async function monitorWebInbox(options: {
         continue;
       }
 
-      const location = extractLocationData(msg.message ?? undefined);
+      let location = extractLocationData(msg.message ?? undefined);
+      // Enrich with reverse geocoding if coordinates-only
+      if (location && !location.name && !location.address && !location.isLive) {
+        location = await enrichLocation(location);
+      }
       const locationText = location ? formatLocationText(location) : undefined;
       let body = extractText(msg.message ?? undefined);
       if (locationText) {

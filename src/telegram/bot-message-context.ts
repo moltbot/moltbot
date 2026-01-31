@@ -17,7 +17,7 @@ import {
 } from "../auto-reply/reply/history.js";
 import { finalizeInboundContext } from "../auto-reply/reply/inbound-context.js";
 import { buildMentionRegexes, matchesMentionWithExplicit } from "../auto-reply/reply/mentions.js";
-import { formatLocationText, toLocationContext } from "../channels/location.js";
+import { enrichLocation, formatLocationText, toLocationContext } from "../channels/location.js";
 import { recordInboundSession } from "../channels/session.js";
 import { formatCliCommand } from "../cli/command-format.js";
 import { readSessionUpdatedAt, resolveStorePath } from "../config/sessions.js";
@@ -366,7 +366,11 @@ export const buildTelegramMessageContext = async ({
     placeholder = `[Sticker${stickerContext ? ` ${stickerContext}` : ""}] ${cachedStickerDescription}`;
   }
 
-  const locationData = extractTelegramLocation(msg);
+  let locationData = extractTelegramLocation(msg);
+  // Enrich with reverse geocoding if coordinates-only
+  if (locationData && !locationData.name && !locationData.address && !locationData.isLive) {
+    locationData = await enrichLocation(locationData);
+  }
   const locationText = locationData ? formatLocationText(locationData) : undefined;
   const rawTextSource = msg.text ?? msg.caption ?? "";
   const rawText = expandTextLinks(rawTextSource, msg.entities ?? msg.caption_entities).trim();
