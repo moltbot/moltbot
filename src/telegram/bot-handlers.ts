@@ -22,6 +22,10 @@ import { resolveTelegramInlineButtonsScope } from "./inline-buttons.js";
 import { readTelegramAllowFromStore } from "./pairing-store.js";
 import { resolveChannelConfigWrites } from "../channels/plugins/config-writes.js";
 import { buildInlineKeyboard } from "./send.js";
+import {
+  handleTelegramApprovalCallback,
+  parseTelegramApprovalCallbackData,
+} from "./exec-approvals.js";
 
 export const registerTelegramHandlers = ({
   cfg,
@@ -355,6 +359,22 @@ export const registerTelegramHandlers = ({
           if (!allowed) {
             return;
           }
+        }
+      }
+
+      // Handle exec approval callbacks (tg_approve:action:id)
+      const approvalParsed = parseTelegramApprovalCallbackData(data);
+      if (approvalParsed) {
+        const result = await handleTelegramApprovalCallback({
+          callbackData: data,
+          senderId,
+          accountId,
+        });
+        if (result.handled) {
+          logVerbose(
+            `telegram: exec approval ${result.approvalId} resolved to ${result.decision} by ${senderId}`,
+          );
+          return;
         }
       }
 
