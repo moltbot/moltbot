@@ -74,7 +74,8 @@ export async function readPromptTokensFromSessionLog(
 
   try {
     const lines = (await fs.promises.readFile(logPath, "utf-8")).split(/\n+/);
-    let totalTokens = 0;
+    // Use the latest usage entry to mirror how totalTokens is stored in session updates.
+    let lastTotalTokens: number | undefined;
     let sawUsage = false;
     for (const line of lines) {
       if (!line.trim()) {
@@ -93,7 +94,7 @@ export async function readPromptTokensFromSessionLog(
           const outputTokens = usage.output ?? 0;
           const entryTotal = usage.total ?? promptTokens + outputTokens;
           if (Number.isFinite(entryTotal) && entryTotal > 0) {
-            totalTokens += entryTotal;
+            lastTotalTokens = entryTotal;
           }
         }
       } catch {
@@ -103,7 +104,7 @@ export async function readPromptTokensFromSessionLog(
     if (!sawUsage) {
       return undefined;
     }
-    return totalTokens > 0 ? totalTokens : undefined;
+    return lastTotalTokens && lastTotalTokens > 0 ? lastTotalTokens : undefined;
   } catch {
     return undefined;
   }
