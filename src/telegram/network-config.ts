@@ -32,8 +32,13 @@ export function resolveTelegramAutoSelectFamilyDecision(params?: {
   if (typeof params?.network?.autoSelectFamily === "boolean") {
     return { value: params.network.autoSelectFamily, source: "config" };
   }
-  if (Number.isFinite(nodeMajor) && nodeMajor >= 22) {
-    return { value: false, source: "default-node22" };
+  // Node 22-23 workaround: disable autoSelectFamily to avoid Happy Eyeballs timeouts.
+  // See: https://github.com/nodejs/node/issues/54359
+  // This issue appears to be resolved in Node 24+, where autoSelectFamily works correctly.
+  if (Number.isFinite(nodeMajor) && nodeMajor >= 22 && nodeMajor < 24) {
+    return { value: false, source: "default-node22-23" };
   }
+  // Node 24+: Use Node's default behavior (autoSelectFamily enabled by default)
+  // Node 25 testing shows autoSelectFamily=true works correctly for Telegram API
   return { value: null };
 }

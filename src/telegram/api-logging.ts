@@ -25,6 +25,35 @@ function resolveTelegramApiLogger(runtime?: RuntimeEnv, logger?: TelegramApiLogg
   return (message: string) => fallbackLogger.error(message);
 }
 
+function isNetworkError(err: unknown): boolean {
+  const errStr = String(err).toLowerCase();
+  return (
+    errStr.includes("network request") ||
+    errStr.includes("fetch failed") ||
+    errStr.includes("econnrefused") ||
+    errStr.includes("enotfound") ||
+    errStr.includes("etimedout") ||
+    errStr.includes("econnreset")
+  );
+}
+
+function buildErrorMessage(operation: string, err: unknown): string {
+  const errText = formatErrorMessage(err);
+  let message = `telegram ${operation} failed: ${errText}`;
+
+  // Add helpful hints for network errors
+  if (isNetworkError(err)) {
+    message +=
+      "\nTroubleshooting network errors:\n" +
+      "  1. Check internet connectivity to api.telegram.org\n" +
+      "  2. If using Node 22-23, try: clawdbot config set channels.telegram.network.autoSelectFamily true\n" +
+      "  3. Check for proxy/firewall blocking Telegram API\n" +
+      "  4. Verify no local DNS resolution issues";
+  }
+
+  return message;
+}
+
 export async function withTelegramApiErrorLogging<T>({
   operation,
   fn,
@@ -36,9 +65,9 @@ export async function withTelegramApiErrorLogging<T>({
     return await fn();
   } catch (err) {
     if (!shouldLog || shouldLog(err)) {
-      const errText = formatErrorMessage(err);
+      const message = buildErrorMessage(operation, err);
       const log = resolveTelegramApiLogger(runtime, logger);
-      log(danger(`telegram ${operation} failed: ${errText}`));
+      log(danger(message));
     }
     throw err;
   }

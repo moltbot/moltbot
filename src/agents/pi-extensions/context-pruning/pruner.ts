@@ -5,6 +5,76 @@ import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { EffectiveContextPruningSettings } from "./settings.js";
 import { makeToolPrunablePredicate } from "./tools.js";
 
+interface ToolCallLike {
+  id: string;
+  name?: string;
+}
+
+function extractToolCallsFromAssistant(
+  msg: Extract<AgentMessage, { role: "assistant" }>,
+): ToolCallLike[] {
+  const content = msg.content;
+  if (!Array.isArray(content)) return [];
+
+  const toolCalls: ToolCallLike[] = [];
+  for (const block of content) {
+    if (!block || typeof block !== "object") continue;
+    const rec = block as { type?: unknown; id?: unknown; name?: unknown };
+    if (typeof rec.id !== "string" || !rec.id) continue;
+    if (rec.type === "tool_use" || rec.type === "toolCall") {
+      toolCalls.push({
+        id: rec.id,
+        name: typeof rec.name === "string" ? rec.name : undefined,
+      });
+    }
+  }
+  return toolCalls;
+}
+
+function extractToolResultId(msg: Extract<AgentMessage, { role: "toolResult" }>): string | null {
+  const toolCallId = (msg as { toolCallId?: unknown }).toolCallId;
+  if (typeof toolCallId === "string" && toolCallId) return toolCallId;
+  const toolUseId = (msg as { toolUseId?: unknown }).toolUseId;
+  if (typeof toolUseId === "string" && toolUseId) return toolUseId;
+  return null;
+}
+
+/**
+ * Validates that a tool_result at the given index has a corresponding tool_use
+ * in the previous assistant message. This prevents orphaned tool_result blocks
+ * that would cause API validation errors.
+ */
+function hasCorrespondingToolUse(messages: AgentMessage[], toolResultIndex: number): boolean {
+  const toolResult = messages[toolResultIndex];
+  if (!toolResult || toolResult.role !== "toolResult") return false;
+
+  const toolResultId = extractToolResultId(
+    toolResult as Extract<AgentMessage, { role: "toolResult" }>,
+  );
+  if (!toolResultId) return false;
+
+  // Scan backwards to find the assistant message with the matching tool_use
+  for (let j = toolResultIndex - 1; j >= 0; j--) {
+    const prevMsg = messages[j];
+    if (!prevMsg) continue;
+
+    // Stop at the first assistant message (tool_results must follow their assistant message)
+    if (prevMsg.role === "assistant") {
+      const toolCalls = extractToolCallsFromAssistant(
+        prevMsg as Extract<AgentMessage, { role: "assistant" }>,
+      );
+      return toolCalls.some((tc) => tc.id === toolResultId);
+    }
+
+    // Stop if we hit a user message (shouldn't happen in valid history)
+    if (prevMsg.role === "user") {
+      return false;
+    }
+  }
+
+  return false;
+}
+
 const CHARS_PER_TOKEN_ESTIMATE = 4;
 // We currently skip pruning tool results that contain images. Still, we count them (approx.) so
 // we start trimming prunable tool results earlier when image-heavy context is consuming the window.
@@ -278,6 +348,12 @@ export function pruneContextMessages(params: {
       continue;
     }
     if (hasImageBlocks(msg.content)) {
+      continue;
+    }
+    // CRITICAL: Validate that this tool_result has a corresponding tool_use
+    // in the previous assistant message. Pruning orphaned tool_results causes
+    // API validation errors: "unexpected tool_use_id found in tool_result blocks"
+    if (!hasCorrespondingToolUse(messages, i)) {
       continue;
     }
     prunableToolIndexes.push(i);
