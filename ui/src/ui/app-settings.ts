@@ -7,6 +7,7 @@ import { loadDevices } from "./controllers/devices";
 import { loadNodes } from "./controllers/nodes";
 import { loadExecApprovals } from "./controllers/exec-approvals";
 import { loadPresence } from "./controllers/presence";
+import { loadSecrets } from "./controllers/secrets";
 import { loadSessions } from "./controllers/sessions";
 import { loadSkills } from "./controllers/skills";
 import {
@@ -156,6 +157,7 @@ export async function refreshActiveTab(host: SettingsHost) {
   if (host.tab === "sessions") await loadSessions(host as unknown as OpenClawApp);
   if (host.tab === "cron") await loadCron(host);
   if (host.tab === "skills") await loadSkills(host as unknown as OpenClawApp);
+  if (host.tab === "secrets") await loadSecrets(host as unknown as OpenClawApp);
   if (host.tab === "nodes") {
     await loadNodes(host as unknown as OpenClawApp);
     await loadDevices(host as unknown as OpenClawApp);

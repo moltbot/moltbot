@@ -239,6 +239,14 @@ const entries: SubCliEntry[] = [
       mod.registerCompletionCli(program);
     },
   },
+  {
+    name: "secrets",
+    description: "Manage secrets for agent tool use",
+    register: async (program) => {
+      const mod = await import("../secrets-cli.js");
+      mod.registerSecretsCli(program);
+    },
+  },
 ];
 
 export function getSubCliEntries(): SubCliEntry[] {

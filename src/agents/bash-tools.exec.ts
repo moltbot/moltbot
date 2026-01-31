@@ -28,6 +28,7 @@ import {
 import { enqueueSystemEvent } from "../infra/system-events.js";
 import { logInfo, logWarn } from "../logger.js";
 import { formatSpawnError, spawnWithFallback } from "../process/spawn-utils.js";
+import { getSecretsEnvVars } from "../secrets/env.js";
 import {
   type ProcessSession,
   type SessionStdin,
@@ -934,6 +935,12 @@ export function createExecTool(
         applyShellPath(env, shellPath);
       }
       applyPathPrepend(env, defaultPathPrepend);
+
+      // Inject user secrets as env vars (values never enter model context)
+      const secretsEnv = getSecretsEnvVars();
+      for (const [key, value] of Object.entries(secretsEnv)) {
+        env[key] = value;
+      }
 
       if (host === "node") {
         const approvals = resolveExecApprovals(agentId, { security, ask });

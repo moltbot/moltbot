@@ -29,6 +29,8 @@ import type { EventLogEntry } from "./app-events";
 import { DEFAULT_CRON_FORM, DEFAULT_LOG_LEVEL_FILTERS } from "./app-defaults";
 import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals";
 import type { DevicePairingList } from "./controllers/devices";
+import type { SecretMetadata } from "./controllers/secrets";
+import type { SkillMessage } from "./controllers/skills";
 import type { ExecApprovalRequest } from "./controllers/exec-approval";
 import {
   resetToolStream as resetToolStreamInternal,
@@ -217,6 +219,16 @@ export class OpenClawApp extends LitElement {
   @state() skillEdits: Record<string, string> = {};
   @state() skillsBusyKey: string | null = null;
   @state() skillMessages: Record<string, SkillMessage> = {};
+
+  @state() secretsLoading = false;
+  @state() secretsList: SecretMetadata[] = [];
+  @state() secretsError: string | null = null;
+  @state() secretsBusyKey: string | null = null;
+  @state() secretsMessage: { kind: "success" | "error"; message: string } | null = null;
+  @state() secretsEditName = "";
+  @state() secretsEditValue = "";
+  @state() secretsEditDescription = "";
+  @state() secretsShowAddForm = false;
 
   @state() debugLoading = false;
   @state() debugStatus: StatusSummary | null = null;

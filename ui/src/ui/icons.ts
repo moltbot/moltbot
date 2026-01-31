@@ -215,6 +215,12 @@ export const icons = {
   circle: html`
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /></svg>
   `,
+  lock: html`
+    <svg viewBox="0 0 24 24">
+      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  `,
   puzzle: html`
     <svg viewBox="0 0 24 24">
       <path

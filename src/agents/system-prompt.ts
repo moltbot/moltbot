@@ -3,6 +3,7 @@ import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 import type { ResolvedTimeFormat } from "./date-time.js";
 import type { EmbeddedContextFile } from "./pi-embedded-helpers.js";
+import { formatSecretsForPrompt } from "../secrets/env.js";
 
 /**
  * Controls which hardcoded sections are included in the system prompt.
@@ -475,6 +476,8 @@ export function buildAgentSystemPrompt(params: {
           .join("\n")
       : "",
     params.sandboxInfo?.enabled ? "" : "",
+    // Inject available secrets (names only, not values) into system prompt
+    formatSecretsForPrompt(),
     ...buildUserIdentitySection(ownerLine, isMinimal),
     ...buildTimeSection({
       userTimezone,

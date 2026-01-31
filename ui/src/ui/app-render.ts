@@ -51,6 +51,7 @@ import {
   rotateDeviceToken,
 } from "./controllers/devices";
 import { renderSkills } from "./views/skills";
+import { renderSecrets } from "./views/secrets";
 import { renderChatControls, renderTab, renderThemeToggle } from "./app-render.helpers";
 import { loadChannels } from "./controllers/channels";
 import { loadPresence } from "./controllers/presence";
@@ -63,6 +64,16 @@ import {
   updateSkillEnabled,
   type SkillMessage,
 } from "./controllers/skills";
+import {
+  addSecret,
+  hideAddSecretForm,
+  loadSecrets,
+  removeSecret,
+  showAddSecretForm,
+  updateSecretEditDescription,
+  updateSecretEditName,
+  updateSecretEditValue,
+} from "./controllers/secrets";
 import { loadNodes } from "./controllers/nodes";
 import { loadChatHistory } from "./controllers/chat";
 import {
@@ -358,6 +369,30 @@ export function renderApp(state: AppViewState) {
                 onSaveKey: (key) => saveSkillApiKey(state, key),
                 onInstall: (skillKey, name, installId) =>
                   installSkill(state, skillKey, name, installId),
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "secrets"
+            ? renderSecrets({
+                loading: state.secretsLoading,
+                secrets: state.secretsList,
+                error: state.secretsError,
+                busyKey: state.secretsBusyKey,
+                message: state.secretsMessage,
+                showAddForm: state.secretsShowAddForm,
+                editName: state.secretsEditName,
+                editValue: state.secretsEditValue,
+                editDescription: state.secretsEditDescription,
+                onRefresh: () => loadSecrets(state),
+                onRemove: (name) => removeSecret(state, name),
+                onShowAddForm: () => showAddSecretForm(state),
+                onHideAddForm: () => hideAddSecretForm(state),
+                onSave: () => addSecret(state),
+                onNameChange: (value) => updateSecretEditName(state, value),
+                onValueChange: (value) => updateSecretEditValue(state, value),
+                onDescriptionChange: (value) => updateSecretEditDescription(state, value),
               })
             : nothing
         }
