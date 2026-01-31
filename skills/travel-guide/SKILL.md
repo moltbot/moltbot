@@ -2,7 +2,13 @@
 name: travel-guide
 description: "Worldwide travel assistant: find hotels, transportation, attractions, restaurants, cafes, pubs, clubs, and get directions anywhere in the world."
 homepage: https://github.com/openclaw/openclaw
-metadata: { "openclaw": { "emoji": "🌍", "requires": { "bins": ["curl", "jq"] } } }
+metadata:
+  openclaw:
+    emoji: "🌍"
+    requires:
+      bins:
+        - curl
+        - jq
 ---
 
 # 🌍 Travel Guide
@@ -193,14 +199,23 @@ curl -s "https://overpass-api.de/api/interpreter" \
 
 ## 6. 🛤️ Get Directions
 
-Get walking/driving directions between two points (requires free API key from openrouteservice.org):
+Get walking/driving directions between two points.
+
+### Setup (Optional - for detailed routes)
+
+```bash
+# Get a free API key from https://openrouteservice.org/dev/#/signup
+export OPENROUTE_API_KEY="your-api-key-here"
+```
+
+### With API Key
 
 ```bash
 # Walking directions from Eiffel Tower to Louvre
 curl -s "https://api.openrouteservice.org/v2/directions/foot-walking?api_key=$OPENROUTE_API_KEY&start=2.2945,48.8584&end=2.3376,48.8606" | jq '.features[0].properties.summary'
 ```
 
-**Without API key** - use Google Maps link:
+### Without API key (Google Maps link)
 
 ```bash
 echo "https://www.google.com/maps/dir/48.8584,2.2945/48.8606,2.3376"

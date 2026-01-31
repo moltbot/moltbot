@@ -2,7 +2,13 @@
 name: market-watch
 description: "Live financial markets: crypto prices, forex rates, stock market data, and financial news from worldwide exchanges."
 homepage: https://github.com/openclaw/openclaw
-metadata: { "openclaw": { "emoji": "📈", "requires": { "bins": ["curl", "jq"] } } }
+metadata:
+  openclaw:
+    emoji: "📈"
+    requires:
+      bins:
+        - curl
+        - jq
 ---
 
 # 📈 Market Watch
