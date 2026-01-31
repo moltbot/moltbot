@@ -94,6 +94,7 @@ function resolveExecConfig(cfg: OpenClawConfig | undefined) {
     pathPrepend: globalExec?.pathPrepend,
     safeBins: globalExec?.safeBins,
     backgroundMs: globalExec?.backgroundMs,
+    backgroundRunner: globalExec?.backgroundRunner,
     timeoutSec: globalExec?.timeoutSec,
     approvalRunningNoticeMs: globalExec?.approvalRunningNoticeMs,
     cleanupMs: globalExec?.cleanupMs,
