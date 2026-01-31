@@ -8,7 +8,7 @@
 import type { WorkspaceBootstrapFile } from "../agents/workspace.js";
 import type { OpenClawConfig } from "../config/config.js";
 
-export type InternalHookEventType = "command" | "session" | "agent" | "gateway";
+export type InternalHookEventType = "command" | "session" | "agent" | "gateway" | "message";
 
 export type AgentBootstrapHookContext = {
   workspaceDir: string;
@@ -23,6 +23,56 @@ export type AgentBootstrapHookEvent = InternalHookEvent & {
   type: "agent";
   action: "bootstrap";
   context: AgentBootstrapHookContext;
+};
+
+/**
+ * Context for message:received hook events
+ */
+export type MessageReceivedHookContext = {
+  /** The raw message text from the user */
+  messageText: string;
+  /** Who sent the message (user ID, phone number, etc.) */
+  senderId?: string;
+  /** The channel this message came from (signal, telegram, slack, etc.) */
+  channel?: string;
+  /** Platform-specific message ID */
+  messageId?: string;
+  /** If this is a reply, the ID of the message being replied to */
+  replyTo?: string;
+  /** Whether this is a group chat */
+  isGroup?: boolean;
+  /** Group ID if applicable */
+  groupId?: string;
+  /** The config object */
+  cfg?: MoltbotConfig;
+};
+
+export type MessageReceivedHookEvent = InternalHookEvent & {
+  type: "message";
+  action: "received";
+  context: MessageReceivedHookContext;
+};
+
+/**
+ * Context for message:sent hook events
+ */
+export type MessageSentHookContext = {
+  /** The response text from the agent */
+  responseText: string;
+  /** Tool calls made during this response (JSON stringified) */
+  toolCalls?: string;
+  /** The original message that triggered this response */
+  originalMessage?: string;
+  /** The channel this response is being sent to */
+  channel?: string;
+  /** The config object */
+  cfg?: MoltbotConfig;
+};
+
+export type MessageSentHookEvent = InternalHookEvent & {
+  type: "message";
+  action: "sent";
+  context: MessageSentHookContext;
 };
 
 export interface InternalHookEvent {
@@ -178,4 +228,60 @@ export function isAgentBootstrapEvent(event: InternalHookEvent): event is AgentB
     return false;
   }
   return Array.isArray(context.bootstrapFiles);
+}
+
+/**
+ * Type guard for message:received events
+ */
+export function isMessageReceivedEvent(
+  event: InternalHookEvent,
+): event is MessageReceivedHookEvent {
+  if (event.type !== "message" || event.action !== "received") return false;
+  const context = event.context as Partial<MessageReceivedHookContext> | null;
+  if (!context || typeof context !== "object") return false;
+  return typeof context.messageText === "string";
+}
+
+/**
+ * Type guard for message:sent events
+ */
+export function isMessageSentEvent(event: InternalHookEvent): event is MessageSentHookEvent {
+  if (event.type !== "message" || event.action !== "sent") return false;
+  const context = event.context as Partial<MessageSentHookContext> | null;
+  if (!context || typeof context !== "object") return false;
+  return typeof context.responseText === "string";
+}
+
+/**
+ * Create a message:received hook event
+ */
+export function createMessageReceivedEvent(
+  sessionKey: string,
+  context: MessageReceivedHookContext,
+): MessageReceivedHookEvent {
+  return {
+    type: "message",
+    action: "received",
+    sessionKey,
+    context,
+    timestamp: new Date(),
+    messages: [],
+  };
+}
+
+/**
+ * Create a message:sent hook event
+ */
+export function createMessageSentEvent(
+  sessionKey: string,
+  context: MessageSentHookContext,
+): MessageSentHookEvent {
+  return {
+    type: "message",
+    action: "sent",
+    sessionKey,
+    context,
+    timestamp: new Date(),
+    messages: [],
+  };
 }

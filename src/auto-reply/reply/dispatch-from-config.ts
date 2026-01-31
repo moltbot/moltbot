@@ -3,6 +3,7 @@ import { resolveSessionAgentId } from "../../agents/agent-scope.js";
 import { loadSessionStore, resolveStorePath } from "../../config/sessions.js";
 import { logVerbose } from "../../globals.js";
 import { isDiagnosticsEnabled } from "../../infra/diagnostic-events.js";
+import { createMessageReceivedEvent, triggerInternalHook } from "../../hooks/internal-hooks.js";
 import {
   logMessageProcessed,
   logMessageQueued,
@@ -195,6 +196,37 @@ export async function dispatchReplyFromConfig(params: {
       .catch((err) => {
         logVerbose(`dispatch-from-config: message_received hook failed: ${String(err)}`);
       });
+  }
+
+  // Trigger internal hook for workspace/bundled hooks (message:received)
+  {
+    const sessionKey = ctx.SessionKey ?? "";
+    const messageText =
+      typeof ctx.BodyForCommands === "string"
+        ? ctx.BodyForCommands
+        : typeof ctx.RawBody === "string"
+          ? ctx.RawBody
+          : typeof ctx.Body === "string"
+            ? ctx.Body
+            : "";
+    const channel = (ctx.OriginatingChannel ?? ctx.Surface ?? ctx.Provider ?? "").toLowerCase();
+    const messageId =
+      ctx.MessageSidFull ?? ctx.MessageSid ?? ctx.MessageSidFirst ?? ctx.MessageSidLast;
+
+    const internalHookEvent = createMessageReceivedEvent(sessionKey, {
+      messageText,
+      senderId: ctx.SenderId ?? ctx.From,
+      channel,
+      messageId,
+      replyTo: ctx.QuotedMessageId,
+      isGroup: ctx.IsGroup,
+      groupId: ctx.GroupId ?? ctx.To,
+      cfg,
+    });
+
+    void triggerInternalHook(internalHookEvent).catch((err) => {
+      logVerbose(`dispatch-from-config: internal message:received hook failed: ${String(err)}`);
+    });
   }
 
   // Check if we should route replies to originating channel instead of dispatcher.
