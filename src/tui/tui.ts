@@ -6,6 +6,33 @@ import {
   Text,
   TUI,
 } from "@mariozechner/pi-tui";
+import { spawnSync } from "node:child_process";
+
+/**
+ * Detect the fd binary for @path fuzzy file picker.
+ * fd is a fast alternative to `find` that respects .gitignore.
+ * On some systems (e.g., Ubuntu) it's called 'fdfind'.
+ *
+ * @returns Path to fd binary, or undefined if not found
+ */
+function detectFd(): string | undefined {
+  for (const name of ["fd", "fdfind"]) {
+    try {
+      const result = spawnSync("which", [name], {
+        encoding: "utf-8",
+        timeout: 1000,
+      });
+      if (result.status === 0 && result.stdout?.trim()) {
+        return result.stdout.trim();
+      }
+    } catch {
+      // Continue to next candidate
+    }
+  }
+  return undefined;
+}
+
+const fdPath = detectFd();
 import { resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { loadConfig } from "../config/config.js";
 import {
@@ -251,6 +278,7 @@ export async function runTui(opts: TuiOptions) {
           model: sessionInfo.model,
         }),
         process.cwd(),
+        fdPath,
       ),
     );
   };
