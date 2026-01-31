@@ -1,0 +1,29 @@
+{
+  "name": "@openclaw/mezon",
+  "version": "2026.1.27-beta.1",
+  "description": "OpenClaw Mezon channel plugin",
+  "type": "module",
+  "dependencies": {
+    "mezon-sdk": "^2.8.0",
+    "openclaw": "workspace:*"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "channel": {
+      "id": "mezon",
+      "label": "Mezon",
+      "selectionLabel": "Mezon (plugin)",
+      "docsPath": "/channels/mezon",
+      "docsLabel": "mezon",
+      "blurb": "Mezon chat platform; install the plugin to enable.",
+      "order": 66
+    },
+    "install": {
+      "npmSpec": "@openclaw/mezon",
+      "localPath": "extensions/mezon",
+      "defaultChoice": "npm"
+    }
+  }
+}

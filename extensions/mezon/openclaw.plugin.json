@@ -1,0 +1,9 @@
+{
+  "id": "mezon",
+  "channels": ["mezon"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

@@ -13,9 +13,13 @@ const ENVELOPE_CHANNELS = [
   "Zalo",
   "Zalo Personal",
   "BlueBubbles",
+  "Mezon",
 ];
 
 const MESSAGE_ID_LINE = /^\s*\[message_id:\s*[^\]]+\]\s*$/i;
+const MEZON_MESSAGE_ID_LINE = /^\s*\[mezon message id:\s*[^\]]+\]\s*$/i;
+const HISTORY_CONTEXT_MARKER = /^\s*\[Chat messages since your last reply - for context\]\s*$/i;
+const CURRENT_MESSAGE_MARKER = /^\s*\[Current message - respond to this\]\s*$/i;
 
 function looksLikeEnvelopeHeader(header: string): boolean {
   if (/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z\b/.test(header)) {
@@ -40,11 +44,24 @@ export function stripEnvelope(text: string): string {
 }
 
 function stripMessageIdHints(text: string): string {
-  if (!text.includes("[message_id:")) {
+  if (
+    !text.includes("[message_id:") &&
+    !text.includes("[mezon message id:") &&
+    !text.includes("[Chat messages since") &&
+    !text.includes("[Current message")
+  ) {
     return text;
   }
   const lines = text.split(/\r?\n/);
-  const filtered = lines.filter((line) => !MESSAGE_ID_LINE.test(line));
+  const filtered = lines.filter((line) => {
+    // Filter out all internal metadata lines
+    return (
+      !MESSAGE_ID_LINE.test(line) &&
+      !MEZON_MESSAGE_ID_LINE.test(line) &&
+      !HISTORY_CONTEXT_MARKER.test(line) &&
+      !CURRENT_MESSAGE_MARKER.test(line)
+    );
+  });
   return filtered.length === lines.length ? text : filtered.join("\n");
 }
 

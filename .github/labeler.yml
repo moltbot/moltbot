@@ -35,6 +35,11 @@
       - any-glob-to-any-file:
           - "extensions/mattermost/**"
           - "docs/channels/mattermost.md"
+"channel: mezon":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "extensions/mezon/**"
+          - "docs/channels/mezon.md"
 "channel: msteams":
   - changed-files:
       - any-glob-to-any-file:
