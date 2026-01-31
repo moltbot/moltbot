@@ -198,10 +198,18 @@ export async function prepareSlackMessage(params: {
   const baseSessionKey = route.sessionKey;
   const threadContext = resolveSlackThreadContext({ message, replyToMode: ctx.replyToMode });
   const threadTs = threadContext.incomingThreadTs;
+  const messageTs = threadContext.messageTs;
   const isThreadReply = threadContext.isThreadReply;
+  // When sessionPerRootMessage is enabled, use the message's own timestamp as the thread ID
+  // for root messages, giving each root-level @mention its own isolated session.
+  const effectiveThreadId = isThreadReply
+    ? threadTs
+    : ctx.threadSessionPerRootMessage && isRoom && messageTs
+      ? messageTs
+      : undefined;
   const threadKeys = resolveThreadSessionKeys({
     baseSessionKey,
-    threadId: isThreadReply ? threadTs : undefined,
+    threadId: effectiveThreadId,
     parentSessionKey: isThreadReply && ctx.threadInheritParent ? baseSessionKey : undefined,
   });
   const sessionKey = threadKeys.sessionKey;

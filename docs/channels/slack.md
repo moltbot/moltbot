@@ -468,10 +468,46 @@ For fine-grained control, use these tags in agent responses:
 
 - DMs share the `main` session (like WhatsApp/Telegram).
 - Channels map to `agent:<agentId>:slack:channel:<channelId>` sessions.
+- Thread replies use `agent:<agentId>:slack:channel:<channelId>:thread:<threadTs>` sessions.
 - Slash commands use `agent:<agentId>:slack:slash:<userId>` sessions (prefix configurable via `channels.slack.slashCommand.sessionPrefix`).
-- If Slack doesn’t provide `channel_type`, OpenClaw infers it from the channel ID prefix (`D`, `C`, `G`) and defaults to `channel` to keep session keys stable.
+- If Slack doesn't provide `channel_type`, OpenClaw infers it from the channel ID prefix (`D`, `C`, `G`) and defaults to `channel` to keep session keys stable.
 - Native command registration uses `commands.native` (global default `"auto"` → Slack off) and can be overridden per-workspace with `channels.slack.commands.native`. Text commands require standalone `/...` messages and can be disabled with `commands.text: false`. Slack slash commands are managed in the Slack app and are not removed automatically. Use `commands.useAccessGroups: false` to bypass access-group checks for commands.
 - Full command list + config: [Slash commands](/tools/slash-commands)
+
+### Thread session configuration
+Configure thread session behavior with `channels.slack.thread`:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `historyScope` | `"thread"` | Scope for thread history context. `"thread"` isolates history per thread; `"channel"` reuses channel history. |
+| `inheritParent` | `false` | If true, thread sessions inherit the parent channel transcript. |
+| `sessionPerRootMessage` | `false` | If true, each root-level channel message creates its own thread-level session. |
+
+### Isolating sessions per root message
+By default, all root-level messages in a channel share a single channel session. This can cause context pollution when multiple users or topics are discussed in the same channel.
+
+Enable `sessionPerRootMessage` to create a unique session for each root-level @mention:
+
+```json5
+{
+  channels: {
+    slack: {
+      replyToMode: "all",  // recommended: reply in threads
+      thread: {
+        sessionPerRootMessage: true
+      }
+    }
+  }
+}
+```
+
+When enabled:
+- Each root @mention creates session `agent:<agentId>:slack:channel:<channelId>:thread:<messageTs>`
+- Thread replies continue using the same session as the root message
+- Different conversations in the same channel are completely isolated
+- Works best with `replyToMode: "all"` so replies stay in threads
+
+Use case: Team channels where multiple people interact with the bot on different topics. Without this option, unrelated conversations share context and may confuse the agent.
 
 ## DM security (pairing)
 

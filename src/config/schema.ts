@@ -337,6 +337,7 @@ const FIELD_LABELS: Record<string, string> = {
   "channels.slack.userTokenReadOnly": "Slack User Token Read Only",
   "channels.slack.thread.historyScope": "Slack Thread History Scope",
   "channels.slack.thread.inheritParent": "Slack Thread Parent Inheritance",
+  "channels.slack.thread.sessionPerRootMessage": "Slack Session Per Root Message",
   "channels.mattermost.botToken": "Mattermost Bot Token",
   "channels.mattermost.baseUrl": "Mattermost Base URL",
   "channels.mattermost.chatmode": "Mattermost Chat Mode",
@@ -469,6 +470,8 @@ const FIELD_HELP: Record<string, string> = {
     'Scope for Slack thread history context ("thread" isolates per thread; "channel" reuses channel history).',
   "channels.slack.thread.inheritParent":
     "If true, Slack thread sessions inherit the parent channel transcript (default: false).",
+  "channels.slack.thread.sessionPerRootMessage":
+    "If true, each root-level channel message creates its own thread-level session for complete isolation (default: false).",
   "channels.mattermost.botToken":
     "Bot token from Mattermost System Console -> Integrations -> Bot Accounts.",
   "channels.mattermost.baseUrl":

@@ -73,6 +73,12 @@ export type SlackThreadConfig = {
   historyScope?: "thread" | "channel";
   /** If true, thread sessions inherit the parent channel transcript. Default: false. */
   inheritParent?: boolean;
+  /**
+   * If true, each root-level channel message creates its own thread-level session
+   * using the message timestamp as the thread ID. This provides complete session
+   * isolation for each conversation started in a channel. Default: false.
+   */
+  sessionPerRootMessage?: boolean;
 };
 
 export type SlackAccountConfig = {
