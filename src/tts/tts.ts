@@ -51,6 +51,12 @@ const DEFAULT_OPENAI_VOICE = "alloy";
 const DEFAULT_EDGE_VOICE = "en-US-MichelleNeural";
 const DEFAULT_EDGE_LANG = "en-US";
 const DEFAULT_EDGE_OUTPUT_FORMAT = "audio-24khz-48kbitrate-mono-mp3";
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-tts";
+const DEFAULT_GEMINI_VOICE = "Aoede";
+const DEFAULT_GEMINI_LANGUAGE = "he-IL";
+const DEFAULT_GEMINI_PROMPT = "Say the following in a natural way";
+const DEFAULT_GEMINI_TEMPERATURE = 2.0;
+const GEMINI_TTS_ENDPOINT = "https://texttospeech.googleapis.com/v1/text:synthesize";
 
 const DEFAULT_ELEVENLABS_VOICE_SETTINGS = {
   stability: 0.5,
@@ -65,6 +71,7 @@ const TELEGRAM_OUTPUT = {
   // ElevenLabs output formats use codec_sample_rate_bitrate naming.
   // Opus @ 48kHz/64kbps is a good voice-note tradeoff for Telegram.
   elevenlabs: "opus_48000_64",
+  gemini: "mp3" as const,
   extension: ".opus",
   voiceCompatible: true,
 };
@@ -72,6 +79,7 @@ const TELEGRAM_OUTPUT = {
 const DEFAULT_OUTPUT = {
   openai: "mp3" as const,
   elevenlabs: "mp3_44100_128",
+  gemini: "mp3" as const,
   extension: ".mp3",
   voiceCompatible: false,
 };
@@ -124,6 +132,15 @@ export type ResolvedTtsConfig = {
     proxy?: string;
     timeoutMs?: number;
   };
+  gemini: {
+    serviceAccountPath?: string;
+    projectId?: string;
+    model: string;
+    voice: string;
+    languageCode: string;
+    prompt: string;
+    temperature: number;
+  };
   prefsPath?: string;
   maxTextLength: number;
   timeoutMs: number;
@@ -164,6 +181,12 @@ type TtsDirectiveOverrides = {
     applyTextNormalization?: "auto" | "on" | "off";
     languageCode?: string;
     voiceSettings?: Partial<ResolvedTtsConfig["elevenlabs"]["voiceSettings"]>;
+  };
+  gemini?: {
+    voice?: string;
+    model?: string;
+    prompt?: string;
+    temperature?: number;
   };
 };
 
@@ -297,6 +320,15 @@ export function resolveTtsConfig(cfg: OpenClawConfig): ResolvedTtsConfig {
       saveSubtitles: raw.edge?.saveSubtitles ?? false,
       proxy: raw.edge?.proxy?.trim() || undefined,
       timeoutMs: raw.edge?.timeoutMs,
+    },
+    gemini: {
+      serviceAccountPath: raw.gemini?.serviceAccountPath?.trim() || undefined,
+      projectId: raw.gemini?.projectId?.trim() || undefined,
+      model: raw.gemini?.model?.trim() || DEFAULT_GEMINI_MODEL,
+      voice: raw.gemini?.voice?.trim() || DEFAULT_GEMINI_VOICE,
+      languageCode: raw.gemini?.languageCode?.trim() || DEFAULT_GEMINI_LANGUAGE,
+      prompt: raw.gemini?.prompt?.trim() || DEFAULT_GEMINI_PROMPT,
+      temperature: raw.gemini?.temperature ?? DEFAULT_GEMINI_TEMPERATURE,
     },
     prefsPath: raw.prefsPath,
     maxTextLength: raw.maxTextLength ?? DEFAULT_MAX_TEXT_LENGTH,
@@ -503,7 +535,7 @@ export function resolveTtsApiKey(
   return undefined;
 }
 
-export const TTS_PROVIDERS = ["openai", "elevenlabs", "edge"] as const;
+export const TTS_PROVIDERS = ["openai", "elevenlabs", "edge", "gemini"] as const;
 
 export function resolveTtsProviderOrder(primary: TtsProvider): TtsProvider[] {
   return [primary, ...TTS_PROVIDERS.filter((provider) => provider !== primary)];
@@ -1139,6 +1171,118 @@ function inferEdgeExtension(outputFormat: string): string {
   return ".mp3";
 }
 
+/**
+ * Get OAuth2 access token from Google Service Account
+ */
+async function getGoogleAccessToken(serviceAccountPath: string): Promise<string> {
+  const { createSign } = await import("node:crypto");
+  const credentials = JSON.parse(readFileSync(serviceAccountPath, "utf8"));
+  const now = Math.floor(Date.now() / 1000);
+
+  const claim = {
+    iss: credentials.client_email,
+    scope: "https://www.googleapis.com/auth/cloud-platform",
+    aud: "https://oauth2.googleapis.com/token",
+    exp: now + 3600,
+    iat: now,
+  };
+
+  // Create JWT
+  const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify(claim)).toString("base64url");
+  const signData = `${header}.${payload}`;
+
+  const sign = createSign("RSA-SHA256");
+  sign.update(signData);
+  const signature = sign.sign(credentials.private_key, "base64url");
+
+  const jwt = `${signData}.${signature}`;
+
+  // Exchange JWT for access token
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+  });
+
+  const data = (await response.json()) as { access_token: string; error?: string };
+  if (!response.ok) {
+    throw new Error(`OAuth error: ${JSON.stringify(data)}`);
+  }
+
+  return data.access_token;
+}
+
+/**
+ * Gemini TTS API call
+ */
+async function geminiTTS(params: {
+  text: string;
+  serviceAccountPath: string;
+  projectId: string;
+  model: string;
+  voice: string;
+  languageCode: string;
+  prompt: string;
+  temperature: number;
+  timeoutMs: number;
+}): Promise<Buffer> {
+  const {
+    text,
+    serviceAccountPath,
+    projectId,
+    model,
+    voice,
+    languageCode,
+    prompt,
+    temperature,
+    timeoutMs,
+  } = params;
+
+  // Get access token
+  const accessToken = await getGoogleAccessToken(serviceAccountPath);
+
+  // Call Gemini TTS API
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(GEMINI_TTS_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "x-goog-user-project": projectId,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        input: {
+          prompt: prompt,
+          text: text,
+        },
+        voice: {
+          languageCode: languageCode,
+          name: voice,
+          model_name: model,
+        },
+        audioConfig: {
+          audioEncoding: "MP3",
+        },
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`Gemini TTS API error (${response.status}): ${JSON.stringify(errorData)}`);
+    }
+
+    const data = (await response.json()) as { audioContent: string };
+    return Buffer.from(data.audioContent, "base64");
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function edgeTTS(params: {
   text: string;
   outputPath: string;
@@ -1254,6 +1398,52 @@ export async function textToSpeech(params: {
           provider,
           outputFormat: edgeResult.outputFormat,
           voiceCompatible,
+        };
+      }
+
+      if (provider === "gemini") {
+        const serviceAccountPath = config.gemini.serviceAccountPath;
+        if (!serviceAccountPath) {
+          lastError = "gemini: no service account path configured";
+          continue;
+        }
+
+        const projectId = config.gemini.projectId;
+        if (!projectId) {
+          lastError = "gemini: no project ID configured";
+          continue;
+        }
+
+        const voiceOverride = params.overrides?.gemini?.voice;
+        const modelOverride = params.overrides?.gemini?.model;
+        const promptOverride = params.overrides?.gemini?.prompt;
+        const temperatureOverride = params.overrides?.gemini?.temperature;
+
+        const audioBuffer = await geminiTTS({
+          text: params.text,
+          serviceAccountPath,
+          projectId,
+          model: modelOverride ?? config.gemini.model,
+          voice: voiceOverride ?? config.gemini.voice,
+          languageCode: config.gemini.languageCode,
+          prompt: promptOverride ?? config.gemini.prompt,
+          temperature: temperatureOverride ?? config.gemini.temperature,
+          timeoutMs: config.timeoutMs,
+        });
+
+        const latencyMs = Date.now() - providerStart;
+        const tempDir = mkdtempSync(path.join(tmpdir(), "tts-"));
+        const audioPath = path.join(tempDir, `voice-${Date.now()}${output.extension}`);
+        writeFileSync(audioPath, audioBuffer);
+        scheduleCleanup(tempDir);
+
+        return {
+          success: true,
+          audioPath,
+          latencyMs,
+          provider,
+          outputFormat: output.gemini,
+          voiceCompatible: output.voiceCompatible,
         };
       }
 

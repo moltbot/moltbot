@@ -1,4 +1,4 @@
-export type TtsProvider = "elevenlabs" | "openai" | "edge";
+export type TtsProvider = "elevenlabs" | "openai" | "edge" | "gemini";
 
 export type TtsMode = "final" | "all";
 
@@ -72,6 +72,23 @@ export type TtsConfig = {
     saveSubtitles?: boolean;
     proxy?: string;
     timeoutMs?: number;
+  };
+  /** Google Gemini TTS configuration. */
+  gemini?: {
+    /** Path to Google Cloud service account JSON file. */
+    serviceAccountPath?: string;
+    /** Google Cloud project ID. */
+    projectId?: string;
+    /** Gemini TTS model name (default: gemini-2.5-flash-tts). */
+    model?: string;
+    /** Voice name (e.g., "Aoede", "Kore", "Puck"). */
+    voice?: string;
+    /** Language code (e.g., "he-IL", "en-US"). */
+    languageCode?: string;
+    /** Style prompt for voice generation. */
+    prompt?: string;
+    /** Temperature for voice generation (0.0-2.0). */
+    temperature?: number;
   };
   /** Optional path for local TTS user preferences JSON. */
   prefsPath?: string;
