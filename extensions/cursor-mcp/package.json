@@ -1,0 +1,17 @@
+{
+  "name": "@openclaw/cursor-mcp",
+  "version": "2026.1.29",
+  "type": "module",
+  "description": "OpenClaw MCP server for Cursor IDE integration",
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.3"
+  },
+  "devDependencies": {
+    "openclaw": "workspace:*"
+  }
+}

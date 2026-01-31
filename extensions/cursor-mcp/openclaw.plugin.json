@@ -1,0 +1,25 @@
+{
+  "id": "cursor-mcp",
+  "name": "Cursor MCP Server",
+  "description": "MCP server integration for Cursor IDE - enables OpenClaw as an AI agent in Cursor",
+  "providers": [],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "description": "Enable the Cursor MCP server"
+      },
+      "port": {
+        "type": "number",
+        "description": "Port for SSE transport (optional, uses stdio by default)"
+      },
+      "autoApproveTools": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "List of tool names to auto-approve without user confirmation"
+      }
+    }
+  }
+}
