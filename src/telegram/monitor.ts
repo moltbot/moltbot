@@ -159,6 +159,9 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
 
   while (!opts.abortSignal?.aborted) {
     const runner = run(bot, createTelegramRunnerOptions(cfg));
+    if (!runner) {
+      throw new Error("Failed to create Telegram runner");
+    }
     const stopOnAbort = () => {
       if (opts.abortSignal?.aborted) {
         void runner.stop();
@@ -167,7 +170,15 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
     opts.abortSignal?.addEventListener("abort", stopOnAbort, { once: true });
     try {
       // runner.task() returns a promise that resolves when the runner stops
-      await runner.task();
+      // Wrap in a defensive promise handler to catch any unhandled rejections
+      // from the grammY runner internals (addresses issue #4501)
+      const task = runner.task();
+      if (task) {
+        await task.catch((taskErr) => {
+          // Re-throw to be handled by the outer catch block
+          throw taskErr;
+        });
+      }
       return;
     } catch (err) {
       if (opts.abortSignal?.aborted) {
@@ -177,6 +188,10 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
       const isRecoverable = isRecoverableTelegramNetworkError(err, { context: "polling" });
       const isNetworkError = isNetworkRelatedError(err);
       if (!isConflict && !isRecoverable && !isNetworkError) {
+        // Log detailed error info for non-recoverable errors before throwing
+        (opts.runtime?.error ?? console.error)(
+          `Telegram non-recoverable error (will crash): ${formatErrorMessage(err)}`,
+        );
         throw err;
       }
       restartAttempts += 1;
@@ -194,6 +209,14 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
       }
     } finally {
       opts.abortSignal?.removeEventListener("abort", stopOnAbort);
+      // Ensure runner is properly stopped to prevent floating promises (issue #4501)
+      try {
+        // runner.stop() is idempotent and safe to call multiple times
+        await runner.stop();
+      } catch {
+        // Ignore errors during stop - we're cleaning up
+        // This is expected if the runner already stopped
+      }
     }
   }
 }

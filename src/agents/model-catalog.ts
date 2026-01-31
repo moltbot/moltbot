@@ -1,5 +1,5 @@
 import { type OpenClawConfig, loadConfig } from "../config/config.js";
-import { resolveOpenClawAgentDir } from "./agent-paths.js";
+// Note: resolveOpenClawAgentDir no longer needed - AuthStorage() doesn't take agentDir in pi-agent-core 0.50.4
 import { ensureOpenClawModelsJson } from "./models-config.js";
 
 export type ModelCatalogEntry = {
@@ -63,9 +63,9 @@ export async function loadModelCatalog(params?: {
       // we must not poison the cache with a rejected promise (otherwise all channel handlers
       // will keep failing until restart).
       const piSdk = await importPiSdk();
-      const agentDir = resolveOpenClawAgentDir();
-      const authStorage = piSdk.discoverAuthStorage(agentDir);
-      const registry = piSdk.discoverModels(authStorage, agentDir) as
+      // Note: agentDir no longer needed - AuthStorage() doesn't take it as parameter in pi-agent-core 0.50.4
+      const authStorage = new piSdk.AuthStorage();
+      const registry = new piSdk.ModelRegistry(authStorage) as
         | {
             getAll: () => Array<DiscoveredModel>;
           }

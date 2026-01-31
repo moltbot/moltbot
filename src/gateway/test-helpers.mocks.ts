@@ -232,15 +232,37 @@ vi.mock("@mariozechner/pi-coding-agent", async () => {
     "@mariozechner/pi-coding-agent",
   );
 
+  class MockModelRegistry {
+    private actualInstance?: InstanceType<typeof actual.ModelRegistry>;
+
+    constructor(...args: unknown[]) {
+      if (!piSdkMock.enabled) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        this.actualInstance = new (actual.ModelRegistry as any)(...args);
+      } else {
+        piSdkMock.discoverCalls += 1;
+      }
+    }
+    getAll() {
+      if (this.actualInstance) return this.actualInstance.getAll();
+      return piSdkMock.models;
+    }
+    find(...args: unknown[]) {
+      if (this.actualInstance) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return (this.actualInstance.find as any)(...args);
+      }
+      return null;
+    }
+    getAvailable() {
+      if (this.actualInstance) return this.actualInstance.getAvailable();
+      return piSdkMock.models;
+    }
+  }
+
   return {
     ...actual,
-    discoverModels: (...args: unknown[]) => {
-      if (!piSdkMock.enabled) {
-        return (actual.discoverModels as (...args: unknown[]) => unknown)(...args);
-      }
-      piSdkMock.discoverCalls += 1;
-      return piSdkMock.models;
-    },
+    ModelRegistry: MockModelRegistry,
   };
 });
 

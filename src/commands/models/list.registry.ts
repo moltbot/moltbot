@@ -1,7 +1,7 @@
 import type { Api, Model } from "@mariozechner/pi-ai";
-import { discoverAuthStorage, discoverModels } from "@mariozechner/pi-coding-agent";
+import { AuthStorage, ModelRegistry } from "@mariozechner/pi-coding-agent";
 
-import { resolveOpenClawAgentDir } from "../../agents/agent-paths.js";
+// Note: resolveOpenClawAgentDir no longer needed - AuthStorage() doesn't take agentDir in pi-agent-core 0.50.4
 import type { AuthProfileStore } from "../../agents/auth-profiles.js";
 import { listProfilesForProvider } from "../../agents/auth-profiles.js";
 import {
@@ -40,9 +40,9 @@ const hasAuthForProvider = (provider: string, cfg: OpenClawConfig, authStore: Au
 
 export async function loadModelRegistry(cfg: OpenClawConfig) {
   await ensureOpenClawModelsJson(cfg);
-  const agentDir = resolveOpenClawAgentDir();
-  const authStorage = discoverAuthStorage(agentDir);
-  const registry = discoverModels(authStorage, agentDir);
+  // Note: agentDir no longer needed - AuthStorage() doesn't take it as parameter in pi-agent-core 0.50.4
+  const authStorage = new AuthStorage();
+  const registry = new ModelRegistry(authStorage);
   const models = registry.getAll() as Model<Api>[];
   const availableModels = registry.getAvailable() as Model<Api>[];
   const availableKeys = new Set(availableModels.map((model) => modelKey(model.provider, model.id)));

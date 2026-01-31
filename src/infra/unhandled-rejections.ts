@@ -147,9 +147,16 @@ export function installUnhandledRejectionHandler(): void {
     }
 
     if (isTransientNetworkError(reason)) {
+      // Log with more detail to help diagnose source (issue #4501)
+      const errorDetails = formatUncaughtError(reason);
+      const stack =
+        reason instanceof Error && reason.stack
+          ? reason.stack.split("\n").slice(0, 5).join("\n")
+          : "";
       console.warn(
         "[openclaw] Non-fatal unhandled rejection (continuing):",
-        formatUncaughtError(reason),
+        errorDetails,
+        stack ? `\nStack trace (truncated):\n${stack}` : "",
       );
       return;
     }
