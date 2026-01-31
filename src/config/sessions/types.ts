@@ -80,6 +80,7 @@ export type SessionEntry = {
   cliSessionIds?: Record<string, string>;
   claudeCliSessionId?: string;
   label?: string;
+  icon?: string;
   displayName?: string;
   channel?: string;
   groupId?: string;

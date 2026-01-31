@@ -115,6 +115,20 @@ export async function applySessionsPatchToStore(params: {
     }
   }
 
+  if ("icon" in patch) {
+    const raw = patch.icon;
+    if (raw === null) {
+      delete next.icon;
+    } else if (raw !== undefined) {
+      const trimmed = String(raw).trim();
+      if (!trimmed) return invalid("invalid icon: empty");
+      // Allow single emoji or short string (max 2 grapheme clusters)
+      const segments = [...new Intl.Segmenter().segment(trimmed)];
+      if (segments.length > 2) return invalid("icon must be a single emoji");
+      next.icon = trimmed;
+    }
+  }
+
   if ("thinkingLevel" in patch) {
     const raw = patch.thinkingLevel;
     if (raw === null) {
