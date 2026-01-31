@@ -45,6 +45,7 @@ export interface LineAccountConfig {
 
 export interface LineGroupConfig {
   enabled?: boolean;
+  policy?: "open" | "allowlist" | "disabled";
   allowFrom?: Array<string | number>;
   requireMention?: boolean;
   systemPrompt?: string;

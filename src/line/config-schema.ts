@@ -6,6 +6,7 @@ const GroupPolicySchema = z.enum(["open", "allowlist", "disabled"]);
 const LineGroupConfigSchema = z
   .object({
     enabled: z.boolean().optional(),
+    policy: GroupPolicySchema.optional(),
     allowFrom: z.array(z.union([z.string(), z.number()])).optional(),
     requireMention: z.boolean().optional(),
     systemPrompt: z.string().optional(),

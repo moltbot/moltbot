@@ -151,26 +151,32 @@ async function shouldProcessLineEvent(
   });
   const dmPolicy = account.config.dmPolicy ?? "pairing";
   const defaultGroupPolicy = cfg.channels?.defaults?.groupPolicy;
-  const groupPolicy = account.config.groupPolicy ?? defaultGroupPolicy ?? "allowlist";
+  const channelGroupPolicy = account.config.groupPolicy ?? defaultGroupPolicy ?? "allowlist";
+  // Per-group policy override: groups.C1234.policy takes precedence over channel-wide groupPolicy
+  const groupPolicy = groupConfig?.policy ?? channelGroupPolicy;
 
   if (isGroup) {
     if (groupConfig?.enabled === false) {
       logVerbose(`Blocked line group ${groupId ?? roomId ?? "unknown"} (group disabled)`);
       return false;
     }
-    if (typeof groupAllowOverride !== "undefined") {
-      if (!senderId) {
-        logVerbose("Blocked line group message (group allowFrom override, no sender ID)");
-        return false;
-      }
-      if (!isSenderAllowed({ allow: effectiveGroupAllow, senderId })) {
-        logVerbose(`Blocked line group sender ${senderId} (group allowFrom override)`);
-        return false;
-      }
-    }
     if (groupPolicy === "disabled") {
       logVerbose("Blocked line group message (groupPolicy: disabled)");
       return false;
+    }
+    if (groupPolicy === "open") {
+      // Per-group allowFrom still applies even with open policy, when explicitly set
+      if (typeof groupAllowOverride !== "undefined") {
+        if (!senderId) {
+          logVerbose("Blocked line group message (group allowFrom override, no sender ID)");
+          return false;
+        }
+        if (!isSenderAllowed({ allow: effectiveGroupAllow, senderId })) {
+          logVerbose(`Blocked line group sender ${senderId} (group allowFrom override)`);
+          return false;
+        }
+      }
+      return true;
     }
     if (groupPolicy === "allowlist") {
       if (!senderId) {

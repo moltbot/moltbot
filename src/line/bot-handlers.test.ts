@@ -170,4 +170,169 @@ describe("handleLineWebhookEvents", () => {
     expect(processMessage).not.toHaveBeenCalled();
     expect(buildLineMessageContextMock).not.toHaveBeenCalled();
   });
+
+  it("allows group messages when per-group policy is open despite channel allowlist", async () => {
+    const processMessage = vi.fn();
+    const event = {
+      type: "message",
+      message: { id: "m5", type: "text", text: "hi" },
+      replyToken: "reply-token",
+      timestamp: Date.now(),
+      source: { type: "group", groupId: "group-open", userId: "user-5" },
+      mode: "active",
+      webhookEventId: "evt-5",
+      deliveryContext: { isRedelivery: false },
+    } as MessageEvent;
+
+    await handleLineWebhookEvents([event], {
+      cfg: { channels: { line: { groupPolicy: "allowlist" } } },
+      account: {
+        accountId: "default",
+        enabled: true,
+        channelAccessToken: "token",
+        channelSecret: "secret",
+        tokenSource: "config",
+        config: {
+          groupPolicy: "allowlist",
+          groups: { "group-open": { policy: "open" } },
+        },
+      },
+      runtime: { error: vi.fn() },
+      mediaMaxBytes: 1,
+      processMessage,
+    });
+
+    expect(buildLineMessageContextMock).toHaveBeenCalledTimes(1);
+    expect(processMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks group messages when per-group policy is disabled despite channel open", async () => {
+    const processMessage = vi.fn();
+    const event = {
+      type: "message",
+      message: { id: "m6", type: "text", text: "hi" },
+      replyToken: "reply-token",
+      timestamp: Date.now(),
+      source: { type: "group", groupId: "group-disabled", userId: "user-6" },
+      mode: "active",
+      webhookEventId: "evt-6",
+      deliveryContext: { isRedelivery: false },
+    } as MessageEvent;
+
+    await handleLineWebhookEvents([event], {
+      cfg: { channels: { line: { groupPolicy: "open" } } },
+      account: {
+        accountId: "default",
+        enabled: true,
+        channelAccessToken: "token",
+        channelSecret: "secret",
+        tokenSource: "config",
+        config: {
+          groupPolicy: "open",
+          groups: { "group-disabled": { policy: "disabled" } },
+        },
+      },
+      runtime: { error: vi.fn() },
+      mediaMaxBytes: 1,
+      processMessage,
+    });
+
+    expect(processMessage).not.toHaveBeenCalled();
+    expect(buildLineMessageContextMock).not.toHaveBeenCalled();
+  });
+
+  it("uses per-group allowlist with group-specific allowFrom", async () => {
+    const processMessage = vi.fn();
+    const allowedEvent = {
+      type: "message",
+      message: { id: "m7", type: "text", text: "hi" },
+      replyToken: "reply-token",
+      timestamp: Date.now(),
+      source: { type: "group", groupId: "group-restricted", userId: "allowed-user" },
+      mode: "active",
+      webhookEventId: "evt-7",
+      deliveryContext: { isRedelivery: false },
+    } as MessageEvent;
+
+    const blockedEvent = {
+      type: "message",
+      message: { id: "m8", type: "text", text: "hi" },
+      replyToken: "reply-token",
+      timestamp: Date.now(),
+      source: { type: "group", groupId: "group-restricted", userId: "blocked-user" },
+      mode: "active",
+      webhookEventId: "evt-8",
+      deliveryContext: { isRedelivery: false },
+    } as MessageEvent;
+
+    const context = {
+      cfg: { channels: { line: { groupPolicy: "open" } } },
+      account: {
+        accountId: "default",
+        enabled: true,
+        channelAccessToken: "token",
+        channelSecret: "secret",
+        tokenSource: "config",
+        config: {
+          groupPolicy: "open",
+          groups: {
+            "group-restricted": {
+              policy: "allowlist",
+              allowFrom: ["allowed-user"],
+            },
+          },
+        },
+      },
+      runtime: { error: vi.fn() },
+      mediaMaxBytes: 1,
+      processMessage,
+    };
+
+    await handleLineWebhookEvents([allowedEvent], context);
+    expect(processMessage).toHaveBeenCalledTimes(1);
+
+    processMessage.mockClear();
+    buildLineMessageContextMock.mockClear();
+
+    await handleLineWebhookEvents([blockedEvent], context);
+    expect(processMessage).not.toHaveBeenCalled();
+  });
+
+  it("falls back to channel-wide policy when no per-group policy is set", async () => {
+    const processMessage = vi.fn();
+    const event = {
+      type: "message",
+      message: { id: "m9", type: "text", text: "hi" },
+      replyToken: "reply-token",
+      timestamp: Date.now(),
+      source: { type: "group", groupId: "group-no-override", userId: "user-9" },
+      mode: "active",
+      webhookEventId: "evt-9",
+      deliveryContext: { isRedelivery: false },
+    } as MessageEvent;
+
+    await handleLineWebhookEvents([event], {
+      cfg: { channels: { line: { groupPolicy: "open" } } },
+      account: {
+        accountId: "default",
+        enabled: true,
+        channelAccessToken: "token",
+        channelSecret: "secret",
+        tokenSource: "config",
+        config: {
+          groupPolicy: "open",
+          groups: {
+            "group-other": { policy: "disabled" },
+          },
+        },
+      },
+      runtime: { error: vi.fn() },
+      mediaMaxBytes: 1,
+      processMessage,
+    });
+
+    // group-no-override has no per-group policy, so channel-wide "open" applies
+    expect(buildLineMessageContextMock).toHaveBeenCalledTimes(1);
+    expect(processMessage).toHaveBeenCalledTimes(1);
+  });
 });
