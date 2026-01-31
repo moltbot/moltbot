@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { SessionManager } from "@mariozechner/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import type { TemplateContext } from "../templating.js";
 import { DEFAULT_MEMORY_FLUSH_PROMPT } from "./memory-flush.js";
@@ -12,8 +13,6 @@ const runCliAgentMock = vi.fn();
 
 type EmbeddedRunParams = {
   prompt?: string;
-  extraSystemPrompt?: string;
-  onAgentEvent?: (evt: { stream?: string; data?: { phase?: string; willRetry?: boolean } }) => void;
 };
 
 vi.mock("../../agents/model-fallback.js", () => ({
@@ -68,13 +67,15 @@ async function seedSessionStore(params: {
 function createBaseRun(params: {
   storePath: string;
   sessionEntry: Record<string, unknown>;
+  sessionKey: string;
+  sessionFile: string;
   config?: Record<string, unknown>;
   runOverrides?: Partial<FollowupRun["run"]>;
 }) {
   const typing = createMockTypingController();
   const sessionCtx = {
-    Provider: "whatsapp",
-    OriginatingTo: "+15550001111",
+    Provider: "telegram",
+    OriginatingTo: "dm",
     AccountId: "primary",
     MessageSid: "msg",
   } as unknown as TemplateContext;
@@ -87,9 +88,9 @@ function createBaseRun(params: {
       agentId: "main",
       agentDir: "/tmp/agent",
       sessionId: "session",
-      sessionKey: "main",
-      messageProvider: "whatsapp",
-      sessionFile: "/tmp/session.jsonl",
+      sessionKey: params.sessionKey,
+      messageProvider: "telegram",
+      sessionFile: params.sessionFile,
       workspaceDir: "/tmp",
       config: params.config ?? {},
       skillsSnapshot: {},
@@ -121,148 +122,58 @@ function createBaseRun(params: {
   };
 }
 
+async function seedSessionTranscript(params: { sessionFile: string; userTurns: number }) {
+  const sessionManager = SessionManager.open(params.sessionFile);
+  const usage = {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 0,
+    cost: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      total: 0,
+    },
+  };
+
+  for (let i = 0; i < params.userTurns; i += 1) {
+    sessionManager.appendMessage({
+      role: "user",
+      content: [{ type: "text", text: `user ${i}` }],
+    });
+    sessionManager.appendMessage({
+      role: "assistant",
+      content: [{ type: "text", text: `assistant ${i}` }],
+      stopReason: "stop",
+      api: "openai-responses",
+      provider: "openai",
+      model: "mock",
+      usage,
+      timestamp: Date.now(),
+    });
+  }
+}
+
 describe("runReplyAgent memory flush", () => {
-  it("skips memory flush when the sandbox workspace is read-only", async () => {
+  it("triggers on dmHistoryLimit for sandbox memory sessions", async () => {
     runEmbeddedPiAgentMock.mockReset();
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-flush-"));
     const storePath = path.join(tmp, "sessions.json");
-    const sessionKey = "main";
+    const sessionFile = path.join(tmp, "session.jsonl");
+    const sessionKey = "agent:main:telegram:dm:123";
     const sessionEntry = {
       sessionId: "session",
+      sessionFile,
       updatedAt: Date.now(),
-      totalTokens: 80_000,
+      totalTokens: 100,
       compactionCount: 1,
     };
 
     await seedSessionStore({ storePath, sessionKey, entry: sessionEntry });
-
-    const calls: Array<{ prompt?: string }> = [];
-    runEmbeddedPiAgentMock.mockImplementation(async (params: EmbeddedRunParams) => {
-      calls.push({ prompt: params.prompt });
-      return {
-        payloads: [{ text: "ok" }],
-        meta: { agentMeta: { usage: { input: 1, output: 1 } } },
-      };
-    });
-
-    const { typing, sessionCtx, resolvedQueue, followupRun } = createBaseRun({
-      storePath,
-      sessionEntry,
-      config: {
-        agents: {
-          defaults: {
-            sandbox: { mode: "all", workspaceAccess: "ro" },
-          },
-        },
-      },
-    });
-
-    await runReplyAgent({
-      commandBody: "hello",
-      followupRun,
-      queueKey: "main",
-      resolvedQueue,
-      shouldSteer: false,
-      shouldFollowup: false,
-      isActive: false,
-      isStreaming: false,
-      typing,
-      sessionCtx,
-      sessionEntry,
-      sessionStore: { [sessionKey]: sessionEntry },
-      sessionKey,
-      storePath,
-      defaultModel: "anthropic/claude-opus-4-5",
-      agentCfgContextTokens: 100_000,
-      resolvedVerboseLevel: "off",
-      isNewSession: false,
-      blockStreamingEnabled: false,
-      resolvedBlockStreamingBreak: "message_end",
-      shouldInjectGroupIntro: false,
-      typingMode: "instant",
-    });
-
-    expect(calls.map((call) => call.prompt)).toEqual(["hello"]);
-
-    const stored = JSON.parse(await fs.readFile(storePath, "utf-8"));
-    expect(stored[sessionKey].memoryFlushAt).toBeUndefined();
-  });
-  it("skips memory flush when the sandbox workspace is none and sandbox memory is disabled", async () => {
-    runEmbeddedPiAgentMock.mockReset();
-    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-flush-"));
-    const storePath = path.join(tmp, "sessions.json");
-    const sessionKey = "main";
-    const sessionEntry = {
-      sessionId: "session",
-      updatedAt: Date.now(),
-      totalTokens: 80_000,
-      compactionCount: 1,
-    };
-
-    await seedSessionStore({ storePath, sessionKey, entry: sessionEntry });
-
-    const calls: Array<{ prompt?: string }> = [];
-    runEmbeddedPiAgentMock.mockImplementation(async (params: EmbeddedRunParams) => {
-      calls.push({ prompt: params.prompt });
-      return {
-        payloads: [{ text: "ok" }],
-        meta: { agentMeta: { usage: { input: 1, output: 1 } } },
-      };
-    });
-
-    const { typing, sessionCtx, resolvedQueue, followupRun } = createBaseRun({
-      storePath,
-      sessionEntry,
-      config: {
-        agents: {
-          defaults: {
-            sandbox: { mode: "all", workspaceAccess: "none", memory: "off" },
-          },
-        },
-      },
-    });
-
-    await runReplyAgent({
-      commandBody: "hello",
-      followupRun,
-      queueKey: "main",
-      resolvedQueue,
-      shouldSteer: false,
-      shouldFollowup: false,
-      isActive: false,
-      isStreaming: false,
-      typing,
-      sessionCtx,
-      sessionEntry,
-      sessionStore: { [sessionKey]: sessionEntry },
-      sessionKey,
-      storePath,
-      defaultModel: "anthropic/claude-opus-4-5",
-      agentCfgContextTokens: 100_000,
-      resolvedVerboseLevel: "off",
-      isNewSession: false,
-      blockStreamingEnabled: false,
-      resolvedBlockStreamingBreak: "message_end",
-      shouldInjectGroupIntro: false,
-      typingMode: "instant",
-    });
-
-    expect(calls.map((call) => call.prompt)).toEqual(["hello"]);
-  });
-
-  it("runs memory flush when sandbox memory is enabled for workspaceAccess none", async () => {
-    runEmbeddedPiAgentMock.mockReset();
-    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-flush-"));
-    const storePath = path.join(tmp, "sessions.json");
-    const sessionKey = "main";
-    const sessionEntry = {
-      sessionId: "session",
-      updatedAt: Date.now(),
-      totalTokens: 80_000,
-      compactionCount: 1,
-    };
-
-    await seedSessionStore({ storePath, sessionKey, entry: sessionEntry });
+    await seedSessionTranscript({ sessionFile, userTurns: 2 });
 
     const calls: Array<{ prompt?: string }> = [];
     runEmbeddedPiAgentMock.mockImplementation(async (params: EmbeddedRunParams) => {
@@ -279,11 +190,16 @@ describe("runReplyAgent memory flush", () => {
     const { typing, sessionCtx, resolvedQueue, followupRun } = createBaseRun({
       storePath,
       sessionEntry,
+      sessionKey,
+      sessionFile,
       config: {
         agents: {
           defaults: {
             sandbox: { mode: "all", workspaceAccess: "none", memory: "sandbox" },
           },
+        },
+        channels: {
+          telegram: { dmHistoryLimit: 2 },
         },
       },
     });
@@ -314,5 +230,86 @@ describe("runReplyAgent memory flush", () => {
     });
 
     expect(calls.map((call) => call.prompt)).toEqual([DEFAULT_MEMORY_FLUSH_PROMPT, "hello"]);
+
+    const stored = JSON.parse(await fs.readFile(storePath, "utf-8"));
+    expect(stored[sessionKey].memoryFlushHistoryCount).toBe(2);
+  });
+
+  it("does not set history counters on token-triggered flushes", async () => {
+    runEmbeddedPiAgentMock.mockReset();
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-flush-"));
+    const storePath = path.join(tmp, "sessions.json");
+    const sessionFile = path.join(tmp, "session.jsonl");
+    const sessionKey = "agent:main:telegram:dm:123";
+    const sessionEntry = {
+      sessionId: "session",
+      sessionFile,
+      updatedAt: Date.now(),
+      totalTokens: 200_000,
+      compactionCount: 1,
+    };
+
+    await seedSessionStore({ storePath, sessionKey, entry: sessionEntry });
+    await seedSessionTranscript({ sessionFile, userTurns: 1 });
+
+    const calls: Array<{ prompt?: string }> = [];
+    runEmbeddedPiAgentMock.mockImplementation(async (params: EmbeddedRunParams) => {
+      calls.push({ prompt: params.prompt });
+      if (params.prompt === DEFAULT_MEMORY_FLUSH_PROMPT) {
+        return { payloads: [], meta: {} };
+      }
+      return {
+        payloads: [{ text: "ok" }],
+        meta: { agentMeta: { usage: { input: 1, output: 1 } } },
+      };
+    });
+
+    const { typing, sessionCtx, resolvedQueue, followupRun } = createBaseRun({
+      storePath,
+      sessionEntry,
+      sessionKey,
+      sessionFile,
+      config: {
+        agents: {
+          defaults: {
+            sandbox: { mode: "all", workspaceAccess: "none", memory: "sandbox" },
+          },
+        },
+        channels: {
+          telegram: { dmHistoryLimit: 5 },
+        },
+      },
+    });
+
+    await runReplyAgent({
+      commandBody: "hello",
+      followupRun,
+      queueKey: "main",
+      resolvedQueue,
+      shouldSteer: false,
+      shouldFollowup: false,
+      isActive: false,
+      isStreaming: false,
+      typing,
+      sessionCtx,
+      sessionEntry,
+      sessionStore: { [sessionKey]: sessionEntry },
+      sessionKey,
+      storePath,
+      defaultModel: "anthropic/claude-opus-4-5",
+      agentCfgContextTokens: 100_000,
+      resolvedVerboseLevel: "off",
+      isNewSession: false,
+      blockStreamingEnabled: false,
+      resolvedBlockStreamingBreak: "message_end",
+      shouldInjectGroupIntro: false,
+      typingMode: "instant",
+    });
+
+    expect(calls.map((call) => call.prompt)).toEqual([DEFAULT_MEMORY_FLUSH_PROMPT, "hello"]);
+
+    const stored = JSON.parse(await fs.readFile(storePath, "utf-8"));
+    expect(stored[sessionKey].memoryFlushHistoryCount).toBeUndefined();
+    expect(stored[sessionKey].memoryFlushAt).toBeDefined();
   });
 });

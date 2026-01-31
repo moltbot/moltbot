@@ -22,7 +22,9 @@ The default workspace layout uses two memory layers:
   - Read today + yesterday at session start.
 - `MEMORY.md` (optional)
   - Curated long-term memory.
-  - **Only load in the main, private session** (never in group contexts).
+  - **Only load in the main, private session** (never in group contexts) by default.
+  - To allow sandboxed sessions to load **their own** `MEMORY.md`, set
+    `agents.defaults.sandbox.memory = "sandbox"` (requires `workspaceAccess: "none"`).
 
 These files live under the workspace (`agents.defaults.workspace`, default
 `~/.openclaw/workspace`). See [Agent workspace](/concepts/agent-workspace) for the full layout.
@@ -69,8 +71,13 @@ Details:
 - **Silent** by default: prompts include `NO_REPLY` so nothing is delivered.
 - **Two prompts**: a user prompt plus a system prompt append the reminder.
 - **One flush per compaction cycle** (tracked in `sessions.json`).
-- **Workspace must be writable**: if the session runs sandboxed with
-  `workspaceAccess: "ro"` or `"none"`, the flush is skipped.
+- **Workspace must be writable**: for sandboxed sessions, the flush is skipped
+  when `workspaceAccess: "ro"`, and it only runs for `workspaceAccess: "none"`
+  if `agents.defaults.sandbox.memory = "sandbox"` (flush writes inside the sandbox workspace).
+- **History-limit trigger (sandboxed DMs)**: when a sandboxed session uses
+  `workspaceAccess: "none"` + `sandbox.memory = "sandbox"` and a DM history
+  limit is configured, the flush can also trigger when user turns reach the
+  history limit (then roughly every half-limit of additional turns).
 
 For the full compaction lifecycle, see
 [Session management + compaction](/reference/session-management-compaction).

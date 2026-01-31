@@ -26,6 +26,7 @@ export type SandboxToolPolicyResolved = {
 };
 
 export type SandboxWorkspaceAccess = "none" | "ro" | "rw";
+export type SandboxMemoryPolicy = "off" | "sandbox";
 
 export type SandboxBrowserConfig = {
   enabled: boolean;
@@ -53,6 +54,7 @@ export type SandboxConfig = {
   scope: SandboxScope;
   workspaceAccess: SandboxWorkspaceAccess;
   workspaceRoot: string;
+  memory: SandboxMemoryPolicy;
   docker: SandboxDockerConfig;
   browser: SandboxBrowserConfig;
   tools: SandboxToolPolicy;

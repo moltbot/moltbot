@@ -1,9 +1,12 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
+import { SessionManager } from "@mariozechner/pi-coding-agent";
 import { resolveAgentModelFallbacksOverride } from "../../agents/agent-scope.js";
 import { runWithModelFallback } from "../../agents/model-fallback.js";
 import { isCliProvider } from "../../agents/model-selection.js";
 import { runEmbeddedPiAgent } from "../../agents/pi-embedded.js";
-import { resolveSandboxConfigForAgent, resolveSandboxRuntimeStatus } from "../../agents/sandbox.js";
+import { getDmHistoryLimitFromSessionKey } from "../../agents/pi-embedded-runner/history.js";
+import { resolveSandboxMemoryAccess } from "../../agents/sandbox.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import {
   resolveAgentIdFromSessionKey,
@@ -24,6 +27,32 @@ import {
 import type { FollowupRun } from "./queue.js";
 import { incrementCompactionCount } from "./session-updates.js";
 
+type SessionMessageEntry = { type?: string; message?: { role?: string } };
+
+function countSessionUserTurns(sessionFile?: string): number | null {
+  const file = sessionFile?.trim();
+  if (!file) {
+    return null;
+  }
+  if (!fs.existsSync(file)) {
+    return null;
+  }
+  try {
+    const sessionManager = SessionManager.open(file);
+    const entries = sessionManager.getEntries();
+    let count = 0;
+    for (const entry of entries) {
+      const messageEntry = entry as SessionMessageEntry;
+      if (messageEntry.type === "message" && messageEntry.message?.role === "user") {
+        count += 1;
+      }
+    }
+    return count;
+  } catch {
+    return null;
+  }
+}
+
 export async function runMemoryFlushIfNeeded(params: {
   cfg: OpenClawConfig;
   followupRun: FollowupRun;
@@ -43,30 +72,24 @@ export async function runMemoryFlushIfNeeded(params: {
     return params.sessionEntry;
   }
 
-  const memoryFlushWritable = (() => {
-    if (!params.sessionKey) {
-      return true;
-    }
-    const runtime = resolveSandboxRuntimeStatus({
-      cfg: params.cfg,
-      sessionKey: params.sessionKey,
-    });
-    if (!runtime.sandboxed) {
-      return true;
-    }
-    const sandboxCfg = resolveSandboxConfigForAgent(params.cfg, runtime.agentId);
-    return sandboxCfg.workspaceAccess === "rw";
-  })();
+  const memoryAccess = resolveSandboxMemoryAccess({
+    cfg: params.cfg,
+    sessionKey: params.sessionKey,
+  });
 
-  const shouldFlushMemory =
+  const canRunFlush =
     memoryFlushSettings &&
-    memoryFlushWritable &&
+    memoryAccess.allowMemoryFlush &&
     !params.isHeartbeat &&
-    !isCliProvider(params.followupRun.run.provider, params.cfg) &&
+    !isCliProvider(params.followupRun.run.provider, params.cfg);
+
+  const activeEntry =
+    params.sessionEntry ??
+    (params.sessionKey ? params.sessionStore?.[params.sessionKey] : undefined);
+  const shouldFlushByTokens =
+    canRunFlush &&
     shouldRunMemoryFlush({
-      entry:
-        params.sessionEntry ??
-        (params.sessionKey ? params.sessionStore?.[params.sessionKey] : undefined),
+      entry: activeEntry,
       contextWindowTokens: resolveMemoryFlushContextWindowTokens({
         modelId: params.followupRun.run.model ?? params.defaultModel,
         agentCfgContextTokens: params.agentCfgContextTokens,
@@ -74,6 +97,34 @@ export async function runMemoryFlushIfNeeded(params: {
       reserveTokensFloor: memoryFlushSettings.reserveTokensFloor,
       softThresholdTokens: memoryFlushSettings.softThresholdTokens,
     });
+
+  const historyLimitRaw = memoryAccess.allowHistoryFlush
+    ? getDmHistoryLimitFromSessionKey(params.sessionKey, params.cfg)
+    : undefined;
+  const historyLimit =
+    typeof historyLimitRaw === "number" && Number.isFinite(historyLimitRaw) && historyLimitRaw > 0
+      ? Math.floor(historyLimitRaw)
+      : undefined;
+  const sessionFile =
+    params.followupRun.run.sessionFile ??
+    activeEntry?.sessionFile ??
+    (params.sessionKey ? params.sessionStore?.[params.sessionKey]?.sessionFile : undefined);
+  const historyUserTurns = canRunFlush && historyLimit ? countSessionUserTurns(sessionFile) : null;
+  const historyFlushCount =
+    activeEntry?.memoryFlushHistoryCount ??
+    (params.sessionKey
+      ? params.sessionStore?.[params.sessionKey]?.memoryFlushHistoryCount
+      : undefined);
+  const shouldFlushByHistory =
+    canRunFlush &&
+    memoryAccess.allowHistoryFlush &&
+    typeof historyLimit === "number" &&
+    typeof historyUserTurns === "number" &&
+    historyUserTurns >= historyLimit &&
+    (typeof historyFlushCount !== "number" ||
+      historyUserTurns - historyFlushCount >= Math.max(1, Math.floor(historyLimit / 2)));
+
+  const shouldFlushMemory = shouldFlushByTokens || shouldFlushByHistory;
 
   if (!shouldFlushMemory) {
     return params.sessionEntry;
@@ -184,6 +235,9 @@ export async function runMemoryFlushIfNeeded(params: {
           update: async () => ({
             memoryFlushAt: Date.now(),
             memoryFlushCompactionCount,
+            ...(shouldFlushByHistory && typeof historyUserTurns === "number"
+              ? { memoryFlushHistoryCount: historyUserTurns }
+              : {}),
           }),
         });
         if (updatedEntry) {

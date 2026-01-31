@@ -210,6 +210,12 @@ export type AgentDefaultsConfig = {
     /** Enable sandboxing for sessions. */
     mode?: "off" | "non-main" | "all";
     /**
+     * Control MEMORY.md injection for sandboxed sessions.
+     * - "off": main-only (default)
+     * - "sandbox": allow sandbox workspaces to inject their own MEMORY.md
+     */
+    memory?: "off" | "sandbox";
+    /**
      * Agent workspace access inside the sandbox.
      * - "none": do not mount the agent workspace into the container; use a sandbox workspace under workspaceRoot
      * - "ro": mount the agent workspace read-only; disables write/edit tools

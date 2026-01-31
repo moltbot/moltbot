@@ -3,7 +3,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { resolveBootstrapContextForRun, resolveBootstrapFilesForRun } from "./bootstrap-files.js";
-import { makeTempWorkspace } from "../test-helpers/workspace.js";
+import { makeTempWorkspace, writeWorkspaceFile } from "../test-helpers/workspace.js";
 import {
   clearInternalHooks,
   registerInternalHook,
@@ -32,6 +32,76 @@ describe("resolveBootstrapFilesForRun", () => {
     const files = await resolveBootstrapFilesForRun({ workspaceDir });
 
     expect(files.some((file) => file.name === "EXTRA.md")).toBe(true);
+  });
+
+  it("filters MEMORY.md for non-main sessions by default", async () => {
+    const workspaceDir = await makeTempWorkspace("openclaw-bootstrap-");
+    await writeWorkspaceFile({ dir: workspaceDir, name: "MEMORY.md", content: "memory" });
+
+    const files = await resolveBootstrapFilesForRun({
+      workspaceDir,
+      sessionKey: "agent:main:telegram:dm:123",
+      config: {
+        agents: {
+          defaults: {
+            sandbox: {
+              mode: "non-main",
+              workspaceAccess: "none",
+            },
+          },
+          list: [{ id: "main" }],
+        },
+      },
+    });
+
+    expect(files.some((file) => file.name === "MEMORY.md")).toBe(false);
+  });
+
+  it("allows MEMORY.md for sandboxed sessions when sandbox memory is enabled", async () => {
+    const workspaceDir = await makeTempWorkspace("openclaw-bootstrap-");
+    await writeWorkspaceFile({ dir: workspaceDir, name: "MEMORY.md", content: "memory" });
+
+    const files = await resolveBootstrapFilesForRun({
+      workspaceDir,
+      sessionKey: "agent:main:telegram:dm:123",
+      config: {
+        agents: {
+          defaults: {
+            sandbox: {
+              mode: "non-main",
+              workspaceAccess: "none",
+              memory: "sandbox",
+            },
+          },
+          list: [{ id: "main" }],
+        },
+      },
+    });
+
+    expect(files.some((file) => file.name === "MEMORY.md")).toBe(true);
+  });
+
+  it("keeps MEMORY.md for main sessions", async () => {
+    const workspaceDir = await makeTempWorkspace("openclaw-bootstrap-");
+    await writeWorkspaceFile({ dir: workspaceDir, name: "MEMORY.md", content: "memory" });
+
+    const files = await resolveBootstrapFilesForRun({
+      workspaceDir,
+      sessionKey: "agent:main:main",
+      config: {
+        agents: {
+          defaults: {
+            sandbox: {
+              mode: "non-main",
+              workspaceAccess: "none",
+            },
+          },
+          list: [{ id: "main" }],
+        },
+      },
+    });
+
+    expect(files.some((file) => file.name === "MEMORY.md")).toBe(true);
   });
 });
 

@@ -26,6 +26,8 @@ export {
   resolveSandboxRuntimeStatus,
 } from "./sandbox/runtime-status.js";
 
+export { resolveSandboxMemoryAccess, type SandboxMemoryAccess } from "./sandbox/memory.js";
+
 export { resolveSandboxToolPolicyForAgent } from "./sandbox/tool-policy.js";
 
 export type {

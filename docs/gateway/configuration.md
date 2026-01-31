@@ -748,6 +748,7 @@ Inbound messages are routed to an agent via bindings.
   - `groupChat`: per-agent mention-gating (`mentionPatterns`).
   - `sandbox`: per-agent sandbox config (overrides `agents.defaults.sandbox`).
     - `mode`: `"off"` | `"non-main"` | `"all"`
+    - `memory`: `"off"` | `"sandbox"`
     - `workspaceAccess`: `"none"` | `"ro"` | `"rw"`
     - `scope`: `"session"` | `"agent"` | `"shared"`
     - `workspaceRoot`: custom sandbox workspace root

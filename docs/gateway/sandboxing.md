@@ -64,6 +64,24 @@ OpenClaw mirrors eligible skills into the sandbox workspace (`.../skills`) so
 they can be read. With `"rw"`, workspace skills are readable from
 `/workspace/skills`.
 
+### Sandboxed MEMORY.md (opt-in)
+By default, `MEMORY.md` is injected **only** for the main/private session.
+To allow sandboxed sessions to load their own `MEMORY.md` from their sandbox
+workspace, set:
+
+```json5
+agents: {
+  defaults: {
+    sandbox: {
+      memory: "sandbox" // "off" | "sandbox"
+    }
+  }
+}
+```
+
+Notes:
+- `memory: "sandbox"` only applies when `workspaceAccess: "none"` (sandbox workspace).
+
 ## Custom bind mounts
 
 `agents.defaults.sandbox.docker.binds` mounts additional host directories into the container.

@@ -39,6 +39,12 @@ export type AgentConfig = {
   };
   sandbox?: {
     mode?: "off" | "non-main" | "all";
+    /**
+     * Control MEMORY.md injection for sandboxed sessions.
+     * - "off": main-only (default)
+     * - "sandbox": allow sandbox workspaces to inject their own MEMORY.md
+     */
+    memory?: "off" | "sandbox";
     /** Agent workspace access inside the sandbox. */
     workspaceAccess?: "none" | "ro" | "rw";
     /**

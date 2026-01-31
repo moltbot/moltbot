@@ -149,6 +149,7 @@ export function resolveSandboxConfigForAgent(
     workspaceAccess: agentSandbox?.workspaceAccess ?? agent?.workspaceAccess ?? "none",
     workspaceRoot:
       agentSandbox?.workspaceRoot ?? agent?.workspaceRoot ?? DEFAULT_SANDBOX_WORKSPACE_ROOT,
+    memory: agentSandbox?.memory ?? agent?.memory ?? "off",
     docker: resolveSandboxDockerConfig({
       scope,
       globalDocker: agent?.docker,
