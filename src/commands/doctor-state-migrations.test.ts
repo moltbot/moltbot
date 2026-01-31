@@ -12,6 +12,7 @@ import {
   resetAutoMigrateLegacyStateDirForTest,
   resetAutoMigrateLegacyStateForTest,
   runLegacyStateMigrations,
+  StateDirConflictError,
 } from "./doctor-state-migrations.js";
 
 let tempRoot: string | null = null;
