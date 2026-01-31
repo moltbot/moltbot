@@ -200,7 +200,10 @@ The wizard uses it to set your **allowlist/owner** so your own DMs are permitted
 - Activation modes:
   - `mention` (default): requires @mention or regex match.
   - `always`: always triggers.
-- `/activation mention|always` is owner-only and must be sent as a standalone message.
+  - `replies`: only triggers when someone replies to a bot message.
+  - `mention+replies`: triggers on @mention/regex match OR replies to bot messages.
+  - `never`: never triggers (except for control commands from owners).
+- `/activation mention|always|replies|mention+replies|never` is owner-only and must be sent as a standalone message.
 - Owner = `channels.whatsapp.allowFrom` (or self E.164 if unset).
 - **History injection** (pending-only):
   - Recent *unprocessed* messages (default 50) inserted under:

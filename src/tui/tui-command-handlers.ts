@@ -4,6 +4,7 @@ import {
   normalizeUsageDisplay,
   resolveResponseUsageMode,
 } from "../auto-reply/thinking.js";
+import { normalizeGroupActivation } from "../auto-reply/group-activation.js";
 import { normalizeAgentId } from "../routing/session-key.js";
 import { formatRelativeTime } from "../utils/time-format.js";
 import { helpText, parseCommand } from "./commands.js";
@@ -391,15 +392,20 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         break;
       case "activation":
         if (!args) {
-          chatLog.addSystem("usage: /activation <mention|always>");
+          chatLog.addSystem("usage: /activation <mention|always|replies|mention+replies|never>");
           break;
         }
         try {
+          const mode = normalizeGroupActivation(args);
+          if (!mode) {
+            chatLog.addSystem("usage: /activation <mention|always|replies|mention+replies|never>");
+            break;
+          }
           await client.patchSession({
             key: state.currentSessionKey,
-            groupActivation: args === "always" ? "always" : "mention",
+            groupActivation: mode,
           });
-          chatLog.addSystem(`activation set to ${args}`);
+          chatLog.addSystem(`activation set to ${mode}`);
           await refreshSessionInfo();
         } catch (err) {
           chatLog.addSystem(`activation failed: ${String(err)}`);

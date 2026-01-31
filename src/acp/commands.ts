@@ -21,7 +21,10 @@ export function getAvailableCommands(): AvailableCommand[] {
     { name: "dock-telegram", description: "Route replies to Telegram." },
     { name: "dock-discord", description: "Route replies to Discord." },
     { name: "dock-slack", description: "Route replies to Slack." },
-    { name: "activation", description: "Set group activation (mention|always)." },
+    {
+      name: "activation",
+      description: "Set group activation (mention|always|replies|mention+replies|never).",
+    },
     { name: "send", description: "Set send mode (on|off|inherit)." },
     { name: "reset", description: "Reset the session (/new)." },
     { name: "new", description: "Reset the session (/reset)." },

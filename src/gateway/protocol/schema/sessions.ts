@@ -76,7 +76,14 @@ export const SessionsPatchParamsSchema = Type.Object(
       Type.Union([Type.Literal("allow"), Type.Literal("deny"), Type.Null()]),
     ),
     groupActivation: Type.Optional(
-      Type.Union([Type.Literal("mention"), Type.Literal("always"), Type.Null()]),
+      Type.Union([
+        Type.Literal("mention"),
+        Type.Literal("always"),
+        Type.Literal("replies"),
+        Type.Literal("mention+replies"),
+        Type.Literal("never"),
+        Type.Null(),
+      ]),
     ),
   },
   { additionalProperties: false },

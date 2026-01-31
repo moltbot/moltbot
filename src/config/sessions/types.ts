@@ -54,7 +54,7 @@ export type SessionEntry = {
   authProfileOverride?: string;
   authProfileOverrideSource?: "auto" | "user";
   authProfileOverrideCompactionCount?: number;
-  groupActivation?: "mention" | "always";
+  groupActivation?: "mention" | "always" | "replies" | "mention+replies" | "never";
   groupActivationNeedsSystemIntro?: boolean;
   sendPolicy?: "allow" | "deny";
   queueMode?:

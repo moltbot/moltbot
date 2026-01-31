@@ -101,28 +101,46 @@ export function applyGroupGating(params: {
     sessionKey: params.sessionKey,
     conversationId: params.conversationId,
   });
-  const requireMention = activation !== "always";
-  const selfJid = params.msg.selfJid?.replace(/:\\d+/, "");
-  const replySenderJid = params.msg.replyToSenderJid?.replace(/:\\d+/, "");
+
+  // Check if this message is a reply to the bot
+  const selfJid = params.msg.selfJid?.replace(/:\d+/, "");
+  const replySenderJid = params.msg.replyToSenderJid?.replace(/:\d+/, "");
   const selfE164 = params.msg.selfE164 ? normalizeE164(params.msg.selfE164) : null;
   const replySenderE164 = params.msg.replyToSenderE164
     ? normalizeE164(params.msg.replyToSenderE164)
     : null;
-  const implicitMention = Boolean(
+  const isReplyToBot = Boolean(
     (selfJid && replySenderJid && selfJid === replySenderJid) ||
     (selfE164 && replySenderE164 && selfE164 === replySenderE164),
   );
+
+  // Owner control commands bypass activation restrictions
+  const bypassMention = shouldBypassMention === true;
+
+  // require mention only in strict 'mention' mode
+  const requireMention = activation === "mention";
   const mentionGate = resolveMentionGating({
     requireMention,
     canDetectMention: true,
     wasMentioned,
-    implicitMention,
-    shouldBypassMention,
+    implicitMention: isReplyToBot, // treat reply-to-bot as an implicit mention
+    shouldBypassMention: bypassMention,
   });
+
+  // Determine if we should process based on activation mode
+  const shouldProcess = (() => {
+    if (activation === "always") return true;
+    if (activation === "never") return bypassMention;
+    if (activation === "replies") return isReplyToBot || bypassMention;
+    if (activation === "mention+replies") return mentionGate.effectiveWasMentioned;
+    // Default to "mention" mode
+    return !mentionGate.shouldSkip;
+  })();
   params.msg.wasMentioned = mentionGate.effectiveWasMentioned;
-  if (!shouldBypassMention && requireMention && mentionGate.shouldSkip) {
+
+  if (!shouldProcess) {
     params.logVerbose(
-      `Group message stored for context (no mention detected) in ${params.conversationId}: ${params.msg.body}`,
+      `Group message stored for context (no activation pass) in ${params.conversationId}: ${params.msg.body}`,
     );
     const sender =
       params.msg.senderName && params.msg.senderE164

@@ -59,7 +59,7 @@ type StatusArgs = {
   sessionEntry?: SessionEntry;
   sessionKey?: string;
   sessionScope?: SessionScope;
-  groupActivation?: "mention" | "always";
+  groupActivation?: "mention" | "always" | "replies" | "mention+replies" | "never";
   resolvedThink?: ThinkLevel;
   resolvedVerbose?: VerboseLevel;
   resolvedReasoning?: ReasoningLevel;
