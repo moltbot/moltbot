@@ -105,6 +105,14 @@ export async function createThreadDiscord(
   if (payload.autoArchiveMinutes) {
     body.auto_archive_duration = payload.autoArchiveMinutes;
   }
+  // Forum channels (type 15) require a message object for thread creation
+  if (payload.message) {
+    body.message = { content: payload.message };
+    // For forum posts, POST directly to /channels/{channelId}/threads
+    const route = `/channels/${channelId}/threads`;
+    return await rest.post(route, { body });
+  }
+  // Regular thread from an existing message
   const route = Routes.threads(channelId, payload.messageId);
   return await rest.post(route, { body });
 }
