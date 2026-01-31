@@ -4,10 +4,7 @@
  * Converts OpenClaw messages to Cursor Background Agent tasks.
  */
 
-import type {
-  ChannelOutboundAdapter,
-  ChannelOutboundContext,
-} from "openclaw/plugin-sdk";
+import type { ChannelOutboundAdapter, ChannelOutboundContext } from "openclaw/plugin-sdk";
 import { launchAgentTask, type LaunchAgentOptions } from "./api.js";
 import type { CursorAgentAccountConfig } from "./types.js";
 import { getTaskStore } from "./task-store.js";
@@ -122,9 +119,7 @@ export const cursorAgentOutbound: ChannelOutboundAdapter<CursorAgentAccountConfi
     }
   },
 
-  async sendToolResult(
-    ctx: ChannelOutboundContext<CursorAgentAccountConfig>,
-  ): Promise<void> {
+  async sendToolResult(ctx: ChannelOutboundContext<CursorAgentAccountConfig>): Promise<void> {
     // For tool results, treat as a follow-up if we have an active task
     // Otherwise, launch a new task
     return cursorAgentOutbound.sendMessage(ctx);
