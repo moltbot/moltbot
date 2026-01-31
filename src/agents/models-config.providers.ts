@@ -76,6 +76,13 @@ const OLLAMA_DEFAULT_COST = {
   cacheWrite: 0,
 };
 
+// In-memory provider health tracking (runtime-only)
+export const providerHealth = new Map<string, boolean>();
+
+export function isProviderHealthy(provider: string): boolean | undefined {
+  return providerHealth.get(provider);
+}
+
 interface OllamaModel {
   name: string;
   modified_at: string;
@@ -91,24 +98,35 @@ interface OllamaTagsResponse {
   models: OllamaModel[];
 }
 
-async function discoverOllamaModels(): Promise<ModelDefinitionConfig[]> {
+import { fetchWithRetry } from "../utils/fetch-retry.js";
+
+export async function discoverOllamaModels(): Promise<ModelDefinitionConfig[]> {
   // Skip Ollama discovery in test environments
   if (process.env.VITEST || process.env.NODE_ENV === "test") {
     return [];
   }
   try {
-    const response = await fetch(`${OLLAMA_API_BASE_URL}/api/tags`, {
-      signal: AbortSignal.timeout(5000),
-    });
+    // Use a small retry/backoff to tolerate short Ollama restarts
+    const response = await fetchWithRetry(
+      `${OLLAMA_API_BASE_URL}/api/tags`,
+      {
+        signal: AbortSignal.timeout(5000),
+      },
+      3,
+      300,
+    );
     if (!response.ok) {
       console.warn(`Failed to discover Ollama models: ${response.status}`);
+      providerHealth.set("ollama", false);
       return [];
     }
     const data = (await response.json()) as OllamaTagsResponse;
     if (!data.models || data.models.length === 0) {
       console.warn("No Ollama models found on local instance");
+      providerHealth.set("ollama", true);
       return [];
     }
+    providerHealth.set("ollama", true);
     return data.models.map((model) => {
       const modelId = model.name;
       const isReasoning =
@@ -125,7 +143,32 @@ async function discoverOllamaModels(): Promise<ModelDefinitionConfig[]> {
     });
   } catch (error) {
     console.warn(`Failed to discover Ollama models: ${String(error)}`);
+    providerHealth.set("ollama", false);
     return [];
+  }
+}
+
+/**
+ * Quick probe to verify Ollama is reachable; updates `providerHealth` and
+ * returns true when reachable.
+ */
+export async function probeOllama(timeoutMs = 2000, attempts = 2): Promise<boolean> {
+  try {
+    const res = await fetchWithRetry(
+      `${OLLAMA_API_BASE_URL}/api/tags`,
+      {
+        signal: AbortSignal.timeout(timeoutMs),
+      },
+      attempts,
+      200,
+    );
+    const ok = res.ok;
+    providerHealth.set("ollama", ok);
+    return ok;
+  } catch {
+    // failure handled via providerHealth flag
+    providerHealth.set("ollama", false);
+    return false;
   }
 }
 

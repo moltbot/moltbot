@@ -1,0 +1,18 @@
+[Unit]
+Description=Ollama LLM runner
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+Environment="OLLAMA_DEBUG=1"
+Environment="OLLAMA_KEEP_ALIVE=30m"
+Environment="OLLAMA_LOAD_TIMEOUT=10m"
+ExecStart=/usr/local/bin/ollama serve
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

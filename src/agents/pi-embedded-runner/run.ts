@@ -47,6 +47,7 @@ import { compactEmbeddedPiSessionDirect } from "./compact.js";
 import { resolveGlobalLane, resolveSessionLane } from "./lanes.js";
 import { log } from "./logger.js";
 import { resolveModel } from "./model.js";
+import { isProviderHealthy, probeOllama } from "../models-config.providers.js";
 import { runEmbeddedAttempt } from "./run/attempt.js";
 import type { RunEmbeddedPiAgentParams } from "./run/params.js";
 import { buildEmbeddedRunPayloads } from "./run/payloads.js";
@@ -109,6 +110,21 @@ export async function runEmbeddedPiAgent(
       );
       if (!model) {
         throw new Error(error ?? `Unknown model: ${provider}/${modelId}`);
+      }
+
+      // If using Ollama, ensure the runtime is reachable. Provide a clear
+      // user-facing error when Ollama is down rather than a vague "Connection error".
+      if (model.provider === "ollama") {
+        const health = isProviderHealthy("ollama");
+        if (health === false || health === undefined) {
+          const ok = await probeOllama(2000, 2);
+          if (!ok) {
+            throw new FailoverError(
+              `Ollama unreachable at http://127.0.0.1:11434 — check Ollama is running and accessible at this address.`,
+              { reason: "unknown", provider: "ollama", model: modelId, status: 503 },
+            );
+          }
+        }
       }
 
       const ctxInfo = resolveContextWindowInfo({
