@@ -20,7 +20,9 @@ import {
   validatePollParams,
   validateSendParams,
 } from "../protocol/index.js";
+
 import { formatForLog } from "../ws-log.js";
+import { sanitizeResponse } from "../../security/sanitizer.js";
 import type { GatewayRequestContext, GatewayRequestHandlers } from "./types.js";
 
 type InflightResult = {
@@ -87,8 +89,15 @@ export const sendHandlers: GatewayRequestHandlers = {
       return;
     }
     const to = request.to.trim();
-    const message = request.message.trim();
-    const mediaUrls = Array.isArray(request.mediaUrls) ? request.mediaUrls : undefined;
+    const rawMessage = request.message.trim();
+    const message = sanitizeResponse(rawMessage);
+    const rawMediaUrls = Array.isArray(request.mediaUrls) ? request.mediaUrls : undefined;
+    let mediaUrls: string[] | undefined;
+    if (rawMediaUrls) {
+      mediaUrls = rawMediaUrls.map((url) => sanitizeResponse(url));
+    }
+    const rawMediaUrl = request.mediaUrl;
+    const mediaUrl = rawMediaUrl ? sanitizeResponse(rawMediaUrl) : undefined;
     const channelInput = typeof request.channel === "string" ? request.channel : undefined;
     const normalizedChannel = channelInput ? normalizeChannelId(channelInput) : null;
     if (channelInput && !normalizedChannel) {
@@ -134,7 +143,7 @@ export const sendHandlers: GatewayRequestHandlers = {
         }
         const outboundDeps = context.deps ? createOutboundSendDeps(context.deps) : undefined;
         const mirrorPayloads = normalizeReplyPayloadsForDelivery([
-          { text: message, mediaUrl: request.mediaUrl, mediaUrls },
+          { text: message, mediaUrl: mediaUrl, mediaUrls },
         ]);
         const mirrorText = mirrorPayloads
           .map((payload) => payload.text)
@@ -172,7 +181,7 @@ export const sendHandlers: GatewayRequestHandlers = {
           channel: outboundChannel,
           to: resolved.to,
           accountId,
-          payloads: [{ text: message, mediaUrl: request.mediaUrl, mediaUrls }],
+          payloads: [{ text: message, mediaUrl: mediaUrl, mediaUrls }],
           gifPlayback: request.gifPlayback,
           deps: outboundDeps,
           mirror: providedSessionKey
@@ -280,8 +289,8 @@ export const sendHandlers: GatewayRequestHandlers = {
     }
     const channel = normalizedChannel ?? DEFAULT_CHAT_CHANNEL;
     const poll = {
-      question: request.question,
-      options: request.options,
+      question: sanitizeResponse(request.question),
+      options: request.options.map((opt) => sanitizeResponse(opt)),
       maxSelections: request.maxSelections,
       durationHours: request.durationHours,
     };
