@@ -8,6 +8,7 @@ export type HybridVectorResult = {
   source: HybridSource;
   snippet: string;
   vectorScore: number;
+  createdAt?: number; // Unix timestamp (ms)
 };
 
 export type HybridKeywordResult = {
@@ -18,7 +19,30 @@ export type HybridKeywordResult = {
   source: HybridSource;
   snippet: string;
   textScore: number;
+  createdAt?: number; // Unix timestamp (ms)
 };
+
+/**
+ * Calculate recency weight using exponential decay.
+ * Recent memories get higher weights, old memories decay toward floor.
+ *
+ * @param createdAtMs - Unix timestamp in milliseconds
+ * @param halfLifeDays - Days until weight halves (default: 30)
+ * @param floor - Minimum weight for very old memories (default: 0.1)
+ * @returns Weight between floor and 1.0
+ */
+export function calculateRecencyWeight(
+  createdAtMs: number | undefined,
+  halfLifeDays: number = 30,
+  floor: number = 0.1
+): number {
+  if (!createdAtMs || createdAtMs <= 0) return 1.0; // No timestamp = full weight
+  const ageMs = Date.now() - createdAtMs;
+  if (ageMs <= 0) return 1.0; // Future or current = full weight
+  const ageDays = ageMs / (1000 * 60 * 60 * 24);
+  const decay = Math.exp(-ageDays / halfLifeDays);
+  return Math.max(floor, decay);
+}
 
 export function buildFtsQuery(raw: string): string | null {
   const tokens =
@@ -41,6 +65,8 @@ export function mergeHybridResults(params: {
   keyword: HybridKeywordResult[];
   vectorWeight: number;
   textWeight: number;
+  recencyHalfLifeDays?: number; // Days until weight halves (default: 30, 0 = disabled)
+  recencyFloor?: number; // Minimum weight for old memories (default: 0.1)
 }): Array<{
   path: string;
   startLine: number;
@@ -60,6 +86,7 @@ export function mergeHybridResults(params: {
       snippet: string;
       vectorScore: number;
       textScore: number;
+      createdAt?: number;
     }
   >();
 
@@ -73,6 +100,7 @@ export function mergeHybridResults(params: {
       snippet: r.snippet,
       vectorScore: r.vectorScore,
       textScore: 0,
+      createdAt: r.createdAt,
     });
   }
 
@@ -81,6 +109,7 @@ export function mergeHybridResults(params: {
     if (existing) {
       existing.textScore = r.textScore;
       if (r.snippet && r.snippet.length > 0) existing.snippet = r.snippet;
+      if (r.createdAt && !existing.createdAt) existing.createdAt = r.createdAt;
     } else {
       byId.set(r.id, {
         id: r.id,
@@ -91,12 +120,22 @@ export function mergeHybridResults(params: {
         snippet: r.snippet,
         vectorScore: 0,
         textScore: r.textScore,
+        createdAt: r.createdAt,
       });
     }
   }
 
+  // Apply recency weighting if enabled (halfLife > 0)
+  const halfLife = params.recencyHalfLifeDays ?? 0; // Default: disabled
+  const floor = params.recencyFloor ?? 0.1;
+  const recencyEnabled = halfLife > 0;
+
   const merged = Array.from(byId.values()).map((entry) => {
-    const score = params.vectorWeight * entry.vectorScore + params.textWeight * entry.textScore;
+    const hybridScore = params.vectorWeight * entry.vectorScore + params.textWeight * entry.textScore;
+    const recencyWeight = recencyEnabled
+      ? calculateRecencyWeight(entry.createdAt, halfLife, floor)
+      : 1.0;
+    const score = hybridScore * recencyWeight;
     return {
       path: entry.path,
       startLine: entry.startLine,
