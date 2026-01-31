@@ -203,12 +203,30 @@ export function renderChat(props: ChatProps) {
 
   const splitRatio = props.splitRatio ?? 0.6;
   const sidebarOpen = Boolean(props.sidebarOpen && props.onCloseSidebar);
+  const handleThreadScroll = (e: Event) => {
+    props.onChatScroll?.(e);
+    const container = e.currentTarget as HTMLElement;
+    const dist = container.scrollHeight - container.scrollTop - container.clientHeight;
+    const main = container.closest(".chat-main");
+    if (main) {
+      main.classList.toggle("chat-main--scrolled-up", dist >= 200);
+    }
+  };
+
+  const handleScrollToBottom = (e: Event) => {
+    const btn = e.currentTarget as HTMLElement;
+    const thread = btn.closest(".chat-main")?.querySelector(".chat-thread");
+    if (thread) {
+      thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" });
+    }
+  };
+
   const thread = html`
     <div
       class="chat-thread"
       role="log"
       aria-live="polite"
-      @scroll=${props.onChatScroll}
+      @scroll=${handleThreadScroll}
     >
       ${props.loading ? html`<div class="muted">Loading chat…</div>` : nothing}
       ${repeat(buildChatItems(props), (item) => item.key, (item) => {
@@ -237,6 +255,14 @@ export function renderChat(props: ChatProps) {
         return nothing;
       })}
     </div>
+    <button
+      class="chat-scroll-bottom"
+      type="button"
+      aria-label="Scroll to bottom"
+      @click=${handleScrollToBottom}
+    >
+      ${icons.arrowDown}
+    </button>
   `;
 
   return html`

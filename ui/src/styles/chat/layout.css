@@ -97,6 +97,72 @@
   stroke-linejoin: round;
 }
 
+/* Scroll-to-bottom floating button */
+.chat-main {
+  position: relative;
+}
+
+.chat-scroll-bottom {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  z-index: 5;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 200ms ease-out,
+    transform 200ms ease-out,
+    background 150ms ease-out,
+    color 150ms ease-out,
+    border-color 150ms ease-out;
+}
+
+.chat-main--scrolled-up .chat-scroll-bottom {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+.chat-scroll-bottom:hover {
+  background: var(--panel-strong);
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.chat-scroll-bottom svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+:root[data-theme="light"] .chat-scroll-bottom {
+  background: #ffffff;
+  border-color: rgba(16, 24, 40, 0.15);
+  box-shadow: 0 4px 12px rgba(16, 24, 40, 0.12);
+}
+
+:root[data-theme="light"] .chat-scroll-bottom:hover {
+  background: #ffffff;
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
 /* Chat compose - sticky at bottom */
 .chat-compose {
   position: sticky;

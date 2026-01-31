@@ -109,7 +109,7 @@ async function sendChatMessageNow(
   if (ok && opts?.restoreAttachments && opts.previousAttachments?.length) {
     host.chatAttachments = opts.previousAttachments;
   }
-  scheduleChatScroll(host as unknown as Parameters<typeof scheduleChatScroll>[0]);
+  scheduleChatScroll(host as unknown as Parameters<typeof scheduleChatScroll>[0], true);
   if (ok && !host.chatRunId) {
     void flushChatQueue(host);
   }
@@ -163,6 +163,9 @@ export async function handleSendChat(
     // Clear attachments when sending
     host.chatAttachments = [];
   }
+
+  // Scroll to bottom immediately so the user sees their message
+  scheduleChatScroll(host as unknown as Parameters<typeof scheduleChatScroll>[0], true);
 
   if (isChatBusy(host)) {
     enqueueChatMessage(host, message, attachmentsToSend, refreshSessions);
