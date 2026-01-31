@@ -1,0 +1,72 @@
+{
+  "id": "feishu",
+  "name": "Feishu (Lark)",
+  "version": "1.0.0",
+  "description": "Feishu/Lark messaging integration for Moltbot",
+  "kind": "channel",
+  "channels": ["feishu"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "appId": {
+        "type": "string",
+        "description": "Feishu app ID"
+      },
+      "appSecret": {
+        "type": "string",
+        "description": "Feishu app secret"
+      },
+      "encryptKey": {
+        "type": "string",
+        "description": "Feishu encrypt key"
+      },
+      "verificationToken": {
+        "type": "string",
+        "description": "Feishu verification token"
+      },
+      "webhookPath": {
+        "type": "string",
+        "description": "Webhook path for Feishu events"
+      },
+      "dmPolicy": {
+        "type": "string",
+        "description": "Direct message policy"
+      },
+      "allowFrom": {
+        "type": "array",
+        "description": "Allowed senders"
+      }
+    }
+  },
+  "uiHints": {
+    "appId": {
+      "label": "App ID",
+      "sensitive": false
+    },
+    "appSecret": {
+      "label": "App Secret",
+      "sensitive": true
+    },
+    "encryptKey": {
+      "label": "Encrypt Key",
+      "sensitive": true
+    },
+    "verificationToken": {
+      "label": "Verification Token",
+      "sensitive": true
+    },
+    "webhookPath": {
+      "label": "Webhook Path",
+      "placeholder": "/webhook/feishu"
+    },
+    "dmPolicy": {
+      "label": "DM Policy",
+      "placeholder": "pairing"
+    },
+    "allowFrom": {
+      "label": "Allow From",
+      "placeholder": "[\"*\"]"
+    }
+  }
+}
