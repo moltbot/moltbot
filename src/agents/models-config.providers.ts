@@ -13,6 +13,11 @@ import {
   SYNTHETIC_MODEL_CATALOG,
 } from "./synthetic-models.js";
 import { discoverVeniceModels, VENICE_BASE_URL } from "./venice-models.js";
+import {
+  buildFirmwareModelDefinition,
+  FIRMWARE_BASE_URL,
+  FIRMWARE_MODEL_CATALOG,
+} from "./firmware-models.js";
 
 type ModelsConfig = NonNullable<OpenClawConfig["models"]>;
 export type ProviderConfig = NonNullable<ModelsConfig["providers"]>[string];
@@ -312,6 +317,14 @@ function buildQwenPortalProvider(): ProviderConfig {
   };
 }
 
+function buildFirmwareProvider(): ProviderConfig {
+  return {
+    baseUrl: FIRMWARE_BASE_URL,
+    api: "openai-completions",
+    models: FIRMWARE_MODEL_CATALOG.map(buildFirmwareModelDefinition),
+  };
+}
+
 function buildSyntheticProvider(): ProviderConfig {
   return {
     baseUrl: SYNTHETIC_BASE_URL,
@@ -405,6 +418,13 @@ export async function resolveImplicitProviders(params: {
     resolveApiKeyFromProfiles({ provider: "xiaomi", store: authStore });
   if (xiaomiKey) {
     providers.xiaomi = { ...buildXiaomiProvider(), apiKey: xiaomiKey };
+  }
+
+  const firmwareKey =
+    resolveEnvApiKeyVarName("firmware") ??
+    resolveApiKeyFromProfiles({ provider: "firmware", store: authStore });
+  if (firmwareKey) {
+    providers.firmware = { ...buildFirmwareProvider(), apiKey: firmwareKey };
   }
 
   // Ollama provider - only add if explicitly configured
