@@ -257,7 +257,8 @@ export function registerModelsCli(program: Command) {
 
   models
     .command("scan")
-    .description("Scan OpenRouter free models for tools + images")
+    .description("Scan model registries for tools + images")
+    .option("--source <registry>", "Model registry (openrouter, edenai)", "openrouter")
     .option("--min-params <b>", "Minimum parameter size (billions)")
     .option("--max-age-days <days>", "Skip models older than N days")
     .option("--provider <name>", "Filter by provider prefix")

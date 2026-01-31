@@ -1,6 +1,10 @@
 import { cancel, multiselect as clackMultiselect, isCancel } from "@clack/prompts";
 import { resolveApiKeyForProvider } from "../../agents/model-auth.js";
-import { type ModelScanResult, scanOpenRouterModels } from "../../agents/model-scan.js";
+import {
+  type ModelScanResult,
+  scanEdenAiModels,
+  scanOpenRouterModels,
+} from "../../agents/model-scan.js";
 import { withProgressTotals } from "../../cli/progress.js";
 import { loadConfig } from "../../config/config.js";
 import { logConfigUpdated } from "../../config/logging.js";
@@ -120,6 +124,8 @@ function printScanTable(results: ModelScanResult[], runtime: RuntimeEnv) {
   }
 }
 
+export type ModelScanSource = "openrouter" | "edenai";
+
 export async function modelsScanCommand(
   opts: {
     minParams?: string;
@@ -134,6 +140,7 @@ export async function modelsScanCommand(
     setImage?: boolean;
     json?: boolean;
     probe?: boolean;
+    source?: ModelScanSource;
   },
   runtime: RuntimeEnv,
 ) {
@@ -160,11 +167,15 @@ export async function modelsScanCommand(
 
   const cfg = loadConfig();
   const probe = opts.probe ?? true;
+  const source: ModelScanSource = opts.source ?? "openrouter";
+  const providerForKey = source === "edenai" ? "edenai" : "openrouter";
+  const sourceLabel = source === "edenai" ? "Eden AI" : "OpenRouter";
+
   let storedKey: string | undefined;
-  if (probe) {
+  if (probe || source === "edenai") {
     try {
       const resolved = await resolveApiKeyForProvider({
-        provider: "openrouter",
+        provider: providerForKey,
         cfg,
       });
       storedKey = resolved.apiKey;
@@ -172,14 +183,15 @@ export async function modelsScanCommand(
       storedKey = undefined;
     }
   }
+
   const results = await withProgressTotals(
     {
-      label: "Scanning OpenRouter models...",
+      label: `Scanning ${sourceLabel} models...`,
       indeterminate: false,
       enabled: opts.json !== true,
     },
-    async (update) =>
-      await scanOpenRouterModels({
+    async (progressUpdate) => {
+      const scanOpts = {
         apiKey: storedKey ?? undefined,
         minParamB: minParams,
         maxAgeDays,
@@ -187,22 +199,35 @@ export async function modelsScanCommand(
         timeoutMs: timeout,
         concurrency,
         probe,
-        onProgress: ({ phase, completed, total }) => {
+        onProgress: ({
+          phase,
+          completed,
+          total,
+        }: {
+          phase: string;
+          completed: number;
+          total: number;
+        }) => {
           if (phase !== "probe") return;
           const labelBase = probe ? "Probing models" : "Scanning models";
-          update({
+          progressUpdate({
             completed,
             total,
             label: `${labelBase} (${completed}/${total})`,
           });
         },
-      }),
+      };
+      if (source === "edenai") {
+        return await scanEdenAiModels(scanOpts);
+      }
+      return await scanOpenRouterModels(scanOpts);
+    },
   );
 
   if (!probe) {
     if (!opts.json) {
       runtime.log(
-        `Found ${results.length} OpenRouter free models (metadata only; pass --probe to test tools/images).`,
+        `Found ${results.length} ${sourceLabel} models (metadata only; pass --probe to test tools/images).`,
       );
       printScanTable(sortScanResults(results), runtime);
     } else {
@@ -213,7 +238,7 @@ export async function modelsScanCommand(
 
   const toolOk = results.filter((entry) => entry.tool.ok);
   if (toolOk.length === 0) {
-    throw new Error("No tool-capable OpenRouter free models found.");
+    throw new Error(`No tool-capable ${sourceLabel} models found.`);
   }
 
   const sorted = sortScanResults(results);

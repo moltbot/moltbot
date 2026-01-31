@@ -118,6 +118,14 @@
       "destination": "/providers/opencode"
     },
     {
+      "source": "/edenai",
+      "destination": "/providers/edenai"
+    },
+    {
+      "source": "/edenai/",
+      "destination": "/providers/edenai"
+    },
+    {
       "source": "/mattermost",
       "destination": "/channels/mattermost"
     },
@@ -1037,6 +1045,7 @@
           "providers/minimax",
           "providers/vercel-ai-gateway",
           "providers/openrouter",
+          "providers/edenai",
           "providers/synthetic",
           "providers/opencode",
           "providers/glm",

@@ -10,6 +10,7 @@ import {
 import { Type } from "@sinclair/typebox";
 
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
+const EDENAI_MODELS_URL = "https://api.edenai.run/v3/llm/models";
 const DEFAULT_TIMEOUT_MS = 12_000;
 const DEFAULT_CONCURRENCY = 3;
 
@@ -463,5 +464,220 @@ export async function scanOpenRouterModels(
   );
 }
 
-export { OPENROUTER_MODELS_URL };
-export type { OpenRouterModelMeta, OpenRouterModelPricing };
+// Eden AI model scanning
+
+type EdenAiModelMeta = {
+  id: string;
+  model_name: string;
+  owned_by: string;
+  context_length: number | null;
+  created: number;
+  capabilities: {
+    supports_function_calling: boolean;
+    supports_vision: boolean;
+    supports_tool_choice: boolean;
+    input_modalities: string[];
+    output_modalities: string[];
+  };
+  pricing: {
+    input_cost_per_token: number;
+    output_cost_per_token: number;
+  };
+};
+
+export type EdenAiScanOptions = {
+  apiKey?: string;
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+  concurrency?: number;
+  minParamB?: number;
+  maxAgeDays?: number;
+  providerFilter?: string;
+  probe?: boolean;
+  onProgress?: (update: { phase: "catalog" | "probe"; completed: number; total: number }) => void;
+};
+
+function parseEdenAiModality(meta: EdenAiModelMeta): Array<"text" | "image"> {
+  const modalities = meta.capabilities?.input_modalities ?? [];
+  const hasImage = modalities.some((m) => m.toLowerCase() === "image");
+  return hasImage ? ["text", "image"] : ["text"];
+}
+
+async function fetchEdenAiModels(
+  fetchImpl: typeof fetch,
+  apiKey: string,
+): Promise<EdenAiModelMeta[]> {
+  const res = await fetchImpl(EDENAI_MODELS_URL, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`Eden AI /llm/models failed: HTTP ${res.status}`);
+  }
+  const payload = (await res.json()) as unknown;
+  // Eden AI returns {object: "list", data: [...]} format
+  const entries = Array.isArray(payload)
+    ? payload
+    : payload &&
+        typeof payload === "object" &&
+        "data" in payload &&
+        Array.isArray((payload as { data: unknown }).data)
+      ? (payload as { data: unknown[] }).data
+      : [];
+
+  return entries
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const obj = entry as Record<string, unknown>;
+      const id = typeof obj.id === "string" ? obj.id.trim() : "";
+      if (!id) return null;
+      const model_name =
+        typeof obj.model_name === "string" && obj.model_name.trim() ? obj.model_name.trim() : id;
+      const owned_by = typeof obj.owned_by === "string" ? obj.owned_by.trim() : "";
+
+      const context_length =
+        typeof obj.context_length === "number" && Number.isFinite(obj.context_length)
+          ? obj.context_length
+          : null;
+
+      const created =
+        typeof obj.created === "number" && Number.isFinite(obj.created) ? obj.created : 0;
+
+      const caps = (obj.capabilities ?? {}) as Record<string, unknown>;
+      const capabilities = {
+        supports_function_calling: caps.supports_function_calling === true,
+        supports_vision: caps.supports_vision === true,
+        supports_tool_choice: caps.supports_tool_choice === true,
+        input_modalities: Array.isArray(caps.input_modalities)
+          ? caps.input_modalities.filter((m): m is string => typeof m === "string")
+          : [],
+        output_modalities: Array.isArray(caps.output_modalities)
+          ? caps.output_modalities.filter((m): m is string => typeof m === "string")
+          : [],
+      };
+
+      const pricingRaw = (obj.pricing ?? {}) as Record<string, unknown>;
+      const pricing = {
+        input_cost_per_token:
+          typeof pricingRaw.input_cost_per_token === "number" ? pricingRaw.input_cost_per_token : 0,
+        output_cost_per_token:
+          typeof pricingRaw.output_cost_per_token === "number"
+            ? pricingRaw.output_cost_per_token
+            : 0,
+      };
+
+      return {
+        id,
+        model_name,
+        owned_by,
+        context_length,
+        created,
+        capabilities,
+        pricing,
+      } satisfies EdenAiModelMeta;
+    })
+    .filter((entry): entry is EdenAiModelMeta => Boolean(entry));
+}
+
+function isFreeEdenAiModel(entry: EdenAiModelMeta): boolean {
+  return entry.pricing.input_cost_per_token === 0 && entry.pricing.output_cost_per_token === 0;
+}
+
+export async function scanEdenAiModels(
+  options: EdenAiScanOptions = {},
+): Promise<ModelScanResult[]> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const probe = options.probe ?? true;
+  const apiKey = options.apiKey?.trim() || getEnvApiKey("edenai") || "";
+  if (!apiKey) {
+    throw new Error("Missing Eden AI API key. Set EDENAI_API_KEY to run models scan.");
+  }
+
+  // timeoutMs reserved for future probing support
+  const concurrency = Math.max(1, Math.floor(options.concurrency ?? DEFAULT_CONCURRENCY));
+  const minParamB = Math.max(0, Math.floor(options.minParamB ?? 0));
+  const maxAgeDays = Math.max(0, Math.floor(options.maxAgeDays ?? 0));
+  const providerFilter = options.providerFilter?.trim().toLowerCase() ?? "";
+
+  const catalog = await fetchEdenAiModels(fetchImpl, apiKey);
+  const now = Date.now();
+
+  const filtered = catalog.filter((entry) => {
+    if (providerFilter) {
+      const prefix = entry.id.split("/")[0]?.toLowerCase() ?? "";
+      if (prefix !== providerFilter) return false;
+    }
+    if (minParamB > 0) {
+      const params = inferParamBFromIdOrName(`${entry.id} ${entry.model_name}`);
+      if (!params || params < minParamB) return false;
+    }
+    if (maxAgeDays > 0 && entry.created > 0) {
+      const createdMs = entry.created * 1000;
+      const ageMs = now - createdMs;
+      const ageDays = ageMs / (24 * 60 * 60 * 1000);
+      if (ageDays > maxAgeDays) return false;
+    }
+    return true;
+  });
+
+  options.onProgress?.({
+    phase: "probe",
+    completed: 0,
+    total: filtered.length,
+  });
+
+  return mapWithConcurrency(
+    filtered,
+    concurrency,
+    async (entry) => {
+      const isFree = isFreeEdenAiModel(entry);
+      const inferredParamB = inferParamBFromIdOrName(`${entry.id} ${entry.model_name}`);
+      const modalities = parseEdenAiModality(entry);
+      const modalityString = modalities.includes("image") ? "text+image" : "text";
+
+      const baseResult = {
+        id: entry.id,
+        name: entry.model_name,
+        provider: "edenai",
+        modelRef: `edenai/${entry.id}`,
+        contextLength: entry.context_length,
+        maxCompletionTokens: null,
+        supportedParametersCount: 0,
+        supportsToolsMeta: entry.capabilities.supports_function_calling,
+        modality: modalityString,
+        inferredParamB,
+        createdAtMs: entry.created > 0 ? entry.created * 1000 : null,
+        pricing: {
+          prompt: entry.pricing.input_cost_per_token,
+          completion: entry.pricing.output_cost_per_token,
+          request: 0,
+          image: 0,
+          webSearch: 0,
+          internalReasoning: 0,
+        },
+        isFree,
+      };
+
+      // Eden AI probing is not yet supported - their API structure differs from OpenAI
+      // Use --no-probe for catalog listing, or implement Eden AI-specific probing later
+      return {
+        ...baseResult,
+        tool: { ok: false, latencyMs: null, skipped: !probe },
+        image: { ok: false, latencyMs: null, skipped: !probe },
+      } satisfies ModelScanResult;
+    },
+    {
+      onProgress: (completed, total) =>
+        options.onProgress?.({
+          phase: "probe",
+          completed,
+          total,
+        }),
+    },
+  );
+}
+
+export { OPENROUTER_MODELS_URL, EDENAI_MODELS_URL };
+export type { OpenRouterModelMeta, OpenRouterModelPricing, EdenAiModelMeta };
