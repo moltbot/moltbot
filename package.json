@@ -51,6 +51,7 @@
     "extensions/**",
     "assets/**",
     "openclaw.mjs",
+    "phoenix-preload.mjs",
     "skills/**",
     "patches/**",
     "README.md",
@@ -151,6 +152,10 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "0.13.1",
+    "@anthropic-ai/sdk": "0.65.0",
+    "@arizeai/openinference-instrumentation-anthropic": "^0.1.7",
+    "@arizeai/openinference-instrumentation-openai": "^4.0.5",
+    "@arizeai/phoenix-otel": "^0.3.4",
     "@aws-sdk/client-bedrock": "^3.980.0",
     "@buape/carbon": "0.14.0",
     "@clack/prompts": "^1.0.0",
@@ -186,6 +191,7 @@
     "long": "^5.3.2",
     "markdown-it": "^14.1.0",
     "node-edge-tts": "^1.2.9",
+    "openai": "6.10.0",
     "osc-progress": "^0.3.0",
     "pdfjs-dist": "^5.4.530",
     "playwright-core": "1.58.1",
@@ -202,7 +208,10 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@arizeai/openinference-core": "^2.0.5",
+    "@arizeai/openinference-semantic-conventions": "^2.1.7",
     "@grammyjs/types": "^3.23.0",
+    "@opentelemetry/api": "^1.9.0",
     "@lit-labs/signals": "^0.2.0",
     "@lit/context": "^1.1.6",
     "@types/express": "^5.0.6",
@@ -238,6 +247,7 @@
     "minimumReleaseAge": 2880,
     "overrides": {
       "@sinclair/typebox": "0.34.47",
+      "@anthropic-ai/sdk": "0.65.0",
       "tar": "7.5.7"
     }
   },

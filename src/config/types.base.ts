@@ -133,12 +133,19 @@ export type DiagnosticsCacheTraceConfig = {
   includeSystem?: boolean;
 };
 
+export type DiagnosticsPhoenixConfig = {
+  enabled?: boolean;
+  url?: string;
+  projectName?: string;
+};
+
 export type DiagnosticsConfig = {
   enabled?: boolean;
   /** Optional ad-hoc diagnostics flags (e.g. "telegram.http"). */
   flags?: string[];
   otel?: DiagnosticsOtelConfig;
   cacheTrace?: DiagnosticsCacheTraceConfig;
+  phoenix?: DiagnosticsPhoenixConfig;
 };
 
 export type WebReconnectConfig = {

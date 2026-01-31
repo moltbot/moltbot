@@ -39,7 +39,18 @@ function ensureExperimentalWarningSuppressed(): boolean {
   }
 
   process.env.OPENCLAW_NODE_OPTIONS_READY = "1";
-  process.env.NODE_OPTIONS = `${nodeOptions} ${EXPERIMENTAL_WARNING_FLAG}`.trim();
+
+  // Add Phoenix preload if enabled via env var (must be loaded BEFORE any application code)
+  // Set OPENCLAW_PHOENIX_ENABLED=true in environment to enable Phoenix tracing
+  let updatedOptions = nodeOptions;
+  if (process.env.OPENCLAW_PHOENIX_ENABLED === "true") {
+    // phoenix-preload.mjs is in the project root alongside openclaw.mjs
+    const projectRoot = path.dirname(process.argv[1]);
+    const phoenixPreload = path.join(projectRoot, "phoenix-preload.mjs");
+    updatedOptions = `${updatedOptions} --import ${phoenixPreload}`.trim();
+  }
+
+  process.env.NODE_OPTIONS = `${updatedOptions} ${EXPERIMENTAL_WARNING_FLAG}`.trim();
 
   const child = spawn(process.execPath, [...process.execArgv, ...process.argv.slice(1)], {
     stdio: "inherit",

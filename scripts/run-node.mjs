@@ -109,7 +109,15 @@ const logRunner = (message) => {
 };
 
 const runNode = () => {
-  const nodeProcess = spawn(process.execPath, ["openclaw.mjs", ...args], {
+  // Add --import flag for Phoenix instrumentation if enabled
+  const nodeArgs = [];
+  if (env.OPENCLAW_PHOENIX_ENABLED === 'true') {
+    const phoenixPreload = path.join(cwd, 'phoenix-preload.mjs');
+    nodeArgs.push('--import', phoenixPreload);
+  }
+  nodeArgs.push('openclaw.mjs', ...args);
+
+  const nodeProcess = spawn(process.execPath, nodeArgs, {
     cwd,
     env,
     stdio: "inherit",
