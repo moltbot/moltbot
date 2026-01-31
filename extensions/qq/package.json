@@ -1,0 +1,14 @@
+{
+  "name": "@clawdbot/qq",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Clawdbot QQ channel plugin via OneBot v11",
+  "clawdbot": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
