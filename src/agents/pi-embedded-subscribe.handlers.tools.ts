@@ -37,7 +37,49 @@ function extendExecMeta(toolName: string, args: unknown, meta?: string): string 
   return meta ? `${meta} · ${suffix}` : suffix;
 }
 
-export async function handleToolExecutionStart(
+
+/**
+ * Generate a truncated summary of tool input for logging
+ */
+function truncateToolInputSummary(
+  toolName: string,
+  args: Record<string, unknown> | undefined,
+): string {
+  if (!args || typeof args !== "object" || Object.keys(args).length === 0) {
+    return "";
+  }
+  
+  // Map tool names to their key fields
+  const fieldMap: Record<string, string[]> = {
+    read: ["path"],
+    write: ["path", "oldText"],
+    edit: ["path"],
+    exec: ["command"],
+    web_search: ["query"],
+    web_fetch: ["url"],
+    memory_search: ["query"],
+    process: ["action", "sessionId"],
+    message: ["action", "target", "channel"],
+    browser: ["action"],
+    gateway: ["action"],
+    cron: ["action"],
+  };
+  
+  const fields = fieldMap[toolName] || [];
+  const summaryParts: string[] = [];
+  
+  for (const field of fields) {
+    const value = args[field as string];
+    if (value) {
+      // Truncate to ~120 chars
+      const truncated = value.length > 120 ? value.slice(0, 117) + "..." : value;
+      summaryParts.push(`${field}=${truncated}`);
+    }
+  }
+  
+  return summaryParts.join(" ");
+}
+\n\nexport async function handleToolExecutionStart(
   ctx: EmbeddedPiSubscribeContext,
   evt: AgentEvent & { toolName: string; toolCallId: string; args: unknown },
 ) {
