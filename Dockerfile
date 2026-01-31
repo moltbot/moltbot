@@ -9,12 +9,17 @@ RUN corepack enable
 WORKDIR /app
 
 ARG OPENCLAW_DOCKER_APT_PACKAGES=""
-RUN if [ -n "$OPENCLAW_DOCKER_APT_PACKAGES" ]; then \
-      apt-get update && \
-      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $OPENCLAW_DOCKER_APT_PACKAGES && \
-      apt-get clean && \
-      rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*; \
-    fi
+
+# Install a system Chromium so the built-in browser tool can render JS-heavy pages and generate PDFs.
+# Note: users can still add more packages via OPENCLAW_DOCKER_APT_PACKAGES.
+ARG OPENCLAW_DOCKER_BROWSER_PACKAGES="chromium ca-certificates fonts-liberation fonts-noto-color-emoji"
+
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      $OPENCLAW_DOCKER_BROWSER_PACKAGES \
+      $OPENCLAW_DOCKER_APT_PACKAGES && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY ui/package.json ./ui/package.json
