@@ -239,6 +239,15 @@ export const HumanDelaySchema = z
   })
   .strict();
 
+export const ChunkDelaySchema = z
+  .object({
+    perCharMs: z.number().min(0).optional(),
+    baseMs: z.number().min(0).optional(),
+    maxMs: z.number().min(0).optional(),
+    jitter: z.number().min(0).max(1).optional(),
+  })
+  .strict();
+
 export const CliBackendSchema = z
   .object({
     command: z.string(),

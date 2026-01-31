@@ -1,6 +1,7 @@
 import type { HistoryEntry } from "../../auto-reply/reply/history.js";
 import type { ReplyPayload } from "../../auto-reply/types.js";
 import type { OpenClawConfig } from "../../config/config.js";
+import type { ChunkDelayConfig } from "../../config/types.base.js";
 import type { DmPolicy, GroupPolicy, SignalReactionNotificationMode } from "../../config/types.js";
 import type { RuntimeEnv } from "../../runtime.js";
 import type { SignalSender } from "../identity.js";
@@ -78,6 +79,7 @@ export type SignalEventHandlerDeps = {
   ignoreAttachments: boolean;
   sendReadReceipts: boolean;
   readReceiptsViaDaemon: boolean;
+  chunkDelay?: ChunkDelayConfig;
   fetchAttachment: (params: {
     baseUrl: string;
     account?: string;
@@ -95,6 +97,7 @@ export type SignalEventHandlerDeps = {
     runtime: RuntimeEnv;
     maxBytes: number;
     textLimit: number;
+    chunkDelay?: ChunkDelayConfig;
   }) => Promise<void>;
   resolveSignalReactionTargets: (reaction: SignalReactionMessage) => SignalReactionTarget[];
   isSignalReactionMessage: (

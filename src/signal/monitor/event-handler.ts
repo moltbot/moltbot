@@ -207,6 +207,7 @@ export function createSignalEventHandler(deps: SignalEventHandlerDeps) {
           runtime: deps.runtime,
           maxBytes: deps.mediaMaxBytes,
           textLimit: deps.textLimit,
+          chunkDelay: deps.chunkDelay,
         });
       },
       onError: (err, info) => {

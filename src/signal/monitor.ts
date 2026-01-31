@@ -1,6 +1,7 @@
 import { chunkTextWithMode, resolveChunkMode, resolveTextChunkLimit } from "../auto-reply/chunk.js";
 import { DEFAULT_GROUP_HISTORY_LIMIT, type HistoryEntry } from "../auto-reply/reply/history.js";
 import type { ReplyPayload } from "../auto-reply/types.js";
+import type { ChunkDelayConfig } from "../config/types.base.js";
 import type { OpenClawConfig } from "../config/config.js";
 import { loadConfig } from "../config/config.js";
 import type { SignalReactionNotificationMode } from "../config/types.js";
@@ -13,7 +14,7 @@ import { signalCheck, signalRpcRequest } from "./client.js";
 import { spawnSignalDaemon } from "./daemon.js";
 import { isSignalSenderAllowed, type resolveSignalSender } from "./identity.js";
 import { createSignalEventHandler } from "./monitor/event-handler.js";
-import { sendMessageSignal } from "./send.js";
+import { sendMessageSignal, sendTypingSignal } from "./send.js";
 import { runSignalSseLoop } from "./sse-reconnect.js";
 
 type SignalReactionMessage = {
@@ -206,6 +207,34 @@ async function fetchAttachment(params: {
   return { path: saved.path, contentType: saved.contentType };
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const CHUNK_DELAY_DEFAULTS = {
+  perCharMs: 50,
+  baseMs: 800,
+  maxMs: 6000,
+  jitter: 0.25,
+};
+
+function computeChunkDelay(config: ChunkDelayConfig, chunkLength: number): number {
+  const perCharMs = config.perCharMs ?? CHUNK_DELAY_DEFAULTS.perCharMs;
+  const baseMs = config.baseMs ?? CHUNK_DELAY_DEFAULTS.baseMs;
+  const maxMs = config.maxMs ?? CHUNK_DELAY_DEFAULTS.maxMs;
+  const jitter = config.jitter ?? CHUNK_DELAY_DEFAULTS.jitter;
+
+  let delayMs = baseMs + chunkLength * perCharMs;
+  delayMs = Math.min(delayMs, maxMs);
+
+  // Apply jitter: random variance within ±jitter range
+  if (jitter > 0) {
+    const variance = delayMs * jitter;
+    delayMs += (Math.random() * 2 - 1) * variance;
+    delayMs = Math.max(0, Math.round(delayMs));
+  }
+
+  return delayMs;
+}
+
 async function deliverReplies(params: {
   replies: ReplyPayload[];
   target: string;
@@ -216,15 +245,53 @@ async function deliverReplies(params: {
   maxBytes: number;
   textLimit: number;
   chunkMode: "length" | "newline";
+  chunkDelay?: ChunkDelayConfig;
 }) {
-  const { replies, target, baseUrl, account, accountId, runtime, maxBytes, textLimit, chunkMode } =
-    params;
+  const {
+    replies,
+    target,
+    baseUrl,
+    account,
+    accountId,
+    runtime,
+    maxBytes,
+    textLimit,
+    chunkMode,
+    chunkDelay,
+  } = params;
+  let isFirstPayload = true;
   for (const payload of replies) {
     const mediaList = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
     const text = payload.text ?? "";
     if (!text && mediaList.length === 0) continue;
+    if (!isFirstPayload && chunkDelay) {
+      const delayMs = computeChunkDelay(chunkDelay, (text || "").length);
+      if (delayMs > 0) {
+        try {
+          await sendTypingSignal(target, { baseUrl, account, accountId });
+        } catch {
+          /* typing failure is non-fatal */
+        }
+        await sleep(delayMs);
+      }
+    }
+    isFirstPayload = false;
     if (mediaList.length === 0) {
-      for (const chunk of chunkTextWithMode(text, textLimit, chunkMode)) {
+      const chunks = chunkTextWithMode(text, textLimit, chunkMode);
+      let isFirst = true;
+      for (const chunk of chunks) {
+        if (!isFirst && chunkDelay) {
+          const delayMs = computeChunkDelay(chunkDelay, chunk.length);
+          if (delayMs > 0) {
+            try {
+              await sendTypingSignal(target, { baseUrl, account, accountId });
+            } catch {
+              /* typing failure is non-fatal */
+            }
+            await sleep(delayMs);
+          }
+        }
+        isFirst = false;
         await sendMessageSignal(target, chunk, {
           baseUrl,
           account,
@@ -284,6 +351,7 @@ export async function monitorSignalProvider(opts: MonitorSignalOpts = {}): Promi
   const mediaMaxBytes = (opts.mediaMaxMb ?? accountInfo.config.mediaMaxMb ?? 8) * 1024 * 1024;
   const ignoreAttachments = opts.ignoreAttachments ?? accountInfo.config.ignoreAttachments ?? false;
   const sendReadReceipts = Boolean(opts.sendReadReceipts ?? accountInfo.config.sendReadReceipts);
+  const chunkDelay = accountInfo.config.chunkDelay;
 
   const autoStart = opts.autoStart ?? accountInfo.config.autoStart ?? !accountInfo.config.httpUrl;
   const startupTimeoutMs = Math.min(
@@ -347,6 +415,7 @@ export async function monitorSignalProvider(opts: MonitorSignalOpts = {}): Promi
       ignoreAttachments,
       sendReadReceipts,
       readReceiptsViaDaemon,
+      chunkDelay,
       fetchAttachment,
       deliverReplies: (params) => deliverReplies({ ...params, chunkMode }),
       resolveSignalReactionTargets,

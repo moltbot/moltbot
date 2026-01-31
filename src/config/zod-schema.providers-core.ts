@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   BlockStreamingChunkSchema,
   BlockStreamingCoalesceSchema,
+  ChunkDelaySchema,
   DmConfigSchema,
   DmPolicySchema,
   ExecutableTokenSchema,
@@ -534,6 +535,7 @@ export const SignalAccountSchemaBase = z
       .optional(),
     reactionLevel: z.enum(["off", "ack", "minimal", "extensive"]).optional(),
     heartbeat: ChannelHeartbeatVisibilitySchema,
+    chunkDelay: ChunkDelaySchema.optional(),
   })
   .strict();
 

@@ -47,6 +47,13 @@ export type HumanDelayConfig = {
   maxMs?: number;
 };
 
+export type ChunkDelayConfig = {
+  perCharMs?: number;
+  baseMs?: number;
+  maxMs?: number;
+  jitter?: number;
+};
+
 export type SessionSendPolicyAction = "allow" | "deny";
 export type SessionSendPolicyMatch = {
   channel?: string;
