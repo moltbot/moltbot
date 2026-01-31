@@ -113,6 +113,52 @@ describe("queue followups", () => {
     });
   });
 
+  it("suppresses message_id in queued prompts when includeIds is false", async () => {
+    vi.useFakeTimers();
+    await withTempHome(async (home) => {
+      const prompts: string[] = [];
+      vi.mocked(runEmbeddedPiAgent).mockImplementation(async (params) => {
+        prompts.push(params.prompt);
+        if (params.prompt.includes("[Queued messages while agent was busy]")) {
+          return makeResult("followup");
+        }
+        return makeResult("main");
+      });
+
+      vi.mocked(isEmbeddedPiRunActive).mockReturnValue(true);
+      vi.mocked(isEmbeddedPiRunStreaming).mockReturnValue(true);
+
+      const cfg = {
+        ...makeCfg(home, { mode: "collect", debounceMs: 200, cap: 10, drop: "summarize" }),
+        messages: {
+          queue: { mode: "collect", debounceMs: 200, cap: 10, drop: "summarize" },
+          includeIds: false,
+        },
+      };
+
+      const first = await getReplyFromConfig(
+        { Body: "first", From: "+1001", To: "+2000", MessageSid: "m-1" },
+        {},
+        cfg,
+      );
+      expect(first).toBeUndefined();
+
+      vi.mocked(isEmbeddedPiRunActive).mockReturnValue(false);
+      vi.mocked(isEmbeddedPiRunStreaming).mockReturnValue(false);
+
+      await getReplyFromConfig({ Body: "second", From: "+1001", To: "+2000" }, {}, cfg);
+
+      await vi.advanceTimersByTimeAsync(500);
+      await Promise.resolve();
+
+      const queuedPrompt = prompts.find((p) =>
+        p.includes("[Queued messages while agent was busy]"),
+      );
+      expect(queuedPrompt).toBeTruthy();
+      expect(queuedPrompt).not.toContain("[message_id:");
+    });
+  });
+
   it("summarizes dropped followups when cap is exceeded", async () => {
     await withTempHome(async (home) => {
       const prompts: string[] = [];
