@@ -209,8 +209,8 @@ agents: {
 
 Tools:
 
-- `memory_search` — returns snippets with file + line ranges.
-- `memory_get` — read memory file content by path.
+- `memory_search` - returns snippets with file + line ranges.
+- `memory_get` - read memory file content by path.
 
 Local mode:
 
@@ -242,20 +242,20 @@ If full-text search is unavailable on your platform, OpenClaw falls back to vect
 
 #### Why hybrid?
 
-Vector search is great at “this means the same thing”:
+Vector search is great at "this means the same thing":
 
-- “Mac Studio gateway host” vs “the machine running the gateway”
-- “debounce file updates” vs “avoid indexing on every write”
+- "Mac Studio gateway host" vs "the machine running the gateway"
+- "debounce file updates" vs "avoid indexing on every write"
 
 But it can be weak at exact, high-signal tokens:
 
 - IDs (`a828e60`, `b3b9895a…`)
 - code symbols (`memorySearch.query.hybrid`)
-- error strings (“sqlite-vec unavailable”)
+- error strings ("sqlite-vec unavailable")
 
 BM25 (full-text) is the opposite: strong at exact tokens, weaker at paraphrases.
 Hybrid search is the pragmatic middle ground: **use both retrieval signals** so you get
-good results for both “natural language” queries and “needle in a haystack” queries.
+good results for both "natural language" queries and "needle in a haystack" queries.
 
 #### How we merge results (the current design)
 
@@ -278,11 +278,10 @@ Notes:
 
 - `vectorWeight` + `textWeight` is normalized to 1.0 in config resolution, so weights behave as percentages.
 - If embeddings are unavailable (or the provider returns a zero-vector), we still run BM25 and return keyword matches.
-- If FTS5 can’t be created, we keep vector-only search (no hard failure).
+- If FTS5 can't be created, we keep vector-only search (no hard failure).
 
-This isn’t “IR-theory perfect”, but it’s simple, fast, and tends to improve recall/precision on real notes.
-If we want to get fancier later, common next steps are Reciprocal Rank Fusion (RRF) or score normalization
-(min/max or z-score) before mixing.
+This is the default and works well for most setups. For more advanced ranking,
+see the merge strategy and recency decay options below.
 
 Config:
 
@@ -302,6 +301,72 @@ agents: {
   }
 }
 ```
+
+#### Merge strategies
+
+OpenClaw supports two merge strategies for combining vector and keyword results:
+
+- **`"weighted"`** (default) — Linear weighted sum: `score = vectorWeight * vectorScore + textWeight * textScore`. Simple, predictable, and backward compatible.
+- **`"rrf"`** — [Reciprocal Rank Fusion](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf): `score = Σ 1/(k + rank_i)` across retrieval systems. RRF ignores raw score magnitudes and focuses on rank agreement — if both vector and keyword search rank a chunk highly, it surfaces. This is more robust when score distributions differ between retrieval methods.
+
+Config:
+
+```json5
+agents: {
+  defaults: {
+    memorySearch: {
+      query: {
+        hybrid: {
+          mergeStrategy: "rrf",  // or "weighted" (default)
+          rrfK: 60               // RRF constant (default: 60)
+        }
+      }
+    }
+  }
+}
+```
+
+Notes:
+
+- `rrfK` is only used when `mergeStrategy` is `"rrf"`. The standard value is 60 (from the original RRF paper). Lower values amplify top-rank differences; higher values flatten them.
+- `vectorWeight` and `textWeight` are ignored when using RRF (ranks are used instead of scores).
+
+#### Recency decay
+
+When enabled, recency decay multiplies the final score by an exponential decay factor based on how old the chunk is:
+
+```
+recencyFactor = exp(-λ × ageDays)
+```
+
+where `λ = ln(2) / halfLifeDays`. This means a chunk's score is halved every `halfLifeDays` days. Newer memories naturally surface above older ones with similar relevance scores.
+
+Config:
+
+```json5
+agents: {
+  defaults: {
+    memorySearch: {
+      query: {
+        hybrid: {
+          recencyDecay: {
+            enabled: true,
+            halfLifeDays: 7  // score halves every 7 days (default)
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Notes:
+
+- Disabled by default for backward compatibility.
+- Works with both `"weighted"` and `"rrf"` merge strategies.
+- The decay is a multiplier on the final merged score, not a replacement.
+- `halfLifeDays` can range from 0.01 to 365. Shorter values aggressively favor recent content; longer values apply gentle decay.
+- Chunk age is derived from the `updated_at` timestamp in the index (set when the chunk is indexed/reindexed).
 
 ### Embedding cache
 
@@ -344,7 +409,7 @@ Notes:
 - Session updates are debounced and **indexed asynchronously** once they cross delta thresholds (best-effort).
 - `memory_search` never blocks on indexing; results can be slightly stale until background sync finishes.
 - Results still include snippets only; `memory_get` remains limited to memory files.
-- Session indexing is isolated per agent (only that agent’s session logs are indexed).
+- Session indexing is isolated per agent (only that agent's session logs are indexed).
 - Session logs live on disk (`~/.openclaw/agents/<agentId>/sessions/*.jsonl`). Any process/user with filesystem access can read them, so treat disk access as the trust boundary. For stricter isolation, run agents under separate OS users or hosts.
 
 Delta thresholds (defaults shown):

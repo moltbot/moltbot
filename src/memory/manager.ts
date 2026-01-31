@@ -322,7 +322,7 @@ export class MemoryIndexManager {
   private async searchVector(
     queryVec: number[],
     limit: number,
-  ): Promise<Array<MemorySearchResult & { id: string }>> {
+  ): Promise<Array<MemorySearchResult & { id: string; updatedAt?: number }>> {
     const results = await searchVector({
       db: this.db,
       vectorTable: VECTOR_TABLE,
@@ -334,7 +334,7 @@ export class MemoryIndexManager {
       sourceFilterVec: this.buildSourceFilter("c"),
       sourceFilterChunks: this.buildSourceFilter(),
     });
-    return results.map((entry) => entry as MemorySearchResult & { id: string });
+    return results.map((entry) => entry as MemorySearchResult & { id: string; updatedAt?: number });
   }
 
   private buildFtsQuery(raw: string): string | null {
@@ -344,11 +344,11 @@ export class MemoryIndexManager {
   private async searchKeyword(
     query: string,
     limit: number,
-  ): Promise<Array<MemorySearchResult & { id: string; textScore: number }>> {
+  ): Promise<Array<MemorySearchResult & { id: string; textScore: number; updatedAt?: number }>> {
     if (!this.fts.enabled || !this.fts.available) {
       return [];
     }
-    const sourceFilter = this.buildSourceFilter();
+    const sourceFilter = this.buildSourceFilter("f");
     const results = await searchKeyword({
       db: this.db,
       ftsTable: FTS_TABLE,
@@ -360,15 +360,19 @@ export class MemoryIndexManager {
       buildFtsQuery: (raw) => this.buildFtsQuery(raw),
       bm25RankToScore,
     });
-    return results.map((entry) => entry as MemorySearchResult & { id: string; textScore: number });
+    return results.map(
+      (entry) =>
+        entry as MemorySearchResult & { id: string; textScore: number; updatedAt?: number },
+    );
   }
 
   private mergeHybridResults(params: {
-    vector: Array<MemorySearchResult & { id: string }>;
-    keyword: Array<MemorySearchResult & { id: string; textScore: number }>;
+    vector: Array<MemorySearchResult & { id: string; updatedAt?: number }>;
+    keyword: Array<MemorySearchResult & { id: string; textScore: number; updatedAt?: number }>;
     vectorWeight: number;
     textWeight: number;
   }): MemorySearchResult[] {
+    const hybrid = this.settings.query.hybrid;
     const merged = mergeHybridResults({
       vector: params.vector.map((r) => ({
         id: r.id,
@@ -378,6 +382,7 @@ export class MemoryIndexManager {
         source: r.source,
         snippet: r.snippet,
         vectorScore: r.score,
+        updatedAt: r.updatedAt,
       })),
       keyword: params.keyword.map((r) => ({
         id: r.id,
@@ -387,9 +392,13 @@ export class MemoryIndexManager {
         source: r.source,
         snippet: r.snippet,
         textScore: r.textScore,
+        updatedAt: r.updatedAt,
       })),
       vectorWeight: params.vectorWeight,
       textWeight: params.textWeight,
+      mergeStrategy: hybrid.mergeStrategy,
+      rrfK: hybrid.rrfK,
+      recencyDecay: hybrid.recencyDecay,
     });
     return merged.map((entry) => entry as MemorySearchResult);
   }

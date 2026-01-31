@@ -63,6 +63,12 @@ export type ResolvedMemorySearchConfig = {
       vectorWeight: number;
       textWeight: number;
       candidateMultiplier: number;
+      mergeStrategy: "weighted" | "rrf";
+      rrfK: number;
+      recencyDecay: {
+        enabled: boolean;
+        halfLifeDays: number;
+      };
     };
   };
   cache: {
@@ -84,6 +90,10 @@ const DEFAULT_HYBRID_ENABLED = true;
 const DEFAULT_HYBRID_VECTOR_WEIGHT = 0.7;
 const DEFAULT_HYBRID_TEXT_WEIGHT = 0.3;
 const DEFAULT_HYBRID_CANDIDATE_MULTIPLIER = 4;
+const DEFAULT_HYBRID_MERGE_STRATEGY = "weighted" as const;
+const DEFAULT_HYBRID_RRF_K = 60;
+const DEFAULT_HYBRID_RECENCY_DECAY_ENABLED = false;
+const DEFAULT_HYBRID_RECENCY_DECAY_HALF_LIFE_DAYS = 7;
 const DEFAULT_CACHE_ENABLED = true;
 const DEFAULT_SOURCES: Array<"memory" | "sessions"> = ["memory"];
 
@@ -230,6 +240,21 @@ function mergeConfig(
       overrides?.query?.hybrid?.candidateMultiplier ??
       defaults?.query?.hybrid?.candidateMultiplier ??
       DEFAULT_HYBRID_CANDIDATE_MULTIPLIER,
+    mergeStrategy:
+      overrides?.query?.hybrid?.mergeStrategy ??
+      defaults?.query?.hybrid?.mergeStrategy ??
+      DEFAULT_HYBRID_MERGE_STRATEGY,
+    rrfK: overrides?.query?.hybrid?.rrfK ?? defaults?.query?.hybrid?.rrfK ?? DEFAULT_HYBRID_RRF_K,
+    recencyDecay: {
+      enabled:
+        overrides?.query?.hybrid?.recencyDecay?.enabled ??
+        defaults?.query?.hybrid?.recencyDecay?.enabled ??
+        DEFAULT_HYBRID_RECENCY_DECAY_ENABLED,
+      halfLifeDays:
+        overrides?.query?.hybrid?.recencyDecay?.halfLifeDays ??
+        defaults?.query?.hybrid?.recencyDecay?.halfLifeDays ??
+        DEFAULT_HYBRID_RECENCY_DECAY_HALF_LIFE_DAYS,
+    },
   };
   const cache = {
     enabled: overrides?.cache?.enabled ?? defaults?.cache?.enabled ?? DEFAULT_CACHE_ENABLED,
@@ -244,6 +269,10 @@ function mergeConfig(
   const normalizedVectorWeight = sum > 0 ? vectorWeight / sum : DEFAULT_HYBRID_VECTOR_WEIGHT;
   const normalizedTextWeight = sum > 0 ? textWeight / sum : DEFAULT_HYBRID_TEXT_WEIGHT;
   const candidateMultiplier = clampInt(hybrid.candidateMultiplier, 1, 20);
+  const mergeStrategy = hybrid.mergeStrategy === "rrf" ? "rrf" : "weighted";
+  const rrfK = clampInt(hybrid.rrfK, 1, 1000);
+  const recencyDecayEnabled = Boolean(hybrid.recencyDecay.enabled);
+  const recencyDecayHalfLifeDays = clampNumber(hybrid.recencyDecay.halfLifeDays, 0.01, 365);
   const deltaBytes = clampInt(sync.sessions.deltaBytes, 0, Number.MAX_SAFE_INTEGER);
   const deltaMessages = clampInt(sync.sessions.deltaMessages, 0, Number.MAX_SAFE_INTEGER);
   return {
@@ -275,6 +304,12 @@ function mergeConfig(
         vectorWeight: normalizedVectorWeight,
         textWeight: normalizedTextWeight,
         candidateMultiplier,
+        mergeStrategy,
+        rrfK,
+        recencyDecay: {
+          enabled: recencyDecayEnabled,
+          halfLifeDays: recencyDecayHalfLifeDays,
+        },
       },
     },
     cache: {

@@ -312,6 +312,17 @@ export type MemorySearchConfig = {
       textWeight?: number;
       /** Multiplier for candidate pool size (default: 4). */
       candidateMultiplier?: number;
+      /** Merge strategy: "weighted" (default) or "rrf" (Reciprocal Rank Fusion). */
+      mergeStrategy?: "weighted" | "rrf";
+      /** RRF constant k (default: 60). Only used when mergeStrategy is "rrf". */
+      rrfK?: number;
+      /** Optional recency decay to boost newer memories. */
+      recencyDecay?: {
+        /** Enable recency decay (default: false). */
+        enabled?: boolean;
+        /** Half-life in days — score halves after this many days (default: 7). */
+        halfLifeDays?: number;
+      };
     };
   };
   /** Index cache behavior. */
