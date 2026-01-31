@@ -16,6 +16,7 @@ import {
   writeDone,
 } from "./http-common.js";
 import { getBearerToken, resolveAgentIdForRequest, resolveSessionKey } from "./http-utils.js";
+import { loadConfig } from "../../config/config.js";
 
 type OpenAiHttpOptions = {
   auth: ResolvedGatewayAuth;
@@ -206,6 +207,9 @@ export async function handleOpenAiHttpRequest(
   const model = typeof payload.model === "string" ? payload.model : "openclaw";
   const user = typeof payload.user === "string" ? payload.user : undefined;
 
+  const cfg = loadConfig();
+  const isXaiModel = typeof model === "string" && model.startsWith("grok-");
+
   const agentId = resolveAgentIdForRequest({ req, model });
   const sessionKey = resolveOpenAiSessionKey({ req, agentId, user });
   const prompt = buildAgentPrompt(payload.messages);
@@ -233,6 +237,7 @@ export async function handleOpenAiHttpRequest(
           deliver: false,
           messageChannel: "webchat",
           bestEffortDeliver: false,
+          clientTools: isXaiModel ? cfg.gateway?.xaiTools ?? [] : undefined,
         },
         defaultRuntime,
         deps,
@@ -346,6 +351,7 @@ export async function handleOpenAiHttpRequest(
           deliver: false,
           messageChannel: "webchat",
           bestEffortDeliver: false,
+          clientTools: isXaiModel ? cfg.gateway?.xaiTools ?? [] : undefined,
         },
         defaultRuntime,
         deps,

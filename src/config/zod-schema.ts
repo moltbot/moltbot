@@ -443,6 +443,7 @@ export const OpenClawSchema = z
           })
           .strict()
           .optional(),
+        xaiTools: z.array(z.string()).optional(),
       })
       .strict()
       .optional(),
