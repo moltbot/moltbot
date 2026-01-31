@@ -193,6 +193,38 @@ export type GatewayHttpConfig = {
   endpoints?: GatewayHttpEndpointsConfig;
 };
 
+export type GatewayNodesAutoApproveConfig = {
+  /**
+   * Enable auto-approval of node pairing requests.
+   * SECURITY: Only enable when you have additional security controls in place.
+   * Default: false (secure default - all pairings require manual approval).
+   */
+  enabled?: boolean;
+  /**
+   * Roles that can be auto-approved (e.g., ["node"]).
+   * For security, "operator" should typically NOT be included.
+   * Default: [] (no roles auto-approved).
+   */
+  roles?: string[];
+  /**
+   * IP CIDR allowlist for auto-approval (e.g., ["10.0.0.0/8", "172.16.0.0/12"]).
+   * Only connections from these networks will be auto-approved.
+   * If undefined or empty, only localhost connections are auto-approved.
+   */
+  ipAllowlist?: string[];
+  /**
+   * Require valid gateway token for auto-approval.
+   * SECURITY: Should almost always be true.
+   * Default: true.
+   */
+  requireToken?: boolean;
+  /**
+   * Log all auto-approved pairings for audit trail.
+   * Default: true.
+   */
+  auditLog?: boolean;
+};
+
 export type GatewayNodesConfig = {
   /** Browser routing policy for node-hosted browser proxies. */
   browser?: {
@@ -205,6 +237,11 @@ export type GatewayNodesConfig = {
   allowCommands?: string[];
   /** Commands to deny even if they appear in the defaults or node claims. */
   denyCommands?: string[];
+  /**
+   * Auto-approve configuration for node pairing.
+   * Allows trusted nodes (e.g., in Kubernetes) to connect without manual approval.
+   */
+  autoApprove?: GatewayNodesAutoApproveConfig;
 };
 
 export type GatewayConfig = {

@@ -26,7 +26,12 @@ import type { ResolvedGatewayAuth } from "../../auth.js";
 import { authorizeGatewayConnect, isLocalDirectRequest } from "../../auth.js";
 import { loadConfig } from "../../../config/config.js";
 import { buildDeviceAuthPayload } from "../../device-auth.js";
-import { isLoopbackAddress, isTrustedProxyAddress, resolveGatewayClientIp } from "../../net.js";
+import {
+  isLoopbackAddress,
+  isTrustedProxyAddress,
+  resolveGatewayClientIp,
+  isIpInAutoApproveAllowlist,
+} from "../../net.js";
 import { resolveNodeCommandAllowlist } from "../../node-command-policy.js";
 import {
   type ConnectParams,
@@ -626,8 +631,37 @@ export function attachGatewayWsMessageHandler(params: {
           return;
         }
 
+        const tokenAuthOk = authMethod === "token" || authMethod === "device-token";
         const skipPairing = allowControlUiBypass && hasSharedAuth;
         if (device && devicePublicKey && !skipPairing) {
+          // Auto-approve logic with security checks
+          const autoApproveConfig = configSnapshot.gateway?.nodes?.autoApprove;
+          const shouldAutoApprove = (() => {
+            // Always auto-approve localhost (backward compatibility)
+            if (isLocalClient) return true;
+
+            // Check if auto-approve is enabled
+            if (!autoApproveConfig?.enabled) return false;
+
+            // Check role is in allowed list
+            const allowedRoles = autoApproveConfig.roles ?? [];
+            if (!allowedRoles.includes(role)) return false;
+
+            // Check IP is in allowlist (if configured)
+            if (!isIpInAutoApproveAllowlist(reportedClientIp, autoApproveConfig.ipAllowlist)) {
+              return false;
+            }
+
+            // Check token is valid (if required, which is the default)
+            if (autoApproveConfig.requireToken !== false && !tokenAuthOk) return false;
+
+            return true;
+          })();
+
+          // Audit log for auto-approvals (when not localhost)
+          const shouldAuditLog =
+            shouldAutoApprove && !isLocalClient && autoApproveConfig?.auditLog !== false;
+
           const requirePairing = async (reason: string, _paired?: { deviceId: string }) => {
             const pairing = await requestDevicePairing({
               deviceId: device.id,
@@ -639,15 +673,22 @@ export function attachGatewayWsMessageHandler(params: {
               role,
               scopes,
               remoteIp: reportedClientIp,
-              silent: isLocalClient,
+              silent: shouldAutoApprove,
             });
             const context = buildRequestContext();
             if (pairing.request.silent === true) {
               const approved = await approveDevicePairing(pairing.request.requestId);
               if (approved) {
-                logGateway.info(
-                  `device pairing auto-approved device=${approved.device.deviceId} role=${approved.device.role ?? "unknown"}`,
-                );
+                // Audit log with detailed information for security review
+                if (shouldAuditLog) {
+                  logGateway.info(
+                    `auto-approve node pairing: device=${approved.device.deviceId} role=${approved.device.role ?? "unknown"} ip=${reportedClientIp ?? "unknown"} client=${connectParams.client.id} displayName=${connectParams.client.displayName ?? "unknown"}`,
+                  );
+                } else {
+                  logGateway.info(
+                    `device pairing auto-approved device=${approved.device.deviceId} role=${approved.device.role ?? "unknown"}`,
+                  );
+                }
                 context.broadcast(
                   "device.pair.resolved",
                   {

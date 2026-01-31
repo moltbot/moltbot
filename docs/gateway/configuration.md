@@ -3110,6 +3110,127 @@ OPENCLAW_STATE_DIR=~/.openclaw-a \
 openclaw gateway --port 19001
 ```
 
+### `gateway.nodes` (Node management)
+
+Configure node-related behavior including browser proxy routing, command allowlists, and auto-approval for node pairing.
+
+```json5
+{
+  gateway: {
+    nodes: {
+      // Browser proxy routing (for remote browser control via nodes)
+      browser: {
+        mode: "auto", // "auto" | "manual" | "off"
+        node: "living-room-ipad" // pin a specific node (optional)
+      },
+      // Command allowlist/denylist for node-invoked commands
+      allowCommands: ["system.run", "browser.*"],
+      denyCommands: ["system.run.sudo"],
+      // Auto-approval for node pairing (see below)
+      autoApprove: {
+        enabled: false,
+        roles: ["node"],
+        ipAllowlist: ["10.0.0.0/8"],
+        requireToken: true,
+        auditLog: true
+      }
+    }
+  }
+}
+```
+
+#### `gateway.nodes.autoApprove` (Auto-approval for node pairing)
+
+Allows trusted nodes to connect without manual approval. Useful for automated deployments (e.g., Kubernetes pods, CI runners) where interactive approval is impractical.
+
+**Security:** This feature is disabled by default and implements defense-in-depth with multiple independent checks that must all pass.
+
+```json5
+{
+  gateway: {
+    nodes: {
+      autoApprove: {
+        // Master switch - must be explicitly enabled
+        enabled: true,
+        // Roles that can be auto-approved (e.g., ["node"])
+        // SECURITY: "operator" should typically NOT be included
+        roles: ["node"],
+        // IP CIDR allowlist - only these networks are auto-approved
+        // If empty/unset, only localhost (127.0.0.1, ::1) is allowed
+        ipAllowlist: [
+          "10.0.0.0/8",      // Private Class A
+          "172.16.0.0/12",   // Private Class B
+          "192.168.0.0/16"   // Private Class C
+        ],
+        // Require valid gateway token for auto-approval (default: true)
+        // SECURITY: Should almost always be true
+        requireToken: true,
+        // Log all auto-approved pairings for audit trail (default: true)
+        auditLog: true
+      }
+    }
+  }
+}
+```
+
+Field reference:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `enabled` | `false` | Master switch for auto-approval. Secure default is off. |
+| `roles` | `[]` | Roles that can be auto-approved. Empty means no roles. |
+| `ipAllowlist` | `[]` | CIDR ranges for allowed IPs. Empty means localhost only. |
+| `requireToken` | `true` | Require valid gateway token. Should almost always be true. |
+| `auditLog` | `true` | Log auto-approvals with device ID, role, IP, and client info. |
+
+**Security considerations:**
+
+- **Disabled by default**: Requires explicit opt-in via `enabled: true`.
+- **Role restrictions**: Only roles in the `roles` array are auto-approved. Keep `operator` out unless you have a specific need.
+- **IP allowlist**: If not configured, only localhost connections are auto-approved. Use CIDR notation for network ranges.
+- **Token validation**: With `requireToken: true` (default), the connecting node must present a valid gateway token.
+- **Audit logging**: When `auditLog: true` (default), all non-localhost auto-approvals are logged with full context for security review.
+
+**Example: Kubernetes cluster**
+
+```json5
+{
+  gateway: {
+    nodes: {
+      autoApprove: {
+        enabled: true,
+        roles: ["node"],
+        ipAllowlist: ["10.244.0.0/16"], // Kubernetes pod CIDR
+        requireToken: true,
+        auditLog: true
+      }
+    }
+  }
+}
+```
+
+**Example: Local development (localhost only)**
+
+```json5
+{
+  gateway: {
+    nodes: {
+      autoApprove: {
+        enabled: true,
+        roles: ["node"],
+        // No ipAllowlist = localhost only (127.0.0.1, ::1)
+        requireToken: false // OK for local dev
+      }
+    }
+  }
+}
+```
+
+Related docs:
+- [Gateway pairing](/gateway/pairing)
+- [Nodes CLI](/cli/nodes)
+- [Gateway security](/gateway/security)
+
 ### `hooks` (Gateway webhooks)
 
 Enable a simple HTTP webhook endpoint on the Gateway HTTP server.

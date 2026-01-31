@@ -235,3 +235,93 @@ function isValidIPv4(host: string): boolean {
 export function isLoopbackHost(host: string): boolean {
   return isLoopbackAddress(host);
 }
+
+/**
+ * Convert an IPv4 address string to a 32-bit unsigned integer.
+ */
+function ipv4ToNumber(ip: string): number {
+  const parts = ip.split(".");
+  if (parts.length !== 4) return 0;
+  return parts.reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+}
+
+/**
+ * Check if an IPv4 address is within a CIDR range.
+ *
+ * @param ip - The IPv4 address to check (e.g., "10.0.1.5")
+ * @param cidr - The CIDR range (e.g., "10.0.0.0/8")
+ * @returns True if the IP is within the CIDR range
+ */
+export function isIpv4InCidr(ip: string, cidr: string): boolean {
+  if (!isValidIPv4(ip)) return false;
+  if (!isValidCidr(cidr)) return false;
+  const [range, bitsStr] = cidr.split("/");
+  if (!range || !bitsStr) return false;
+  const bits = parseInt(bitsStr, 10);
+
+  const ipNum = ipv4ToNumber(ip);
+  const rangeNum = ipv4ToNumber(range);
+
+  // Create a mask with `bits` leading 1s
+  const mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
+
+  return (ipNum & mask) === (rangeNum & mask);
+}
+
+/**
+ * Validate if a string is a valid CIDR notation.
+ *
+ * @param cidr - The CIDR string to validate (e.g., "10.0.0.0/8")
+ * @returns True if valid CIDR format
+ */
+export function isValidCidr(cidr: string): boolean {
+  const [range, bitsStr] = cidr.split("/");
+  if (!range || !bitsStr) return false;
+
+  // Validate the bits portion
+  const bits = parseInt(bitsStr, 10);
+  if (Number.isNaN(bits) || bits < 0 || bits > 32 || bitsStr !== String(bits)) {
+    return false;
+  }
+
+  // Validate the IP portion
+  const parts = range.split(".");
+  if (parts.length !== 4) return false;
+  return parts.every((part) => {
+    const n = parseInt(part, 10);
+    return !Number.isNaN(n) && n >= 0 && n <= 255 && part === String(n);
+  });
+}
+
+/**
+ * Check if an IP address should be auto-approved based on allowlist.
+ *
+ * Security-focused: If no allowlist is provided, only localhost is allowed.
+ *
+ * @param ip - The IP address to check
+ * @param allowlist - Array of CIDR ranges, or undefined/empty for localhost-only
+ * @returns True if the IP should be auto-approved
+ */
+export function isIpInAutoApproveAllowlist(
+  ip: string | undefined,
+  allowlist: string[] | undefined,
+): boolean {
+  if (!ip) return false;
+
+  // Normalize IPv4-mapped IPv6 addresses
+  const normalizedIp = ip.startsWith("::ffff:") ? ip.slice("::ffff:".length) : ip;
+
+  // If no allowlist, only allow localhost
+  if (!allowlist || allowlist.length === 0) {
+    return isLoopbackAddress(normalizedIp);
+  }
+
+  // Check if the IP matches any CIDR in the allowlist
+  return allowlist.some((cidr) => {
+    // Allow explicit localhost entries
+    if (cidr === "127.0.0.1" || cidr === "::1" || cidr === "localhost") {
+      return isLoopbackAddress(normalizedIp);
+    }
+    return isIpv4InCidr(normalizedIp, cidr);
+  });
+}

@@ -68,14 +68,48 @@ Notes:
   `node.pair.request`.
 - Requests may include `silent: true` as a hint for auto-approval flows.
 
-## Auto-approval (macOS app)
+## Auto-approval
+
+Auto-approval allows trusted nodes to connect without manual intervention. There are two mechanisms:
+
+### macOS app (SSH verification)
 
 The macOS app can optionally attempt a **silent approval** when:
 
 - the request is marked `silent`, and
 - the app can verify an SSH connection to the gateway host using the same user.
 
-If silent approval fails, it falls back to the normal “Approve/Reject” prompt.
+If silent approval fails, it falls back to the normal "Approve/Reject" prompt.
+
+### Configuration-based auto-approval
+
+For automated deployments (Kubernetes, CI runners, etc.), you can configure the gateway to auto-approve nodes based on role, IP address, and token validation.
+
+```json5
+{
+  gateway: {
+    nodes: {
+      autoApprove: {
+        enabled: true,
+        roles: ["node"],           // Only auto-approve "node" role
+        ipAllowlist: ["10.0.0.0/8"], // Only from private network
+        requireToken: true,        // Must have valid gateway token
+        auditLog: true             // Log all auto-approvals
+      }
+    }
+  }
+}
+```
+
+**Security layers (all must pass):**
+1. `enabled: true` - Feature must be explicitly enabled
+2. Role must be in `roles` array
+3. Client IP must match `ipAllowlist` (or be localhost if empty)
+4. Valid gateway token required (when `requireToken: true`)
+
+Localhost connections (127.0.0.1, ::1) are always auto-approved for backward compatibility.
+
+See [gateway.nodes.autoApprove](/gateway/configuration#gatewaynodes-node-management) for the full configuration reference.
 
 ## Storage (local, private)
 

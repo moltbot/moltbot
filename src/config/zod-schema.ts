@@ -440,6 +440,16 @@ export const OpenClawSchema = z
               .optional(),
             allowCommands: z.array(z.string()).optional(),
             denyCommands: z.array(z.string()).optional(),
+            autoApprove: z
+              .object({
+                enabled: z.boolean().optional(),
+                roles: z.array(z.string()).optional(),
+                ipAllowlist: z.array(z.string()).optional(),
+                requireToken: z.boolean().optional(),
+                auditLog: z.boolean().optional(),
+              })
+              .strict()
+              .optional(),
           })
           .strict()
           .optional(),
