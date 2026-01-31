@@ -2,6 +2,9 @@ import { listChannelPlugins } from "../channels/plugins/index.js";
 
 const BASE_METHODS = [
   "health",
+  "workspace.file.read",
+  "workspace.file.write",
+  "workspace.file.list",
   "logs.tail",
   "channels.status",
   "channels.logout",
