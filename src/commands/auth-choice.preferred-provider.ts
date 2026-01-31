@@ -14,7 +14,7 @@ const PREFERRED_PROVIDER_BY_AUTH_CHOICE: Partial<Record<AuthChoice, string>> = {
   "ai-gateway-api-key": "vercel-ai-gateway",
   "moonshot-api-key": "moonshot",
   "chutes-api-key": "chutes",
-  "kimi-code-api-key": "kimi-code",
+  "kimi-code-api-key": "kimi-coding",
   "gemini-api-key": "google",
   "google-antigravity": "google-antigravity",
   "google-gemini-cli": "google-gemini-cli",

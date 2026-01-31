@@ -147,6 +147,12 @@ describe("cli program (smoke)", () => {
   it("passes auth api keys to onboard", async () => {
     const cases = [
       {
+        authChoice: "chutes-api-key",
+        flag: "--chutes-api-key",
+        key: "sk-chutes-test",
+        field: "chutesApiKey",
+      },
+      {
         authChoice: "opencode-zen",
         flag: "--opencode-zen-api-key",
         key: "sk-opencode-zen-test",

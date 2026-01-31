@@ -74,7 +74,6 @@ export async function setMoonshotApiKey(key: string, agentDir?: string) {
   });
 }
 
-<<<<<<< HEAD
 export async function setChutesApiKey(key: string, agentDir?: string) {
   // Write to resolved agent dir so gateway finds credentials on startup.
   upsertAuthProfile({
@@ -89,9 +88,19 @@ export async function setChutesApiKey(key: string, agentDir?: string) {
 }
 
 export async function setKimiCodeApiKey(key: string, agentDir?: string) {
-=======
+  // Write to resolved agent dir so gateway finds credentials on startup.
+  upsertAuthProfile({
+    profileId: "kimi-coding:default",
+    credential: {
+      type: "api_key",
+      provider: "kimi-coding",
+      key,
+    },
+    agentDir: resolveAuthAgentDir(agentDir),
+  });
+}
+
 export async function setKimiCodingApiKey(key: string, agentDir?: string) {
->>>>>>> upstream/main
   // Write to resolved agent dir so gateway finds credentials on startup.
   upsertAuthProfile({
     profileId: "kimi-coding:default",

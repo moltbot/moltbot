@@ -391,8 +391,8 @@ export async function applyAuthChoiceApiProviders(
 
     if (isKimiCode) {
       nextConfig = applyAuthProfileConfig(nextConfig, {
-        profileId: "kimi-code:default",
-        provider: "kimi-code",
+        profileId: "kimi-coding:default",
+        provider: "kimi-coding",
         mode: "api_key",
       });
       const applied = await applyDefaultModelChoice({

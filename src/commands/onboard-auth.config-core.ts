@@ -277,7 +277,7 @@ export function applyKimiCodeProviderConfig(cfg: OpenClawConfig): OpenClawConfig
   };
 
   const providers = { ...cfg.models?.providers };
-  const existingProvider = providers["kimi-code"];
+  const existingProvider = providers["kimi-coding"];
   const existingModels = Array.isArray(existingProvider?.models) ? existingProvider.models : [];
   const defaultModel = buildKimiCodeModelDefinition();
   const hasDefaultModel = existingModels.some((model) => model.id === KIMI_CODE_MODEL_ID);
@@ -288,7 +288,7 @@ export function applyKimiCodeProviderConfig(cfg: OpenClawConfig): OpenClawConfig
   > as { apiKey?: string };
   const resolvedApiKey = typeof existingApiKey === "string" ? existingApiKey : undefined;
   const normalizedApiKey = resolvedApiKey?.trim();
-  providers["kimi-code"] = {
+  providers["kimi-coding"] = {
     ...existingProviderRest,
     baseUrl: KIMI_CODE_BASE_URL,
     api: "openai-completions",

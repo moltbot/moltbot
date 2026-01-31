@@ -10,6 +10,7 @@ import {
   applyAuthProfileConfig,
   applyChutesConfig,
   applyKimiCodeConfig,
+  applyKimiCodingConfig,
   applyMinimaxApiConfig,
   applyMinimaxConfig,
   applyMoonshotConfig,
@@ -23,6 +24,7 @@ import {
   setAnthropicApiKey,
   setChutesApiKey,
   setGeminiApiKey,
+  setKimiCodeApiKey,
   setKimiCodingApiKey,
   setMinimaxApiKey,
   setMoonshotApiKey,
@@ -323,7 +325,9 @@ export async function applyNonInteractiveAuthChoice(params: {
         envVar: "CHUTES_API_KEY",
         runtime,
       });
-      if (!resolved) return null;
+      if (!resolved) {
+        return null;
+      }
       if (resolved.source === "env" && !process.env.CHUTES_API_KEY) {
         // resolveNonInteractiveApiKey found CHUTES_OAUTH_TOKEN via resolveEnvApiKey
         // Skip it for api-key onboarding.
@@ -335,7 +339,9 @@ export async function applyNonInteractiveAuthChoice(params: {
       source = resolved.source;
     }
 
-    if (source !== "profile") await setChutesApiKey(resolvedKey);
+    if (source !== "profile") {
+      await setChutesApiKey(resolvedKey);
+    }
     nextConfig = applyAuthProfileConfig(nextConfig, {
       profileId: "chutes:default",
       provider: "chutes",
@@ -345,26 +351,31 @@ export async function applyNonInteractiveAuthChoice(params: {
   }
 
   if (authChoice === "kimi-code-api-key") {
+    const isKimiCode = opts.tokenProvider === "kimi-code";
     const resolved = await resolveNonInteractiveApiKey({
       provider: "kimi-coding",
       cfg: baseConfig,
       flagValue: opts.kimiCodeApiKey,
       flagName: "--kimi-code-api-key",
-      envVar: "KIMI_API_KEY",
+      envVar: isKimiCode ? "KIMICODE_API_KEY" : "KIMI_API_KEY",
       runtime,
     });
     if (!resolved) {
       return null;
     }
     if (resolved.source !== "profile") {
-      await setKimiCodingApiKey(resolved.key);
+      if (isKimiCode) {
+        await setKimiCodeApiKey(resolved.key);
+      } else {
+        await setKimiCodingApiKey(resolved.key);
+      }
     }
     nextConfig = applyAuthProfileConfig(nextConfig, {
       profileId: "kimi-coding:default",
       provider: "kimi-coding",
       mode: "api_key",
     });
-    return applyKimiCodeConfig(nextConfig);
+    return isKimiCode ? applyKimiCodeConfig(nextConfig) : applyKimiCodingConfig(nextConfig);
   }
 
   if (authChoice === "synthetic-api-key") {
