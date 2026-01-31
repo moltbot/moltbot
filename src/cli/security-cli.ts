@@ -8,6 +8,7 @@ import { formatDocsLink } from "../terminal/links.js";
 import { isRich, theme } from "../terminal/theme.js";
 import { shortenHomeInString, shortenHomePath } from "../utils.js";
 import { formatCliCommand } from "./command-format.js";
+import { registerSecurityWrapCli } from "./security-wrap-cli.js";
 
 type SecurityAuditOptions = {
   json?: boolean;
@@ -30,12 +31,15 @@ function formatSummary(summary: { critical: number; warn: number; info: number }
 export function registerSecurityCli(program: Command) {
   const security = program
     .command("security")
-    .description("Security tools (audit)")
+    .description("Security tools (audit, wrap)")
     .addHelpText(
       "after",
       () =>
         `\n${theme.muted("Docs:")} ${formatDocsLink("/cli/security", "docs.openclaw.ai/cli/security")}\n`,
     );
+
+  // Register subcommands
+  registerSecurityWrapCli(security);
 
   security
     .command("audit")
