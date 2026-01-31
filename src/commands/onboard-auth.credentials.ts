@@ -178,3 +178,15 @@ export async function setOpencodeZenApiKey(key: string, agentDir?: string) {
     agentDir: resolveAuthAgentDir(agentDir),
   });
 }
+
+export async function setAzureOpenAIApiKey(key: string, agentDir?: string) {
+  upsertAuthProfile({
+    profileId: "azure-openai:default",
+    credential: {
+      type: "api_key",
+      provider: "azure-openai",
+      key,
+    },
+    agentDir: resolveAuthAgentDir(agentDir),
+  });
+}

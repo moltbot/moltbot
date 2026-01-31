@@ -10,6 +10,7 @@ import { applyAuthChoiceGoogleGeminiCli } from "./auth-choice.apply.google-gemin
 import { applyAuthChoiceMiniMax } from "./auth-choice.apply.minimax.js";
 import { applyAuthChoiceOAuth } from "./auth-choice.apply.oauth.js";
 import { applyAuthChoiceOpenAI } from "./auth-choice.apply.openai.js";
+import { applyAuthChoiceAzureOpenAI } from "./auth-choice.apply.azure-openai.js";
 import { applyAuthChoiceQwenPortal } from "./auth-choice.apply.qwen-portal.js";
 import type { AuthChoice } from "./onboard-types.js";
 
@@ -38,6 +39,7 @@ export async function applyAuthChoice(
   const handlers: Array<(p: ApplyAuthChoiceParams) => Promise<ApplyAuthChoiceResult | null>> = [
     applyAuthChoiceAnthropic,
     applyAuthChoiceOpenAI,
+    applyAuthChoiceAzureOpenAI,
     applyAuthChoiceOAuth,
     applyAuthChoiceApiProviders,
     applyAuthChoiceMiniMax,

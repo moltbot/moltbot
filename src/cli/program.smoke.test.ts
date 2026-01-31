@@ -202,6 +202,39 @@ describe("cli program (smoke)", () => {
     }
   });
 
+  it("passes azure openai flags to onboard", async () => {
+    const program = buildProgram();
+    await program.parseAsync(
+      [
+        "onboard",
+        "--non-interactive",
+        "--auth-choice",
+        "azure-openai",
+        "--azure-openai-api-key",
+        "sk-azure-test",
+        "--azure-openai-endpoint",
+        "https://my-resource.openai.azure.com",
+        "--azure-openai-deployment-name",
+        "gpt-5",
+        "--azure-openai-api-version",
+        "2024-08-01-preview",
+      ],
+      { from: "user" },
+    );
+
+    expect(onboardCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nonInteractive: true,
+        authChoice: "azure-openai",
+        azureOpenAIApiKey: "sk-azure-test",
+        azureOpenAIEndpoint: "https://my-resource.openai.azure.com",
+        azureOpenAIDeploymentName: "gpt-5",
+        azureOpenAIApiVersion: "2024-08-01-preview",
+      }),
+      runtime,
+    );
+  });
+
   it("runs channels login", async () => {
     const program = buildProgram();
     await program.parseAsync(["channels", "login", "--account", "work"], {

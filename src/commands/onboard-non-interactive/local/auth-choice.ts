@@ -1,6 +1,7 @@
 import { upsertAuthProfile } from "../../../agents/auth-profiles.js";
 import { normalizeProviderId } from "../../../agents/model-selection.js";
 import { parseDurationMs } from "../../../cli/parse-duration.js";
+import { tryParseAzureOpenAIEndpoint } from "../../../agents/azure-openai-provider.js";
 import type { OpenClawConfig } from "../../../config/config.js";
 import { upsertSharedEnvVar } from "../../../infra/env-file.js";
 import type { RuntimeEnv } from "../../../runtime.js";
@@ -20,6 +21,7 @@ import {
   applyXiaomiConfig,
   applyZaiConfig,
   setAnthropicApiKey,
+  setAzureOpenAIApiKey,
   setGeminiApiKey,
   setKimiCodingApiKey,
   setMinimaxApiKey,
@@ -231,6 +233,97 @@ export async function applyNonInteractiveAuthChoice(params: {
     const result = upsertSharedEnvVar({ key: "OPENAI_API_KEY", value: key });
     process.env.OPENAI_API_KEY = key;
     runtime.log(`Saved OPENAI_API_KEY to ${shortenHomePath(result.path)}`);
+    return nextConfig;
+  }
+
+  if (authChoice === "azure-openai") {
+    const endpointRaw = (
+      opts.azureOpenAIEndpoint ??
+      process.env.AZURE_OPENAI_ENDPOINT ??
+      ""
+    ).trim();
+    const endpoint = tryParseAzureOpenAIEndpoint(endpointRaw);
+    if (!endpoint) {
+      runtime.error(
+        "Missing or invalid --azure-openai-endpoint (or AZURE_OPENAI_ENDPOINT). Expected https://<resource>.openai.azure.com",
+      );
+      runtime.exit(1);
+      return null;
+    }
+
+    const deploymentName = (
+      opts.azureOpenAIDeploymentName ??
+      process.env.AZURE_OPENAI_DEPLOYMENT_NAME ??
+      ""
+    ).trim();
+    if (!deploymentName) {
+      runtime.error("Missing --azure-openai-deployment-name (or AZURE_OPENAI_DEPLOYMENT_NAME).");
+      runtime.exit(1);
+      return null;
+    }
+
+    const resolved = await resolveNonInteractiveApiKey({
+      provider: "azure-openai",
+      cfg: baseConfig,
+      flagValue: opts.azureOpenAIApiKey,
+      flagName: "--azure-openai-api-key",
+      envVar: "AZURE_OPENAI_API_KEY",
+      runtime,
+    });
+    if (!resolved) {
+      return null;
+    }
+    if (resolved.source !== "profile") {
+      await setAzureOpenAIApiKey(resolved.key);
+    }
+
+    const envPath = upsertSharedEnvVar({
+      key: "AZURE_OPENAI_ENDPOINT",
+      value: endpoint.origin,
+    }).path;
+    upsertSharedEnvVar({
+      key: "AZURE_OPENAI_DEPLOYMENT_NAME",
+      value: deploymentName,
+    });
+    const apiVersion = (
+      opts.azureOpenAIApiVersion ??
+      process.env.AZURE_OPENAI_API_VERSION ??
+      ""
+    ).trim();
+    if (apiVersion) {
+      upsertSharedEnvVar({
+        key: "AZURE_OPENAI_API_VERSION",
+        value: apiVersion,
+      });
+      process.env.AZURE_OPENAI_API_VERSION = apiVersion;
+    }
+
+    process.env.AZURE_OPENAI_ENDPOINT = endpoint.origin;
+    process.env.AZURE_OPENAI_DEPLOYMENT_NAME = deploymentName;
+    runtime.log(
+      `Saved AZURE_OPENAI_ENDPOINT/AZURE_OPENAI_DEPLOYMENT_NAME to ${shortenHomePath(envPath)}`,
+    );
+
+    nextConfig = applyAuthProfileConfig(nextConfig, {
+      profileId: "azure-openai:default",
+      provider: "azure-openai",
+      mode: "api_key",
+    });
+
+    nextConfig = {
+      ...nextConfig,
+      agents: {
+        ...nextConfig.agents,
+        defaults: {
+          ...nextConfig.agents?.defaults,
+          model: {
+            ...nextConfig.agents?.defaults?.model,
+            primary: `azure-openai/${deploymentName}`,
+          },
+        },
+      },
+    };
+
     return nextConfig;
   }
 

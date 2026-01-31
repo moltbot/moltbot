@@ -52,6 +52,7 @@ export {
   VERCEL_AI_GATEWAY_DEFAULT_MODEL_REF,
   XIAOMI_DEFAULT_MODEL_REF,
   ZAI_DEFAULT_MODEL_REF,
+  setAzureOpenAIApiKey,
 } from "./onboard-auth.credentials.js";
 export {
   buildMinimaxApiModelDefinition,

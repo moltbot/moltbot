@@ -13,6 +13,10 @@ import {
   SYNTHETIC_MODEL_CATALOG,
 } from "./synthetic-models.js";
 import { discoverVeniceModels, VENICE_BASE_URL } from "./venice-models.js";
+import {
+  buildAzureOpenAIProvider,
+  resolveAzureOpenAISettingsFromEnv,
+} from "./azure-openai-provider.js";
 
 type ModelsConfig = NonNullable<OpenClawConfig["models"]>;
 export type ProviderConfig = NonNullable<ModelsConfig["providers"]>[string];
@@ -459,6 +463,21 @@ export async function resolveImplicitProviders(params: {
     resolveApiKeyFromProfiles({ provider: "ollama", store: authStore });
   if (ollamaKey) {
     providers.ollama = { ...(await buildOllamaProvider()), apiKey: ollamaKey };
+  }
+
+  // Azure OpenAI provider - auto-discover from environment variables
+  // Endpoint + deployment come from env; API key can come from env OR auth profiles.
+  const azureSettings = resolveAzureOpenAISettingsFromEnv();
+  if (azureSettings) {
+    const azureOpenAIKey =
+      resolveEnvApiKey("azure-openai")?.apiKey ??
+      resolveApiKeyFromProfiles({ provider: "azure-openai", store: authStore });
+    if (azureOpenAIKey) {
+      providers["azure-openai"] = buildAzureOpenAIProvider({
+        ...azureSettings,
+        apiKey: azureOpenAIKey,
+      });
+    }
   }
 
   return providers;

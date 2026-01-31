@@ -53,6 +53,7 @@ Docs: https://docs.openclaw.ai
 - Rebrand: rename the npm package/CLI to `openclaw`, add a `openclaw` compatibility shim, and move extensions to the `@openclaw/*` scope.
 - Onboarding: strengthen security warning copy for beta + access control expectations.
 - Onboarding: add Venice API key to non-interactive flow. (#1893) Thanks @jonisjongithub.
+- Onboarding: add Azure OpenAI (endpoint + API key) auth flow and unify env config on `AZURE_OPENAI_ENDPOINT`. (#3675) Thanks @haxudev.
 - Config: auto-migrate legacy state/config paths and keep config resolution consistent across legacy filenames.
 - Gateway: warn on hook tokens via query params; document header auth preference. (#2200) Thanks @YuriNachos.
 - Gateway: add dangerous Control UI device auth bypass flag + audit warnings. (#2248)
