@@ -1,5 +1,7 @@
-import { formatTokenCount } from "../utils/usage-format.js";
 import { formatRawAssistantErrorForUi } from "../agents/pi-embedded-helpers.js";
+import { getRecoveryInfo } from "../infra/error-recovery.js";
+import { formatDocsLink } from "../terminal/links.js";
+import { formatTokenCount } from "../utils/usage-format.js";
 
 export function resolveFinalAssistantText(params: {
   finalText?: string | null;
@@ -85,7 +87,7 @@ export function extractContentFromMessage(message: unknown): string {
     const stopReason = typeof record.stopReason === "string" ? record.stopReason : "";
     if (stopReason === "error") {
       const errorMessage = typeof record.errorMessage === "string" ? record.errorMessage : "";
-      return formatRawAssistantErrorForUi(errorMessage);
+      return formatRecoveryAssistantErrorText(errorMessage);
     }
     return "";
   }
@@ -106,7 +108,7 @@ export function extractContentFromMessage(message: unknown): string {
     const stopReason = typeof record.stopReason === "string" ? record.stopReason : "";
     if (stopReason === "error") {
       const errorMessage = typeof record.errorMessage === "string" ? record.errorMessage : "";
-      return formatRawAssistantErrorForUi(errorMessage);
+      return formatRecoveryAssistantErrorText(errorMessage);
     }
   }
 
@@ -167,7 +169,7 @@ export function extractTextFromMessage(
   }
 
   const errorMessage = typeof record.errorMessage === "string" ? record.errorMessage : "";
-  return formatRawAssistantErrorForUi(errorMessage);
+  return formatRecoveryAssistantErrorText(errorMessage);
 }
 
 export function isCommandMessage(message: unknown): boolean {
@@ -175,6 +177,25 @@ export function isCommandMessage(message: unknown): boolean {
     return false;
   }
   return (message as Record<string, unknown>).command === true;
+}
+
+export function formatRecoveryAssistantErrorText(raw?: string): string {
+  const message = formatRawAssistantErrorForUi(raw);
+  const info = getRecoveryInfo(raw ?? "");
+  if (!info) return message;
+
+  const lines = [info.title, message].filter(Boolean);
+  if (info.suggestions.length > 0) {
+    lines.push("Recovery:");
+    for (const suggestion of info.suggestions) {
+      lines.push(`- ${suggestion}`);
+    }
+  }
+  if (info.docs?.length) {
+    const links = info.docs.map((doc) => formatDocsLink(doc.path, doc.label));
+    lines.push("", `Docs: ${links.join(" • ")}`);
+  }
+  return lines.join("\n");
 }
 
 export function formatTokens(total?: number | null, context?: number | null) {

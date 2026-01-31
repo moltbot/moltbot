@@ -1,6 +1,11 @@
 import type { TUI } from "@mariozechner/pi-tui";
 import type { ChatLog } from "./components/chat-log.js";
-import { asString, extractTextFromMessage, isCommandMessage } from "./tui-formatters.js";
+import {
+  asString,
+  extractTextFromMessage,
+  formatRecoveryAssistantErrorText,
+  isCommandMessage,
+} from "./tui-formatters.js";
 import { TuiStreamAssembler } from "./tui-stream-assembler.js";
 import type { AgentEvent, ChatEvent, TuiStateAccess } from "./tui-types.js";
 
@@ -131,7 +136,8 @@ export function createEventHandlers(context: EventHandlerContext) {
       void refreshSessionInfo?.();
     }
     if (evt.state === "error") {
-      chatLog.addSystem(`run error: ${evt.errorMessage ?? "unknown"}`);
+      const formatted = formatRecoveryAssistantErrorText(evt.errorMessage ?? "unknown");
+      chatLog.addSystem(`run error: ${formatted}`);
       streamAssembler.drop(evt.runId);
       sessionRuns.delete(evt.runId);
       state.activeChatRunId = null;

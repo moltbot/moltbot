@@ -12,6 +12,7 @@ import {
   renderStreamingGroup,
 } from "../chat/grouped-render";
 import { renderMarkdownSidebar } from "./markdown-sidebar";
+import { renderErrorCallout } from "./error-callout";
 import "../components/resizable-divider";
 
 export type CompactionIndicatorStatus = {
@@ -243,7 +244,7 @@ export function renderChat(props: ChatProps) {
     <section class="card chat">
       ${props.disabledReason ? html`<div class="callout">${props.disabledReason}</div>` : nothing}
 
-      ${props.error ? html`<div class="callout danger">${props.error}</div>` : nothing}
+      ${renderErrorCallout(props.error)}
 
       ${renderCompactionIndicator(props.compactionStatus)}
 
