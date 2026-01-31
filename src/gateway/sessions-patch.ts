@@ -115,6 +115,20 @@ export async function applySessionsPatchToStore(params: {
     }
   }
 
+  if ("displayName" in patch) {
+    const raw = patch.displayName;
+    if (raw === null) {
+      delete next.displayName;
+    } else if (raw !== undefined) {
+      const trimmed = String(raw).trim();
+      if (!trimmed) {
+        delete next.displayName;
+      } else {
+        next.displayName = trimmed;
+      }
+    }
+  }
+
   if ("thinkingLevel" in patch) {
     const raw = patch.thinkingLevel;
     if (raw === null) {

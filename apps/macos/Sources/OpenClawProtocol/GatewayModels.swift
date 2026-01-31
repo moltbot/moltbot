@@ -1002,6 +1002,7 @@ public struct SessionsResolveParams: Codable, Sendable {
 public struct SessionsPatchParams: Codable, Sendable {
     public let key: String
     public let label: AnyCodable?
+    public let displayname: AnyCodable?
     public let thinkinglevel: AnyCodable?
     public let verboselevel: AnyCodable?
     public let reasoninglevel: AnyCodable?
@@ -1019,6 +1020,7 @@ public struct SessionsPatchParams: Codable, Sendable {
     public init(
         key: String,
         label: AnyCodable?,
+        displayname: AnyCodable?,
         thinkinglevel: AnyCodable?,
         verboselevel: AnyCodable?,
         reasoninglevel: AnyCodable?,
@@ -1035,6 +1037,7 @@ public struct SessionsPatchParams: Codable, Sendable {
     ) {
         self.key = key
         self.label = label
+        self.displayname = displayname
         self.thinkinglevel = thinkinglevel
         self.verboselevel = verboselevel
         self.reasoninglevel = reasoninglevel
@@ -1052,6 +1055,7 @@ public struct SessionsPatchParams: Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case key
         case label
+        case displayname = "displayName"
         case thinkinglevel = "thinkingLevel"
         case verboselevel = "verboseLevel"
         case reasoninglevel = "reasoningLevel"

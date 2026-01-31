@@ -409,6 +409,27 @@ export function createCommandHandlers(context: CommandHandlerContext) {
           chatLog.addSystem(`activation failed: ${String(err)}`);
         }
         break;
+      case "name":
+        if (!args) {
+          chatLog.addSystem("usage: /name <text> (or /name clear)");
+          break;
+        }
+        try {
+          const displayName = args.toLowerCase() === "clear" ? null : args;
+          await client.patchSession({
+            key: state.currentSessionKey,
+            displayName,
+          });
+          if (displayName) {
+            chatLog.addSystem(`session name set to "${displayName}"`);
+          } else {
+            chatLog.addSystem("session name cleared");
+          }
+          await refreshSessionInfo();
+        } catch (err) {
+          chatLog.addSystem(`name failed: ${String(err)}`);
+        }
+        break;
       case "new":
       case "reset":
         try {
