@@ -390,7 +390,7 @@ export function applyVeniceProviderConfig(cfg: OpenClawConfig): OpenClawConfig {
   const models = { ...cfg.agents?.defaults?.models };
   models[VENICE_DEFAULT_MODEL_REF] = {
     ...models[VENICE_DEFAULT_MODEL_REF],
-    alias: models[VENICE_DEFAULT_MODEL_REF]?.alias ?? "Llama 3.3 70B",
+    alias: models[VENICE_DEFAULT_MODEL_REF]?.alias ?? "GLM 4.7",
   };
 
   const providers = { ...cfg.models?.providers };
