@@ -91,6 +91,14 @@ const isNetworkRelatedError = (err: unknown) => {
   return NETWORK_ERROR_SNIPPETS.some((snippet) => message.includes(snippet));
 };
 
+const isTelegramTimeout = (err: unknown) => {
+  if (!err) return false;
+  const message = formatErrorMessage(err).toLowerCase();
+  // Explicitly match Telegram API timeout errors (e.g., "Request to 'getUpdates' timed out after 30 seconds")
+  // This is more specific than the general "timeout" snippet to ensure these are always retried.
+  return message.includes("timed out");
+};
+
 export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
   const cfg = opts.config ?? loadConfig();
   const account = resolveTelegramAccount({
@@ -176,12 +184,13 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
       const isConflict = isGetUpdatesConflict(err);
       const isRecoverable = isRecoverableTelegramNetworkError(err, { context: "polling" });
       const isNetworkError = isNetworkRelatedError(err);
-      if (!isConflict && !isRecoverable && !isNetworkError) {
+      const isTimeout = isTelegramTimeout(err);
+      if (!isConflict && !isRecoverable && !isNetworkError && !isTimeout) {
         throw err;
       }
       restartAttempts += 1;
       const delayMs = computeBackoff(TELEGRAM_POLL_RESTART_POLICY, restartAttempts);
-      const reason = isConflict ? "getUpdates conflict" : "network error";
+      const reason = isConflict ? "getUpdates conflict" : isTimeout ? "timeout" : "network error";
       const errMsg = formatErrorMessage(err);
       (opts.runtime?.error ?? console.error)(
         `Telegram ${reason}: ${errMsg}; retrying in ${formatDurationMs(delayMs)}.`,

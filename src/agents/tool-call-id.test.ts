@@ -137,6 +137,123 @@ describe("sanitizeToolCallIdsForCloudCodeAssist", () => {
       expect(r1.toolCallId).toBe(a.id);
       expect(r2.toolCallId).toBe(b.id);
     });
+
+    it("enforces 40-char limit for very long IDs (issue #4718)", () => {
+      // Simulate a very long tool call ID (like 438 chars reported in issue)
+      const veryLongId = `call_${"x".repeat(434)}`;
+      expect(veryLongId.length).toBe(439); // Verify we're testing a long ID
+
+      const input = [
+        {
+          role: "assistant",
+          content: [{ type: "toolCall", id: veryLongId, name: "gitlab", arguments: {} }],
+        },
+        {
+          role: "toolResult",
+          toolCallId: veryLongId,
+          toolName: "gitlab",
+          content: [{ type: "text", text: "ok" }],
+        },
+      ] satisfies AgentMessage[];
+
+      const out = sanitizeToolCallIdsForCloudCodeAssist(input);
+      expect(out).not.toBe(input);
+
+      const assistant = out[0] as Extract<AgentMessage, { role: "assistant" }>;
+      const toolCall = assistant.content?.[0] as { id?: string };
+      expect(toolCall.id).toBeDefined();
+      expect(toolCall.id?.length).toBeLessThanOrEqual(40);
+      expect(toolCall.id?.length).toBeGreaterThan(0);
+      expect(isValidCloudCodeAssistToolId(toolCall.id as string, "strict")).toBe(true);
+
+      const result = out[1] as Extract<AgentMessage, { role: "toolResult" }>;
+      expect(result.toolCallId).toBe(toolCall.id);
+      expect(result.toolCallId?.length).toBeLessThanOrEqual(40);
+    });
+
+    it("preserves exactly 40-char alphanumeric IDs without modification", () => {
+      const exactly40 = "a".repeat(40);
+      expect(exactly40.length).toBe(40);
+
+      const input = [
+        {
+          role: "assistant",
+          content: [{ type: "toolCall", id: exactly40, name: "read", arguments: {} }],
+        },
+        {
+          role: "toolResult",
+          toolCallId: exactly40,
+          toolName: "read",
+          content: [{ type: "text", text: "ok" }],
+        },
+      ] satisfies AgentMessage[];
+
+      const out = sanitizeToolCallIdsForCloudCodeAssist(input);
+      // Should be no-op since ID is already valid
+      expect(out).toBe(input);
+    });
+
+    it("maintains pairing with multiple very long tool calls", () => {
+      // Test that even with multiple very long IDs, pairing is preserved
+      const longId1 = `call_${"a".repeat(100)}_tool1`;
+      const longId2 = `call_${"b".repeat(100)}_tool2`;
+      const longId3 = `call_${"c".repeat(100)}_tool3`;
+
+      const input = [
+        {
+          role: "assistant",
+          content: [
+            { type: "toolCall", id: longId1, name: "read", arguments: {} },
+            { type: "toolCall", id: longId2, name: "exec", arguments: {} },
+            { type: "toolCall", id: longId3, name: "write", arguments: {} },
+          ],
+        },
+        {
+          role: "toolResult",
+          toolCallId: longId1,
+          toolName: "read",
+          content: [{ type: "text", text: "result1" }],
+        },
+        {
+          role: "toolResult",
+          toolCallId: longId2,
+          toolName: "exec",
+          content: [{ type: "text", text: "result2" }],
+        },
+        {
+          role: "toolResult",
+          toolCallId: longId3,
+          toolName: "write",
+          content: [{ type: "text", text: "result3" }],
+        },
+      ] satisfies AgentMessage[];
+
+      const out = sanitizeToolCallIdsForCloudCodeAssist(input);
+      expect(out).not.toBe(input);
+
+      const assistant = out[0] as Extract<AgentMessage, { role: "assistant" }>;
+      const toolCall1 = assistant.content?.[0] as { id?: string };
+      const toolCall2 = assistant.content?.[1] as { id?: string };
+      const toolCall3 = assistant.content?.[2] as { id?: string };
+
+      // All IDs should be <= 40 chars
+      expect(toolCall1.id?.length).toBeLessThanOrEqual(40);
+      expect(toolCall2.id?.length).toBeLessThanOrEqual(40);
+      expect(toolCall3.id?.length).toBeLessThanOrEqual(40);
+
+      // All IDs should be unique
+      expect(toolCall1.id).not.toBe(toolCall2.id);
+      expect(toolCall1.id).not.toBe(toolCall3.id);
+      expect(toolCall2.id).not.toBe(toolCall3.id);
+
+      // Pairing should be preserved
+      const result1 = out[1] as Extract<AgentMessage, { role: "toolResult" }>;
+      const result2 = out[2] as Extract<AgentMessage, { role: "toolResult" }>;
+      const result3 = out[3] as Extract<AgentMessage, { role: "toolResult" }>;
+      expect(result1.toolCallId).toBe(toolCall1.id);
+      expect(result2.toolCallId).toBe(toolCall2.id);
+      expect(result3.toolCallId).toBe(toolCall3.id);
+    });
   });
 
   describe("strict mode (alphanumeric only)", () => {
