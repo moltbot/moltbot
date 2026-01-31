@@ -1,9 +1,9 @@
 ---
 name: coding-agent
-description: Run Codex CLI, Claude Code, OpenCode, or Pi Coding Agent via background process for programmatic control.
+description: Run Codex CLI, Claude Code, OpenCode, Pi Coding Agent, or Kiro CLI via background process for programmatic control.
 metadata:
   {
-    "openclaw": { "emoji": "🧩", "requires": { "anyBins": ["claude", "codex", "opencode", "pi"] } },
+    "openclaw": { "emoji": "🧩", "requires": { "anyBins": ["claude", "codex", "opencode", "pi", "kiro-cli"] } },
   }
 ---
 
@@ -13,7 +13,7 @@ Use **bash** (with optional background mode) for all coding agent work. Simple a
 
 ## ⚠️ PTY Mode Required!
 
-Coding agents (Codex, Claude Code, Pi) are **interactive terminal applications** that need a pseudo-terminal (PTY) to work correctly. Without PTY, you'll get broken output, missing colors, or the agent may hang.
+Coding agents (Codex, Claude Code, Pi, Kiro) are **interactive terminal applications** that need a pseudo-terminal (PTY) to work correctly. Without PTY, you'll get broken output, missing colors, or the agent may hang.
 
 **Always use `pty:true`** when running coding agents:
 
@@ -189,6 +189,18 @@ bash pty:true command:"pi --provider openai --model gpt-4o-mini -p 'Your task'"
 ```
 
 **Note:** Pi now has Anthropic prompt caching enabled (PR #584, merged Jan 2026)!
+
+---
+
+## Kiro CLI
+
+```bash
+# Install: curl -fsSL https://cli.kiro.dev/install | bash
+bash pty:true workdir:~/project command:"kiro-cli chat 'Your task'"
+
+# Auto-approve tools (like --yolo)
+bash pty:true workdir:~/project command:"kiro-cli chat -a 'Refactor the auth module'"
+```
 
 ---
 
