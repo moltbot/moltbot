@@ -168,6 +168,9 @@ export async function handleSlackAction(
     }
     switch (action) {
       case "sendMessage": {
+        if (!isActionEnabled("sendMessage")) {
+          throw new Error("Slack sendMessage is disabled.");
+        }
         const to = readStringParam(params, "to", { required: true });
         const content = readStringParam(params, "content", { required: true });
         const mediaUrl = readStringParam(params, "mediaUrl");

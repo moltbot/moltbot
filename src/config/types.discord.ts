@@ -55,6 +55,7 @@ export type DiscordGuildEntry = {
 
 export type DiscordActionConfig = {
   reactions?: boolean;
+  sendMessage?: boolean;
   stickers?: boolean;
   polls?: boolean;
   permissions?: boolean;

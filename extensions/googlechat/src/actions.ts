@@ -86,6 +86,11 @@ export const googlechatMessageActions: ChannelMessageActionAdapter = {
     }
 
     if (action === "send") {
+      const actionConfig = account.config.actions ?? (cfg as OpenClawConfig).channels?.["googlechat"]?.actions;
+      const isActionEnabled = createActionGate(actionConfig as Record<string, boolean | undefined>);
+      if (!isActionEnabled("sendMessage")) {
+        throw new Error("Google Chat sendMessage is disabled.");
+      }
       const to = readStringParam(params, "to", { required: true });
       const content = readStringParam(params, "message", {
         required: true,

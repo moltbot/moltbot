@@ -61,6 +61,11 @@ export const matrixMessageActions: ChannelMessageActionAdapter = {
       readStringParam(params, "to", { required: true });
 
     if (action === "send") {
+      const account = resolveMatrixAccount({ cfg: cfg as CoreConfig });
+      const isActionEnabled = createActionGate((cfg as CoreConfig).channels?.matrix?.actions);
+      if (!isActionEnabled("sendMessage")) {
+        throw new Error("Matrix sendMessage is disabled.");
+      }
       const to = readStringParam(params, "to", { required: true });
       const content = readStringParam(params, "message", {
         required: true,

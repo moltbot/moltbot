@@ -224,8 +224,8 @@ export async function handleDiscordMessagingAction(
       });
     }
     case "sendMessage": {
-      if (!isActionEnabled("messages")) {
-        throw new Error("Discord message sends are disabled.");
+      if (!isActionEnabled("sendMessage")) {
+        throw new Error("Discord sendMessage is disabled.");
       }
       const to = readStringParam(params, "to", { required: true });
       const content = readStringParam(params, "content", {

@@ -30,6 +30,7 @@ export type GoogleChatGroupConfig = {
 
 export type GoogleChatActionConfig = {
   reactions?: boolean;
+  sendMessage?: boolean;
 };
 
 export type GoogleChatAccountConfig = {

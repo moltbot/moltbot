@@ -6,6 +6,7 @@ const allowFromEntry = z.union([z.string(), z.number()]);
 const matrixActionSchema = z
   .object({
     reactions: z.boolean().optional(),
+    sendMessage: z.boolean().optional(),
     messages: z.boolean().optional(),
     pins: z.boolean().optional(),
     memberInfo: z.boolean().optional(),

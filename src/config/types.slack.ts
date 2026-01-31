@@ -48,6 +48,7 @@ export type SlackReactionNotificationMode = "off" | "own" | "all" | "allowlist";
 
 export type SlackActionConfig = {
   reactions?: boolean;
+  sendMessage?: boolean;
   messages?: boolean;
   pins?: boolean;
   search?: boolean;
