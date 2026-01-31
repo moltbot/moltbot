@@ -25,8 +25,8 @@ read_when:
 <p align="center">
   <a href="https://github.com/openclaw/openclaw">GitHub</a> ·
   <a href="https://github.com/openclaw/openclaw/releases">Releases</a> ·
-  <a href="/">Docs</a> ·
-  <a href="/start/openclaw">OpenClaw assistant setup</a>
+  <a href="./">Docs</a> ·
+  <a href="./start/openclaw">OpenClaw assistant setup</a>
 </p>
 
 OpenClaw bridges WhatsApp (via WhatsApp Web / Baileys), Telegram (Bot API / grammY), Discord (Bot API / channels.discord.js), and iMessage (imsg CLI) to coding agents like [Pi](https://github.com/badlogic/pi-mono). Plugins add Mattermost (Bot API + WebSocket) and more.
@@ -34,8 +34,8 @@ OpenClaw also powers the OpenClaw assistant.
 
 ## Start here
 
-- **New install from zero:** [Getting Started](/start/getting-started)
-- **Guided setup (recommended):** [Wizard](/start/wizard) (`openclaw onboard`)
+- **New install from zero:** [Getting Started](./start/getting-started)
+- **Guided setup (recommended):** [Wizard](./start/wizard) (`openclaw onboard`)
 - **Open the dashboard (local Gateway):** http://127.0.0.1:18789/ (or http://localhost:18789/)
 
 If the Gateway is running on the same computer, that link opens the browser Control UI
@@ -45,7 +45,7 @@ immediately. If it fails, start the Gateway first: `openclaw gateway`.
 
 The dashboard is the browser Control UI for chat, config, nodes, sessions, and more.
 Local default: http://127.0.0.1:18789/
-Remote access: [Web surfaces](/web) and [Tailscale](/gateway/tailscale)
+Remote access: [Web surfaces](./web) and [Tailscale](./gateway/tailscale)
 
 <p align="center">
   <img src="whatsapp-openclaw.jpg" alt="OpenClaw" width="420" />
@@ -76,13 +76,13 @@ Most operations flow through the **Gateway** (`openclaw gateway`), a single long
 
 ## Network model
 
-- **One Gateway per host (recommended)**: it is the only process allowed to own the WhatsApp Web session. If you need a rescue bot or strict isolation, run multiple gateways with isolated profiles and ports; see [Multiple gateways](/gateway/multiple-gateways).
+- **One Gateway per host (recommended)**: it is the only process allowed to own the WhatsApp Web session. If you need a rescue bot or strict isolation, run multiple gateways with isolated profiles and ports; see [Multiple gateways](./gateway/multiple-gateways).
 - **Loopback-first**: Gateway WS defaults to `ws://127.0.0.1:18789`.
   - The wizard now generates a gateway token by default (even for loopback).
   - For Tailnet access, run `openclaw gateway --bind tailnet --token ...` (token is required for non-loopback binds).
 - **Nodes**: connect to the Gateway WebSocket (LAN/tailnet/SSH as needed); legacy TCP bridge is deprecated/removed.
-- **Canvas host**: HTTP file server on `canvasHost.port` (default `18793`), serving `/__openclaw__/canvas/` for node WebViews; see [Gateway configuration](/gateway/configuration) (`canvasHost`).
-- **Remote use**: SSH tunnel or tailnet/VPN; see [Remote access](/gateway/remote) and [Discovery](/gateway/discovery).
+- **Canvas host**: HTTP file server on `canvasHost.port` (default `18793`), serving `/__openclaw__/canvas/` for node WebViews; see [Gateway configuration](./gateway/configuration) (`canvasHost`).
+- **Remote use**: SSH tunnel or tailnet/VPN; see [Remote access](./gateway/remote) and [Discovery](./gateway/discovery).
 
 ## Features (high level)
 
@@ -92,7 +92,7 @@ Most operations flow through the **Gateway** (`openclaw gateway`), a single long
 - 🧩 **Mattermost Bot (plugin)** — Bot token + WebSocket events
 - 💬 **iMessage** — Local imsg CLI integration (macOS)
 - 🤖 **Agent bridge** — Pi (RPC mode) with tool streaming
-- ⏱️ **Streaming + chunking** — Block streaming + Telegram draft streaming details ([/concepts/streaming](/concepts/streaming))
+- ⏱️ **Streaming + chunking** — Block streaming + Telegram draft streaming details ([/concepts/streaming](./concepts/streaming))
 - 🧠 **Multi-agent routing** — Route provider accounts/peers to isolated agents (workspace + per-agent sessions)
 - 🔐 **Subscription auth** — Anthropic (Claude Pro/Max) + OpenAI (ChatGPT/Codex) via OAuth
 - 💬 **Sessions** — Direct chats collapse into shared `main` (default); groups are isolated
@@ -177,49 +177,49 @@ Example:
 ## Docs
 
 - Start here:
-  - [Docs hubs (all pages linked)](/start/hubs)
-  - [Help](/help) ← *common fixes + troubleshooting*
-  - [Configuration](/gateway/configuration)
-  - [Configuration examples](/gateway/configuration-examples)
-  - [Slash commands](/tools/slash-commands)
-  - [Multi-agent routing](/concepts/multi-agent)
-  - [Updating / rollback](/install/updating)
-  - [Pairing (DM + nodes)](/start/pairing)
-  - [Nix mode](/install/nix)
-  - [OpenClaw assistant setup](/start/openclaw)
-  - [Skills](/tools/skills)
-  - [Skills config](/tools/skills-config)
-  - [Workspace templates](/reference/templates/AGENTS)
-  - [RPC adapters](/reference/rpc)
-  - [Gateway runbook](/gateway)
-  - [Nodes (iOS/Android)](/nodes)
-  - [Web surfaces (Control UI)](/web)
-  - [Discovery + transports](/gateway/discovery)
-  - [Remote access](/gateway/remote)
+  - [Docs hubs (all pages linked)](./start/hubs)
+  - [Help](./help) ← *common fixes + troubleshooting*
+  - [Configuration](./gateway/configuration)
+  - [Configuration examples](./gateway/configuration-examples)
+  - [Slash commands](./tools/slash-commands)
+  - [Multi-agent routing](./concepts/multi-agent)
+  - [Updating / rollback](./install/updating)
+  - [Pairing (DM + nodes)](./start/pairing)
+  - [Nix mode](./install/nix)
+  - [OpenClaw assistant setup](./start/openclaw)
+  - [Skills](./tools/skills)
+  - [Skills config](./tools/skills-config)
+  - [Workspace templates](./reference/templates/AGENTS)
+  - [RPC adapters](./reference/rpc)
+  - [Gateway runbook](./gateway)
+  - [Nodes (iOS/Android)](./nodes)
+  - [Web surfaces (Control UI)](./web)
+  - [Discovery + transports](./gateway/discovery)
+  - [Remote access](./gateway/remote)
 - Providers and UX:
-  - [WebChat](/web/webchat)
-  - [Control UI (browser)](/web/control-ui)
-  - [Telegram](/channels/telegram)
-  - [Discord](/channels/discord)
-  - [Mattermost (plugin)](/channels/mattermost)
-  - [iMessage](/channels/imessage)
-  - [Groups](/concepts/groups)
-  - [WhatsApp group messages](/concepts/group-messages)
-  - [Media: images](/nodes/images)
-  - [Media: audio](/nodes/audio)
+  - [WebChat](./web/webchat)
+  - [Control UI (browser)](./web/control-ui)
+  - [Telegram](./channels/telegram)
+  - [Discord](./channels/discord)
+  - [Mattermost (plugin)](./channels/mattermost)
+  - [iMessage](./channels/imessage)
+  - [Groups](./concepts/groups)
+  - [WhatsApp group messages](./concepts/group-messages)
+  - [Media: images](./nodes/images)
+  - [Media: audio](./nodes/audio)
 - Companion apps:
-  - [macOS app](/platforms/macos)
-  - [iOS app](/platforms/ios)
-  - [Android app](/platforms/android)
-  - [Windows (WSL2)](/platforms/windows)
-  - [Linux app](/platforms/linux)
+  - [macOS app](./platforms/macos)
+  - [iOS app](./platforms/ios)
+  - [Android app](./platforms/android)
+  - [Windows (WSL2)](./platforms/windows)
+  - [Linux app](./platforms/linux)
 - Ops and safety:
-  - [Sessions](/concepts/session)
-  - [Cron jobs](/automation/cron-jobs)
-  - [Webhooks](/automation/webhook)
-  - [Gmail hooks (Pub/Sub)](/automation/gmail-pubsub)
-  - [Security](/gateway/security)
-  - [Troubleshooting](/gateway/troubleshooting)
+  - [Sessions](./concepts/session)
+  - [Cron jobs](./automation/cron-jobs)
+  - [Webhooks](./automation/webhook)
+  - [Gmail hooks (Pub/Sub)](./automation/gmail-pubsub)
+  - [Security](./gateway/security)
+  - [Troubleshooting](./gateway/troubleshooting)
 
 ## The name
 
