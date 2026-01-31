@@ -1,7 +1,7 @@
 ---
 name: coding-agent
 description: Run Codex CLI, Claude Code, OpenCode, or Pi Coding Agent via background process for programmatic control.
-metadata: {"openclaw":{"emoji":"🧩","requires":{"anyBins":["claude","codex","opencode","pi"]}}}
+metadata: {"openclaw":{"emoji":"🧩","requires":{"anyBins":["claude","codex","opencode","pi","copilot"]}}}
 ---
 
 # Coding Agent (bash-first)
@@ -184,6 +184,23 @@ bash pty:true command:"pi --provider openai --model gpt-4o-mini -p 'Your task'"
 ```
 
 **Note:** Pi now has Anthropic prompt caching enabled (PR #584, merged Jan 2026)!
+
+---
+
+## GitHub Copilot CLI
+
+```bash
+# Ask Copilot to code or refactor in a project
+bash pty:true workdir:~/project background:true command:"copilot --allow-all-tools -p \"Add unit tests for src/lib/foo.ts\""
+
+# Summarize or explain code
+bash pty:true workdir:~/project background:true command:"copilot --allow-all-tools -p \"Summarize src/ and list risky files\""
+```
+
+Tips:
+- Keep prompts specific about files and expected outputs (tests, diffs, commands).
+- Use background mode (still with `pty:true` for coding agents) unless you truly need a foreground TTY; monitor with `process action:log`.
+- If Copilot asks a question, reply with `process action:write` to keep it moving.
 
 ---
 
