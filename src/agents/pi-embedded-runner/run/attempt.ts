@@ -460,7 +460,7 @@ export async function runEmbeddedAttempt(
         sessionManager,
         settingsManager,
         skills: [],
-        contextFiles: [],
+        contextFiles,
         additionalExtensionPaths,
       }));
       if (!session) {
