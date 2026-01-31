@@ -331,7 +331,6 @@ describe("embedding provider local fallback", () => {
 describe("local embedding L2 normalization", () => {
   afterEach(() => {
     vi.resetAllMocks();
-    vi.resetModules();
     vi.unstubAllGlobals();
     vi.doUnmock("./node-llama.js");
   });

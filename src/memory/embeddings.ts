@@ -9,7 +9,7 @@ import { importNodeLlamaCpp } from "./node-llama.js";
 
 function l2Normalize(vec: number[]): number[] {
   const magnitude = Math.sqrt(vec.reduce((sum, x) => sum + x * x, 0));
-  if (magnitude < 1e-10) return vec;
+  if (!Number.isFinite(magnitude) || magnitude < 1e-10) return vec;
   return vec.map((x) => x / magnitude);
 }
 
