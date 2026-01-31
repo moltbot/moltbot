@@ -273,6 +273,10 @@ export function resolveEnvApiKey(provider: string): EnvApiKeyResult | null {
     return pick("OPENCODE_API_KEY") ?? pick("OPENCODE_ZEN_API_KEY");
   }
 
+  if (normalized === "opencode-server") {
+    return pick("OPENCODE_SERVER_PASSWORD");
+  }
+
   if (normalized === "qwen-portal") {
     return pick("QWEN_OAUTH_TOKEN") ?? pick("QWEN_PORTAL_API_KEY");
   }
@@ -301,6 +305,7 @@ export function resolveEnvApiKey(provider: string): EnvApiKeyResult | null {
     venice: "VENICE_API_KEY",
     mistral: "MISTRAL_API_KEY",
     opencode: "OPENCODE_API_KEY",
+    "opencode-server": "OPENCODE_SERVER_PASSWORD",
   };
   const envVar = envMap[normalized];
   if (!envVar) {
