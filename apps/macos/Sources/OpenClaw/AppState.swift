@@ -375,10 +375,9 @@ final class AppState {
         let gateway = root["gateway"] as? [String: Any]
         let modeRaw = (gateway?["mode"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let remoteUrl = GatewayRemoteConfig.resolveUrlString(root: root)
-        let hasRemoteUrl = !(
-            remoteUrl?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .isEmpty ?? true)
+        let hasRemoteUrl = !(remoteUrl?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty ?? true)
         let remoteTransport = GatewayRemoteConfig.resolveTransport(root: root)
 
         let desiredMode: ConnectionMode? = switch modeRaw {
@@ -423,10 +422,11 @@ final class AppState {
         let trimmedUser = parsed.user?.trimmingCharacters(in: .whitespacesAndNewlines)
         let user = (trimmedUser?.isEmpty ?? true) ? nil : trimmedUser
         let port = parsed.port
-        let assembled: String = if let user {
-            port == 22 ? "\(user)@\(host)" : "\(user)@\(host):\(port)"
+        let assembled: String
+        if let user {
+            assembled = port == 22 ? "\(user)@\(host)" : "\(user)@\(host):\(port)"
         } else {
-            port == 22 ? host : "\(host):\(port)"
+            assembled = port == 22 ? host : "\(host):\(port)"
         }
         if assembled != self.remoteTarget {
             self.remoteTarget = assembled

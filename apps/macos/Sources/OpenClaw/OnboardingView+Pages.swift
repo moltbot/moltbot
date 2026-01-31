@@ -206,9 +206,7 @@ extension OnboardingView {
                                             .textFieldStyle(.roundedBorder)
                                             .frame(width: fieldWidth)
                                     }
-                                    if let message = CommandResolver
-                                        .sshTargetValidationMessage(self.state.remoteTarget)
-                                    {
+                                    if let message = CommandResolver.sshTargetValidationMessage(self.state.remoteTarget) {
                                         GridRow {
                                             Text("")
                                                 .frame(width: labelWidth, alignment: .leading)
@@ -247,10 +245,9 @@ extension OnboardingView {
                                 }
                             }
 
-                            Text(
-                                self.state.remoteTransport == .direct
-                                    ? "Tip: use Tailscale Serve so the gateway has a valid HTTPS cert."
-                                    : "Tip: keep Tailscale enabled so your gateway stays reachable.")
+                            Text(self.state.remoteTransport == .direct
+                                ? "Tip: use Tailscale Serve so the gateway has a valid HTTPS cert."
+                                : "Tip: keep Tailscale enabled so your gateway stays reachable.")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
@@ -352,10 +349,9 @@ extension OnboardingView {
                         .frame(width: 10, height: 10)
                     Text(
                         self.anthropicAuthConnected
-                            ? (
-                                self.anthropicAuthVerified
-                                    ? "Claude connected (OAuth) — verified"
-                                    : "Claude connected (OAuth)")
+                            ? (self.anthropicAuthVerified
+                                ? "Claude connected (OAuth) — verified"
+                                : "Claude connected (OAuth)")
                             : "Not connected yet")
                         .font(.headline)
                     Spacer()

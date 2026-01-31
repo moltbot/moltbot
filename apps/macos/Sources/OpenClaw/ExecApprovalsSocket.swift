@@ -1,8 +1,8 @@
 import AppKit
+import OpenClawKit
 import CryptoKit
 import Darwin
 import Foundation
-import OpenClawKit
 import OSLog
 
 struct ExecApprovalPromptRequest: Codable, Sendable {

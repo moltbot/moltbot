@@ -1,8 +1,8 @@
 import AppKit
-import Observation
 import OpenClawDiscovery
 import OpenClawIPC
 import OpenClawKit
+import Observation
 import SwiftUI
 
 struct GeneralSettings: View {
@@ -295,9 +295,8 @@ struct GeneralSettings: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(
-                    self.remoteStatus == .checking || self.state.remoteUrl
-                        .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(self.remoteStatus == .checking || self.state.remoteUrl
+                    .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             Text("Direct mode requires a ws:// or wss:// URL (Tailscale Serve uses wss://<magicdns>).")
                 .font(.caption)

@@ -1,6 +1,6 @@
-import Foundation
 import OpenClawKit
 import OpenClawProtocol
+import Foundation
 
 // Prefer the OpenClawKit wrapper to keep gateway request payloads consistent.
 typealias AnyCodable = OpenClawKit.AnyCodable

@@ -1,11 +1,11 @@
 import AppKit
 import ApplicationServices
 import AVFoundation
+import OpenClawIPC
 import CoreGraphics
 import CoreLocation
 import Foundation
 import Observation
-import OpenClawIPC
 import Speech
 import UserNotifications
 

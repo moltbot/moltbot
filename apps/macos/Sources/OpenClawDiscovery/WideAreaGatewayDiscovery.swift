@@ -1,5 +1,5 @@
-import Foundation
 import OpenClawKit
+import Foundation
 
 struct WideAreaGatewayBeacon: Sendable, Equatable {
     var instanceName: String

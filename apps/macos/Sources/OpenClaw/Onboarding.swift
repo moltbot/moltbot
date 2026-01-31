@@ -1,9 +1,9 @@
 import AppKit
-import Combine
-import Observation
 import OpenClawChatUI
 import OpenClawDiscovery
 import OpenClawIPC
+import Combine
+import Observation
 import SwiftUI
 
 enum UIStrings {

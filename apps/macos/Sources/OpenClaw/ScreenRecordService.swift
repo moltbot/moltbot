@@ -250,14 +250,12 @@ private final class StreamRecorder: NSObject, SCStreamOutput, SCStreamDelegate, 
                 self.writer.finishWriting {
                     if let err = self.writer.error {
                         cont
-                            .resume(
-                                throwing: ScreenRecordService.ScreenRecordError
-                                    .writeFailed(err.localizedDescription))
+                            .resume(throwing: ScreenRecordService.ScreenRecordError
+                                .writeFailed(err.localizedDescription))
                     } else if self.writer.status != .completed {
                         cont
-                            .resume(
-                                throwing: ScreenRecordService.ScreenRecordError
-                                    .writeFailed("Failed to finalize video"))
+                            .resume(throwing: ScreenRecordService.ScreenRecordError
+                                .writeFailed("Failed to finalize video"))
                     } else {
                         cont.resume()
                     }

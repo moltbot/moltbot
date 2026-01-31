@@ -84,10 +84,9 @@ struct GatewayDiscoveryInlineList: View {
                         .fill(Color(NSColor.controlBackgroundColor)))
             }
         }
-        .help(
-            self.transport == .direct
-                ? "Click a discovered gateway to fill the gateway URL."
-                : "Click a discovered gateway to fill the SSH target.")
+        .help(self.transport == .direct
+            ? "Click a discovered gateway to fill the gateway URL."
+            : "Click a discovered gateway to fill the SSH target.")
     }
 
     private func displayInfo(

@@ -426,27 +426,23 @@ extension ChannelsSettings {
             return self.date(fromMs: status.lastEventAt ?? status.lastMessageAt ?? status.lastConnectedAt)
         case "telegram":
             return self
-                .date(
-                    fromMs: self.channelStatus("telegram", as: ChannelsStatusSnapshot.TelegramStatus.self)?
-                        .lastProbeAt)
+                .date(fromMs: self.channelStatus("telegram", as: ChannelsStatusSnapshot.TelegramStatus.self)?
+                    .lastProbeAt)
         case "discord":
             return self
-                .date(
-                    fromMs: self.channelStatus("discord", as: ChannelsStatusSnapshot.DiscordStatus.self)?
-                        .lastProbeAt)
+                .date(fromMs: self.channelStatus("discord", as: ChannelsStatusSnapshot.DiscordStatus.self)?
+                    .lastProbeAt)
         case "googlechat":
             return self
-                .date(
-                    fromMs: self.channelStatus("googlechat", as: ChannelsStatusSnapshot.GoogleChatStatus.self)?
-                        .lastProbeAt)
+                .date(fromMs: self.channelStatus("googlechat", as: ChannelsStatusSnapshot.GoogleChatStatus.self)?
+                    .lastProbeAt)
         case "signal":
             return self
                 .date(fromMs: self.channelStatus("signal", as: ChannelsStatusSnapshot.SignalStatus.self)?.lastProbeAt)
         case "imessage":
             return self
-                .date(
-                    fromMs: self.channelStatus("imessage", as: ChannelsStatusSnapshot.IMessageStatus.self)?
-                        .lastProbeAt)
+                .date(fromMs: self.channelStatus("imessage", as: ChannelsStatusSnapshot.IMessageStatus.self)?
+                    .lastProbeAt)
         default:
             let status = self.channelStatusDictionary(channel.id)
             if let probeAt = status?["lastProbeAt"]?.doubleValue {

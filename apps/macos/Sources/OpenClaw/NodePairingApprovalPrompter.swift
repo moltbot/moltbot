@@ -1,10 +1,10 @@
 import AppKit
-import Foundation
-import Observation
 import OpenClawDiscovery
 import OpenClawIPC
 import OpenClawKit
 import OpenClawProtocol
+import Foundation
+import Observation
 import OSLog
 import UserNotifications
 
@@ -547,9 +547,8 @@ final class NodePairingApprovalPrompter {
         let preferred = GatewayDiscoveryPreferences.preferredStableID()
         let gateway = model.gateways.first { $0.stableID == preferred } ?? model.gateways.first
         guard let gateway else { return nil }
-        let host = (
-            gateway.tailnetDns?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ??
-                gateway.lanHost?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty)
+        let host = (gateway.tailnetDns?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ??
+            gateway.lanHost?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty)
         guard let host, !host.isEmpty else { return nil }
         let port = gateway.sshPort > 0 ? gateway.sshPort : 22
         return SSHTarget(host: host, port: port)

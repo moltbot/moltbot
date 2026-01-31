@@ -1,5 +1,5 @@
-import Foundation
 import OpenClawProtocol
+import Foundation
 
 struct SkillsStatusReport: Codable {
     let workspaceDir: String

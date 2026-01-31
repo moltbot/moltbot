@@ -163,9 +163,8 @@ struct VoiceWakeSettings: View {
                 } label: {
                     Label("Add word", systemImage: "plus")
                 }
-                .disabled(
-                    self.triggerEntries
-                        .contains(where: { $0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }))
+                .disabled(self.triggerEntries
+                    .contains(where: { $0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }))
 
                 Button("Reset defaults") {
                     self.triggerEntries = defaultVoiceWakeTriggers.map { TriggerEntry(id: UUID(), value: $0) }
