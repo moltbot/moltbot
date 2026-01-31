@@ -158,7 +158,12 @@ export async function runReplyAgent(params: {
         })
       : null;
 
-  if (shouldSteer && isStreaming) {
+  // Only attempt fast steering when there's no thread routing to preserve.
+  // When originatingThreadId is set, the message needs per-thread reply routing
+  // which is lost by queueEmbeddedPiMessage (it only injects the prompt text).
+  // Forcing these through enqueueFollowupRun preserves the routing context.
+  const hasThreadRouting = followupRun.originatingThreadId != null;
+  if (shouldSteer && isStreaming && !hasThreadRouting) {
     const steered = queueEmbeddedPiMessage(followupRun.run.sessionId, followupRun.prompt);
     if (steered && !shouldFollowup) {
       if (activeSessionEntry && activeSessionStore && sessionKey) {
