@@ -9,6 +9,7 @@ import type { OpenClawConfig } from "../config/config.js";
 import { isSubagentSessionKey } from "../routing/session-key.js";
 import { resolveGatewayMessageChannel } from "../utils/message-channel.js";
 import { createApplyPatchTool } from "./apply-patch.js";
+import { createMultiEditTool } from "./multi-edit.js";
 import {
   createExecTool,
   createProcessTool,
@@ -303,6 +304,13 @@ export function createOpenClawCodingTools(options?: {
           cwd: sandboxRoot ?? workspaceRoot,
           sandboxRoot: sandboxRoot && allowWorkspaceWrites ? sandboxRoot : undefined,
         });
+  const multiEditTool =
+    sandboxRoot && !allowWorkspaceWrites
+      ? null
+      : createMultiEditTool({
+          cwd: sandboxRoot ?? workspaceRoot,
+          sandboxRoot: sandboxRoot && allowWorkspaceWrites ? sandboxRoot : undefined,
+        });
   const tools: AnyAgentTool[] = [
     ...base,
     ...(sandboxRoot
@@ -311,6 +319,7 @@ export function createOpenClawCodingTools(options?: {
         : []
       : []),
     ...(applyPatchTool ? [applyPatchTool as unknown as AnyAgentTool] : []),
+    ...(multiEditTool ? [multiEditTool as unknown as AnyAgentTool] : []),
     execTool as unknown as AnyAgentTool,
     processTool as unknown as AnyAgentTool,
     // Channel docking: include channel-defined agent tools (login, etc.).
