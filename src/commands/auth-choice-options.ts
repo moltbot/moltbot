@@ -12,6 +12,7 @@ export type AuthChoiceGroupId =
   | "anthropic"
   | "google"
   | "copilot"
+  | "cursor"
   | "openrouter"
   | "ai-gateway"
   | "moonshot"
@@ -120,6 +121,12 @@ const AUTH_CHOICE_GROUP_DEFS: {
     hint: "Privacy-focused (uncensored models)",
     choices: ["venice-api-key"],
   },
+  {
+    value: "cursor",
+    label: "Cursor",
+    hint: "CLI OAuth (cursor agent login)",
+    choices: ["cursor-cli"],
+  },
 ];
 
 export function buildAuthChoiceOptions(params: {
@@ -185,6 +192,11 @@ export function buildAuthChoiceOptions(params: {
     value: "copilot-proxy",
     label: "Copilot Proxy (local)",
     hint: "Local proxy for VS Code Copilot models",
+  });
+  options.push({
+    value: "cursor-cli",
+    label: "Cursor CLI (OAuth)",
+    hint: "Run `cursor agent login` to authenticate",
   });
   options.push({ value: "apiKey", label: "Anthropic API key" });
   // Token flow is currently Anthropic-only; use CLI for advanced providers.

@@ -1,0 +1,37 @@
+{
+  "name": "@openclaw/extension-cursor-agent",
+  "version": "0.1.0",
+  "description": "Cursor Background Agents integration for OpenClaw",
+  "keywords": [
+    "agent",
+    "ai",
+    "background-agents",
+    "coding",
+    "cursor",
+    "openclaw"
+  ],
+  "type": "module",
+  "main": "index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "mock-server": "npx tsx scripts/mock-cursor-api.ts",
+    "test": "vitest run",
+    "test:api": "npx tsx scripts/test-api.ts",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "openclaw": "workspace:*",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "vitest": "^1.0.0"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2024.0.0"
+  }
+}

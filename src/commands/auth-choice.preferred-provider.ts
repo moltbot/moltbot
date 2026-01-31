@@ -29,6 +29,7 @@ const PREFERRED_PROVIDER_BY_AUTH_CHOICE: Partial<Record<AuthChoice, string>> = {
   minimax: "lmstudio",
   "opencode-zen": "opencode",
   "qwen-portal": "qwen-portal",
+  "cursor-cli": "cursor-cli",
   "minimax-portal": "minimax-portal",
 };
 

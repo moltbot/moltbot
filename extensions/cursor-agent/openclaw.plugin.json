@@ -1,0 +1,9 @@
+{
+  "id": "cursor-agent",
+  "channels": ["cursorAgent"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

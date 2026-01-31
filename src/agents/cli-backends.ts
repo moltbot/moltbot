@@ -25,6 +25,26 @@ const CLAUDE_MODEL_ALIASES: Record<string, string> = {
   "claude-haiku-3-5": "haiku",
 };
 
+const CURSOR_MODEL_ALIASES: Record<string, string> = {
+  auto: "auto",
+  opus: "opus-4.5",
+  "opus-4.5": "opus-4.5",
+  "opus-thinking": "opus-4.5-thinking",
+  "opus-4.5-thinking": "opus-4.5-thinking",
+  sonnet: "sonnet-4",
+  "sonnet-4": "sonnet-4",
+  "sonnet-thinking": "sonnet-4-thinking",
+  "sonnet-4-thinking": "sonnet-4-thinking",
+  gpt5: "gpt-5.2",
+  "gpt-5": "gpt-5.2",
+  "gpt-5.2": "gpt-5.2",
+  codex: "gpt-5.2-codex",
+  "gpt-5.2-codex": "gpt-5.2-codex",
+  gemini: "gemini-3-pro",
+  "gemini-3": "gemini-3-pro",
+  "gemini-3-pro": "gemini-3-pro",
+};
+
 const DEFAULT_CLAUDE_BACKEND: CliBackendConfig = {
   command: "claude",
   args: ["-p", "--output-format", "json", "--dangerously-skip-permissions"],
@@ -74,6 +94,20 @@ const DEFAULT_CODEX_BACKEND: CliBackendConfig = {
   serialize: true,
 };
 
+const DEFAULT_CURSOR_BACKEND: CliBackendConfig = {
+  command: "cursor",
+  args: ["agent", "--print", "--output-format", "stream-json"],
+  resumeArgs: ["agent", "--print", "--output-format", "stream-json", "--resume", "{sessionId}"],
+  output: "jsonl",
+  resumeOutput: "jsonl",
+  input: "arg",
+  modelArg: "--model",
+  modelAliases: CURSOR_MODEL_ALIASES,
+  sessionIdFields: ["chatId", "chat_id", "sessionId", "session_id"],
+  sessionMode: "existing",
+  serialize: true,
+};
+
 function normalizeBackendKey(key: string): string {
   return normalizeProviderId(key);
 }
@@ -111,6 +145,7 @@ export function resolveCliBackendIds(cfg?: OpenClawConfig): Set<string> {
   const ids = new Set<string>([
     normalizeBackendKey("claude-cli"),
     normalizeBackendKey("codex-cli"),
+    normalizeBackendKey("cursor-cli"),
   ]);
   const configured = cfg?.agents?.defaults?.cliBackends ?? {};
   for (const key of Object.keys(configured)) {
@@ -137,6 +172,14 @@ export function resolveCliBackendConfig(
   }
   if (normalized === "codex-cli") {
     const merged = mergeBackendConfig(DEFAULT_CODEX_BACKEND, override);
+    const command = merged.command?.trim();
+    if (!command) {
+      return null;
+    }
+    return { id: normalized, config: { ...merged, command } };
+  }
+  if (normalized === "cursor-cli") {
+    const merged = mergeBackendConfig(DEFAULT_CURSOR_BACKEND, override);
     const command = merged.command?.trim();
     if (!command) {
       return null;

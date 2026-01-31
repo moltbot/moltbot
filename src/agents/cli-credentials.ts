@@ -19,6 +19,10 @@ const MINIMAX_CLI_CREDENTIALS_RELATIVE_PATH = ".minimax/oauth_creds.json";
 const CLAUDE_CLI_KEYCHAIN_SERVICE = "Claude Code-credentials";
 const CLAUDE_CLI_KEYCHAIN_ACCOUNT = "Claude Code";
 
+const CURSOR_CLI_ACCESS_TOKEN_SERVICE = "cursor-access-token";
+const CURSOR_CLI_REFRESH_TOKEN_SERVICE = "cursor-refresh-token";
+const CURSOR_CLI_KEYCHAIN_ACCOUNT = "cursor-user";
+
 type CachedValue<T> = {
   value: T | null;
   readAt: number;
@@ -28,12 +32,14 @@ type CachedValue<T> = {
 let claudeCliCache: CachedValue<ClaudeCliCredential> | null = null;
 let codexCliCache: CachedValue<CodexCliCredential> | null = null;
 let qwenCliCache: CachedValue<QwenCliCredential> | null = null;
+let cursorCliCache: CachedValue<CursorCliCredential> | null = null;
 let minimaxCliCache: CachedValue<MiniMaxCliCredential> | null = null;
 
 export function resetCliCredentialCachesForTest(): void {
   claudeCliCache = null;
   codexCliCache = null;
   qwenCliCache = null;
+  cursorCliCache = null;
   minimaxCliCache = null;
 }
 
@@ -66,6 +72,15 @@ export type QwenCliCredential = {
   provider: "qwen-portal";
   access: string;
   refresh: string;
+  expires: number;
+};
+
+export type CursorCliCredential = {
+  type: "oauth";
+  provider: "cursor";
+  access: string;
+  refresh: string;
+  /** Cursor tokens don't have explicit expiry; we estimate based on read time. */
   expires: number;
 };
 
@@ -582,6 +597,93 @@ export function readQwenCliCredentialsCached(options?: {
   const value = readQwenCliCredentials({ homeDir: options?.homeDir });
   if (ttlMs > 0) {
     qwenCliCache = { value, readAt: now, cacheKey };
+  }
+  return value;
+}
+
+/**
+ * Read Cursor CLI credentials from macOS Keychain.
+ *
+ * Cursor stores OAuth tokens in the keychain with service names:
+ * - cursor-access-token
+ * - cursor-refresh-token
+ *
+ * Authentication is handled via `cursor agent login`.
+ */
+export function readCursorCliCredentials(options?: {
+  platform?: NodeJS.Platform;
+  execSync?: ExecSyncFn;
+}): CursorCliCredential | null {
+  const platform = options?.platform ?? process.platform;
+  if (platform !== "darwin") {
+    // Cursor keychain auth is macOS-only for now
+    return null;
+  }
+
+  const execSyncImpl = options?.execSync ?? execSync;
+
+  try {
+    const accessToken = execSyncImpl(
+      `security find-generic-password -s "${CURSOR_CLI_ACCESS_TOKEN_SERVICE}" -a "${CURSOR_CLI_KEYCHAIN_ACCOUNT}" -w`,
+      { encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"] },
+    ).trim();
+
+    if (!accessToken) {
+      return null;
+    }
+
+    let refreshToken = "";
+    try {
+      refreshToken = execSyncImpl(
+        `security find-generic-password -s "${CURSOR_CLI_REFRESH_TOKEN_SERVICE}" -a "${CURSOR_CLI_KEYCHAIN_ACCOUNT}" -w`,
+        { encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"] },
+      ).trim();
+    } catch {
+      // Refresh token may not exist; access token alone is sufficient
+    }
+
+    // Cursor tokens don't have explicit expiry; estimate 1 hour from read time
+    const expires = Date.now() + 60 * 60 * 1000;
+
+    log.info("read cursor credentials from keychain", {
+      hasRefresh: Boolean(refreshToken),
+      expires: new Date(expires).toISOString(),
+    });
+
+    return {
+      type: "oauth",
+      provider: "cursor",
+      access: accessToken,
+      refresh: refreshToken,
+      expires,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function readCursorCliCredentialsCached(options?: {
+  ttlMs?: number;
+  platform?: NodeJS.Platform;
+  execSync?: ExecSyncFn;
+}): CursorCliCredential | null {
+  const ttlMs = options?.ttlMs ?? 0;
+  const now = Date.now();
+  const cacheKey = `cursor-cli|${options?.platform ?? process.platform}`;
+  if (
+    ttlMs > 0 &&
+    cursorCliCache &&
+    cursorCliCache.cacheKey === cacheKey &&
+    now - cursorCliCache.readAt < ttlMs
+  ) {
+    return cursorCliCache.value;
+  }
+  const value = readCursorCliCredentials({
+    platform: options?.platform,
+    execSync: options?.execSync,
+  });
+  if (ttlMs > 0) {
+    cursorCliCache = { value, readAt: now, cacheKey };
   }
   return value;
 }

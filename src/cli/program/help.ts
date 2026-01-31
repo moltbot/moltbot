@@ -1,4 +1,5 @@
 import type { Command } from "commander";
+import { resolveCommitHash } from "../../infra/git-commit.js";
 import { formatDocsLink } from "../../terminal/links.js";
 import { isRich, theme } from "../../terminal/theme.js";
 import { formatCliBannerLine, hasEmittedCliBanner } from "../banner.js";
@@ -68,7 +69,9 @@ export function configureProgramHelp(program: Command, ctx: ProgramContext) {
     process.argv.includes("--version") ||
     process.argv.includes("-v")
   ) {
-    console.log(ctx.programVersion);
+    const commit = resolveCommitHash();
+    const versionStr = commit ? `${ctx.programVersion} (${commit})` : ctx.programVersion;
+    console.log(versionStr);
     process.exit(0);
   }
 

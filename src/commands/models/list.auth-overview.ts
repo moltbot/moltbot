@@ -6,6 +6,7 @@ import {
   resolveAuthStorePathForDisplay,
   resolveProfileUnusableUntilForDisplay,
 } from "../../agents/auth-profiles.js";
+import { readCursorCliCredentials } from "../../agents/cli-credentials.js";
 import { getCustomProviderApiKey, resolveEnvApiKey } from "../../agents/model-auth.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { shortenHomePath } from "../../utils.js";
@@ -62,6 +63,9 @@ export function resolveProviderAuthOverview(params: {
   const envKey = resolveEnvApiKey(provider);
   const customKey = getCustomProviderApiKey(cfg, provider);
 
+  // CLI backends that use external auth (e.g. cursor agent login → keychain)
+  const cursorCliCreds = provider === "cursor-cli" ? readCursorCliCredentials() : null;
+
   const effective: ProviderAuthOverview["effective"] = (() => {
     if (profiles.length > 0) {
       return {
@@ -80,12 +84,16 @@ export function resolveProviderAuthOverview(params: {
     if (customKey) {
       return { kind: "models.json", detail: maskApiKey(customKey) };
     }
+    if (cursorCliCreds) {
+      return { kind: "cli", detail: "cursor agent login (keychain)" };
+    }
     return { kind: "missing", detail: "missing" };
   })();
 
   return {
     provider,
     effective,
+    ...(cursorCliCreds ? { cliAuth: true as const } : {}),
     profiles: {
       count: profiles.length,
       oauth: oauthCount,

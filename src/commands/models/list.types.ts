@@ -19,9 +19,11 @@ export type ModelRow = {
 export type ProviderAuthOverview = {
   provider: string;
   effective: {
-    kind: "profiles" | "env" | "models.json" | "missing";
+    kind: "profiles" | "env" | "models.json" | "cli" | "missing";
     detail: string;
   };
+  /** True when provider uses external CLI auth (e.g. cursor-cli via cursor agent login). */
+  cliAuth?: boolean;
   profiles: {
     count: number;
     oauth: number;

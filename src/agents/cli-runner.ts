@@ -30,7 +30,21 @@ import { FailoverError, resolveFailoverStatus } from "./failover-error.js";
 import { classifyFailoverReason, isFailoverErrorMessage } from "./pi-embedded-helpers.js";
 import type { EmbeddedPiRunResult } from "./pi-embedded-runner.js";
 
-const log = createSubsystemLogger("agent/claude-cli");
+// Provider-specific loggers for backwards compatibility
+const claudeCliLog = createSubsystemLogger("agent/claude-cli");
+const cursorCliLog = createSubsystemLogger("agent/cursor-cli");
+const codexCliLog = createSubsystemLogger("agent/codex-cli");
+
+function getProviderLogger(provider: string) {
+  const normalized = provider.toLowerCase();
+  if (normalized === "cursor-cli") {
+    return cursorCliLog;
+  }
+  if (normalized === "codex-cli") {
+    return codexCliLog;
+  }
+  return claudeCliLog; // default for claude-cli and unknown providers
+}
 
 export async function runCliAgent(params: {
   sessionId: string;
@@ -70,6 +84,7 @@ export async function runCliAgent(params: {
     .filter(Boolean)
     .join("\n");
 
+  const log = getProviderLogger(params.provider);
   const sessionLabel = params.sessionKey ?? params.sessionId;
   const { contextFiles } = await resolveBootstrapContextForRun({
     workspaceDir,
@@ -164,9 +179,7 @@ export async function runCliAgent(params: {
 
   try {
     const output = await enqueueCliRun(queueKey, async () => {
-      log.info(
-        `cli exec: provider=${params.provider} model=${normalizedModel} promptChars=${params.prompt.length}`,
-      );
+      log.info(`cli exec: model=${normalizedModel} promptChars=${params.prompt.length}`);
       const logOutputText = isTruthyEnvValue(process.env.OPENCLAW_CLAUDE_CLI_LOG_OUTPUT);
       if (logOutputText) {
         const logArgs: string[] = [];

@@ -36,6 +36,7 @@ export type AgentCliOpts = {
   agent?: string;
   to?: string;
   sessionId?: string;
+  model?: string;
   thinking?: string;
   verbose?: string;
   json?: boolean;
@@ -132,6 +133,7 @@ export async function agentViaGatewayCommand(opts: AgentCliOpts, runtime: Runtim
           replyTo: opts.replyTo,
           sessionId: opts.sessionId,
           sessionKey,
+          model: opts.model?.trim() || undefined,
           thinking: opts.thinking,
           deliver: Boolean(opts.deliver),
           channel,

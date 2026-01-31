@@ -24,7 +24,11 @@ export function registerAgentCommands(program: Command, args: { agentChannelOpti
     .requiredOption("-m, --message <text>", "Message body for the agent")
     .option("-t, --to <number>", "Recipient number in E.164 used to derive the session key")
     .option("--session-id <id>", "Use an explicit session id")
-    .option("--agent <id>", "Agent id (overrides routing bindings)")
+    .option("--agent <id>", "Agent id (overrides routing bindings)", "main")
+    .option(
+      "--model <provider/model>",
+      "Model for this run (e.g. cursor-cli/auto, anthropic/claude-sonnet-4-5)",
+    )
     .option("--thinking <level>", "Thinking level: off | minimal | low | medium | high")
     .option("--verbose <on|off>", "Persist agent verbose level for the session")
     .option(
@@ -54,6 +58,10 @@ ${formatHelpExamples([
   ['openclaw agent --to +15555550123 --message "status update"', "Start a new session."],
   ['openclaw agent --agent ops --message "Summarize logs"', "Use a specific agent."],
   [
+    'openclaw agent --message "Hello" --model cursor-cli/auto',
+    "Use Cursor CLI backend (run cursor agent login first).",
+  ],
+  [
     'openclaw agent --session-id 1234 --message "Summarize inbox" --thinking medium',
     "Target a session with explicit thinking level.",
   ],
@@ -73,10 +81,16 @@ ${theme.muted("Docs:")} ${formatDocsLink("/cli/agent", "docs.openclaw.ai/cli/age
     .action(async (opts) => {
       const verboseLevel = typeof opts.verbose === "string" ? opts.verbose.toLowerCase() : "";
       setVerbose(verboseLevel === "on");
-      // Build default deps (keeps parity with other commands; future-proofing).
       const deps = createDefaultDeps();
       await runCommandWithRuntime(defaultRuntime, async () => {
-        await agentCliCommand(opts, defaultRuntime, deps);
+        await agentCliCommand(
+          {
+            ...opts,
+            model: typeof opts.model === "string" ? opts.model : undefined,
+          },
+          defaultRuntime,
+          deps,
+        );
       });
     });
 

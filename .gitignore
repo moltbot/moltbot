@@ -71,3 +71,8 @@ USER.md
 
 # local tooling
 .serena/
+
+# Dev environment (local only)
+dev/config/
+dev/data/
+dev/.env

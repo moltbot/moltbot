@@ -15,6 +15,7 @@ import {
   buildAllowedModelSet,
   isCliProvider,
   modelKey,
+  parseModelRef,
   resolveConfiguredModelRef,
   resolveThinkingDefault,
 } from "../agents/model-selection.js";
@@ -262,7 +263,8 @@ export async function agentCommand(
     const hasStoredOverride = Boolean(
       sessionEntry?.modelOverride || sessionEntry?.providerOverride,
     );
-    const needsModelCatalog = hasAllowlist || hasStoredOverride;
+    const hasOptsModel = Boolean(opts.model?.trim());
+    const needsModelCatalog = hasAllowlist || hasStoredOverride || hasOptsModel;
     let allowedModelKeys = new Set<string>();
     let allowedModelCatalog: Awaited<ReturnType<typeof loadModelCatalog>> = [];
     let modelCatalog: Awaited<ReturnType<typeof loadModelCatalog>> | null = null;
@@ -304,9 +306,26 @@ export async function agentCommand(
       }
     }
 
+    // CLI/gateway model override for this run (takes precedence over session)
+    const optsModel = opts.model?.trim();
+    if (optsModel) {
+      const parsed = parseModelRef(optsModel, defaultProvider);
+      if (parsed) {
+        const key = modelKey(parsed.provider, parsed.model);
+        if (
+          isCliProvider(parsed.provider, cfg) ||
+          allowedModelKeys.size === 0 ||
+          allowedModelKeys.has(key)
+        ) {
+          provider = parsed.provider;
+          model = parsed.model;
+        }
+      }
+    }
+
     const storedProviderOverride = sessionEntry?.providerOverride?.trim();
     const storedModelOverride = sessionEntry?.modelOverride?.trim();
-    if (storedModelOverride) {
+    if (!optsModel && storedModelOverride) {
       const candidateProvider = storedProviderOverride || defaultProvider;
       const key = modelKey(candidateProvider, storedModelOverride);
       if (

@@ -37,6 +37,8 @@ export type AgentCommandOpts = {
   to?: string;
   sessionId?: string;
   sessionKey?: string;
+  /** Model for this run (provider/model, e.g. cursor-cli/auto). */
+  model?: string;
   thinking?: string;
   thinkingOnce?: string;
   verbose?: string;

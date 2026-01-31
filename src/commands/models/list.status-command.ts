@@ -187,7 +187,11 @@ export async function modelsStatusCommand(
   const providerAuth = providers
     .map((provider) => resolveProviderAuthOverview({ provider, cfg, store, modelsPath }))
     .filter((entry) => {
-      const hasAny = entry.profiles.count > 0 || Boolean(entry.env) || Boolean(entry.modelsJson);
+      const hasAny =
+        entry.profiles.count > 0 ||
+        Boolean(entry.env) ||
+        Boolean(entry.modelsJson) ||
+        Boolean(entry.cliAuth);
       return hasAny;
     });
   const providerAuthMap = new Map(providerAuth.map((entry) => [entry.provider, entry]));
@@ -543,7 +547,9 @@ export async function modelsStatusCommand(
       const hint =
         provider === "anthropic"
           ? `Run \`claude setup-token\`, then \`${formatCliCommand("openclaw models auth setup-token")}\` or \`${formatCliCommand("openclaw configure")}\`.`
-          : `Run \`${formatCliCommand("openclaw configure")}\` or set an API key env var.`;
+          : provider === "cursor-cli"
+            ? `Run \`cursor agent login\` to authenticate with Cursor CLI.`
+            : `Run \`${formatCliCommand("openclaw configure")}\` or set an API key env var.`;
       runtime.log(`- ${theme.heading(provider)} ${hint}`);
     }
   }
