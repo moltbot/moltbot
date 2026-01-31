@@ -44,13 +44,31 @@ const XIAOMI_DEFAULT_COST = {
 };
 
 const MOONSHOT_BASE_URL = "https://api.moonshot.ai/v1";
-const MOONSHOT_DEFAULT_MODEL_ID = "kimi-k2.5";
-const MOONSHOT_DEFAULT_CONTEXT_WINDOW = 256000;
-const MOONSHOT_DEFAULT_MAX_TOKENS = 8192;
+const MOONSHOT_CN_BASE_URL = "https://api.moonshot.cn/v1";
+const MOONSHOT_DEFAULT_CONTEXT_WINDOW = 262144;
+const MOONSHOT_DEFAULT_MAX_TOKENS = 262144;
 const MOONSHOT_DEFAULT_COST = {
-  input: 0,
-  output: 0,
-  cacheRead: 0,
+  input: 0.6,
+  output: 2.5,
+  cacheRead: 0.15,
+  cacheWrite: 0,
+};
+const MOONSHOT_THINKING_COST = {
+  input: 0.6,
+  output: 2.5,
+  cacheRead: 0.15,
+  cacheWrite: 0,
+};
+const MOONSHOT_THINKING_TURBO_COST = {
+  input: 1.15,
+  output: 8,
+  cacheRead: 0.15,
+  cacheWrite: 0,
+};
+const MOONSHOT_TURBO_COST = {
+  input: 2.4,
+  output: 10,
+  cacheRead: 0.6,
   cacheWrite: 0,
 };
 
@@ -287,6 +305,65 @@ function buildMinimaxProvider(): ProviderConfig {
   };
 }
 
+function buildMoonshotModels(): ProviderConfig["models"] {
+  return [
+    {
+      id: "kimi-k2.5",
+      name: "Kimi K2.5",
+      reasoning: true,
+      input: ["text", "image"],
+      cost: MOONSHOT_DEFAULT_COST,
+      contextWindow: MOONSHOT_DEFAULT_CONTEXT_WINDOW,
+      maxTokens: MOONSHOT_DEFAULT_MAX_TOKENS,
+    },
+    {
+      id: "kimi-k2-thinking",
+      name: "Kimi K2 Thinking",
+      reasoning: true,
+      input: ["text"],
+      cost: MOONSHOT_THINKING_COST,
+      contextWindow: MOONSHOT_DEFAULT_CONTEXT_WINDOW,
+      maxTokens: MOONSHOT_DEFAULT_MAX_TOKENS,
+    },
+    {
+      id: "kimi-k2-thinking-turbo",
+      name: "Kimi K2 Thinking Turbo",
+      reasoning: true,
+      input: ["text"],
+      cost: MOONSHOT_THINKING_TURBO_COST,
+      contextWindow: MOONSHOT_DEFAULT_CONTEXT_WINDOW,
+      maxTokens: MOONSHOT_DEFAULT_MAX_TOKENS,
+    },
+    {
+      id: "kimi-k2-0905-preview",
+      name: "Kimi K2 0905",
+      reasoning: false,
+      input: ["text"],
+      cost: MOONSHOT_DEFAULT_COST,
+      contextWindow: MOONSHOT_DEFAULT_CONTEXT_WINDOW,
+      maxTokens: MOONSHOT_DEFAULT_MAX_TOKENS,
+    },
+    {
+      id: "kimi-k2-0711-preview",
+      name: "Kimi K2 0711",
+      reasoning: false,
+      input: ["text"],
+      cost: MOONSHOT_DEFAULT_COST,
+      contextWindow: 131072,
+      maxTokens: 16384,
+    },
+    {
+      id: "kimi-k2-turbo-preview",
+      name: "Kimi K2 Turbo",
+      reasoning: false,
+      input: ["text"],
+      cost: MOONSHOT_TURBO_COST,
+      contextWindow: MOONSHOT_DEFAULT_CONTEXT_WINDOW,
+      maxTokens: MOONSHOT_DEFAULT_MAX_TOKENS,
+    },
+  ];
+}
+
 function buildMinimaxPortalProvider(): ProviderConfig {
   return {
     baseUrl: MINIMAX_PORTAL_BASE_URL,
@@ -309,17 +386,15 @@ function buildMoonshotProvider(): ProviderConfig {
   return {
     baseUrl: MOONSHOT_BASE_URL,
     api: "openai-completions",
-    models: [
-      {
-        id: MOONSHOT_DEFAULT_MODEL_ID,
-        name: "Kimi K2.5",
-        reasoning: false,
-        input: ["text"],
-        cost: MOONSHOT_DEFAULT_COST,
-        contextWindow: MOONSHOT_DEFAULT_CONTEXT_WINDOW,
-        maxTokens: MOONSHOT_DEFAULT_MAX_TOKENS,
-      },
-    ],
+    models: buildMoonshotModels(),
+  };
+}
+
+function buildMoonshotCnProvider(): ProviderConfig {
+  return {
+    baseUrl: MOONSHOT_CN_BASE_URL,
+    api: "openai-completions",
+    models: buildMoonshotModels(),
   };
 }
 
@@ -422,6 +497,13 @@ export async function resolveImplicitProviders(params: {
     resolveApiKeyFromProfiles({ provider: "moonshot", store: authStore });
   if (moonshotKey) {
     providers.moonshot = { ...buildMoonshotProvider(), apiKey: moonshotKey };
+  }
+
+  const moonshotCnKey =
+    resolveEnvApiKeyVarName("moonshot-cn") ??
+    resolveApiKeyFromProfiles({ provider: "moonshot-cn", store: authStore });
+  if (moonshotCnKey) {
+    providers["moonshot-cn"] = { ...buildMoonshotCnProvider(), apiKey: moonshotCnKey };
   }
 
   const syntheticKey =
