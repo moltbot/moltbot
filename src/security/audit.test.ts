@@ -104,6 +104,55 @@ describe("security audit", () => {
     );
   });
 
+  it("emits info when device auto-approve is set to tailscale", async () => {
+    const cfg: MoltbotConfig = {
+      gateway: {
+        devices: {
+          autoApprove: "tailscale",
+        },
+      },
+    };
+
+    const res = await runSecurityAudit({
+      config: cfg,
+      includeFilesystem: false,
+      includeChannelSecurity: false,
+    });
+
+    expect(res.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          checkId: "gateway.devices.auto_approve_tailscale",
+          severity: "info",
+        }),
+      ]),
+    );
+  });
+
+  it("does NOT emit device auto-approve finding when set to none", async () => {
+    const cfg: MoltbotConfig = {
+      gateway: {
+        devices: {
+          autoApprove: "none",
+        },
+      },
+    };
+
+    const res = await runSecurityAudit({
+      config: cfg,
+      includeFilesystem: false,
+      includeChannelSecurity: false,
+    });
+
+    expect(res.findings).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          checkId: "gateway.devices.auto_approve_tailscale",
+        }),
+      ]),
+    );
+  });
+
   it("flags logging.redactSensitive=off", async () => {
     const cfg: OpenClawConfig = {
       logging: { redactSensitive: "off" },

@@ -2970,6 +2970,14 @@ Trusted proxies:
 - When a connection comes from one of these IPs, OpenClaw uses `x-forwarded-for` (or `x-real-ip`) to determine the client IP for local pairing checks and HTTP auth/local checks.
 - Only list proxies you fully control, and ensure they **overwrite** incoming `x-forwarded-for`.
 
+Device auto-approve:
+- `gateway.devices.autoApprove` controls whether new device pairing requests are auto-approved.
+- Valid values: `"none"` (default) or `"tailscale"`.
+- `"none"`: only local (loopback) connections are auto-approved; remote connections require manual approval.
+- `"tailscale"`: auto-approve when the connection authenticates via Tailscale Serve identity (verified via `tailscale whois`).
+- This is useful for personal tailnets where you trust all machines on your network.
+- For shared or corporate tailnets, consider keeping `"none"` and approving devices manually.
+
 Notes:
 
 - `openclaw gateway` refuses to start unless `gateway.mode` is set to `local` (or you pass the override flag).

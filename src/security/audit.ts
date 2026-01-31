@@ -326,6 +326,18 @@ function collectGatewayConfigFindings(
     });
   }
 
+  const deviceAutoApprove = cfg.gateway?.devices?.autoApprove ?? "none";
+  if (deviceAutoApprove === "tailscale") {
+    findings.push({
+      checkId: "gateway.devices.auto_approve_tailscale",
+      severity: "info",
+      title: "Device auto-approve via Tailscale enabled",
+      detail:
+        'gateway.devices.autoApprove="tailscale" auto-approves device pairing for Tailscale-authenticated connections. ' +
+        'Safe for personal tailnets; for shared/corporate tailnets, consider keeping autoApprove="none".',
+    });
+  }
+
   if (cfg.gateway?.controlUi?.allowInsecureAuth === true) {
     findings.push({
       checkId: "gateway.control_ui.insecure_auth",

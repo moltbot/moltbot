@@ -628,6 +628,10 @@ export function attachGatewayWsMessageHandler(params: {
 
         const skipPairing = allowControlUiBypass && hasSharedAuth;
         if (device && devicePublicKey && !skipPairing) {
+          const deviceAutoApprove = configSnapshot.gateway?.devices?.autoApprove ?? "none";
+          const shouldAutoApprove =
+            isLocalClient || (deviceAutoApprove === "tailscale" && authMethod === "tailscale");
+
           const requirePairing = async (reason: string, _paired?: { deviceId: string }) => {
             const pairing = await requestDevicePairing({
               deviceId: device.id,
@@ -639,7 +643,7 @@ export function attachGatewayWsMessageHandler(params: {
               role,
               scopes,
               remoteIp: reportedClientIp,
-              silent: isLocalClient,
+              silent: shouldAutoApprove,
             });
             const context = buildRequestContext();
             if (pairing.request.silent === true) {
@@ -655,6 +659,8 @@ export function attachGatewayWsMessageHandler(params: {
                     deviceId: approved.device.deviceId,
                     decision: "approved",
                     ts: Date.now(),
+                    autoApproved: true,
+                    autoApproveReason: isLocalClient ? "local" : "tailscale",
                   },
                   { dropIfSlow: true },
                 );

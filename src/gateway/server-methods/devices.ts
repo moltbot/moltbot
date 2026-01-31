@@ -84,6 +84,8 @@ export const deviceHandlers: GatewayRequestHandlers = {
         deviceId: approved.device.deviceId,
         decision: "approved",
         ts: Date.now(),
+        autoApproved: false,
+        autoApproveReason: null,
       },
       { dropIfSlow: true },
     );
@@ -116,6 +118,8 @@ export const deviceHandlers: GatewayRequestHandlers = {
         deviceId: rejected.deviceId,
         decision: "rejected",
         ts: Date.now(),
+        autoApproved: false,
+        autoApproveReason: null,
       },
       { dropIfSlow: true },
     );

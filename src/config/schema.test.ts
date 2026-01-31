@@ -102,4 +102,12 @@ describe("config schema", () => {
     expect(defaultsHint?.help).toContain("last");
     expect(listHint?.help).toContain("bluebubbles");
   });
+
+  it("includes gateway.devices.autoApprove ui hints", () => {
+    const res = buildConfigSchema();
+    const autoApproveHint = res.uiHints["gateway.devices.autoApprove"];
+    expect(autoApproveHint?.label).toBe("Device Auto-Approve Policy");
+    expect(autoApproveHint?.help).toContain("none");
+    expect(autoApproveHint?.help).toContain("tailscale");
+  });
 });

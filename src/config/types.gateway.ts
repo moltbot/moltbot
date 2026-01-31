@@ -1,5 +1,12 @@
 export type GatewayBindMode = "auto" | "lan" | "loopback" | "custom" | "tailnet";
 
+export type GatewayDeviceAutoApproveMode = "none" | "tailscale";
+
+export type GatewayDevicesConfig = {
+  /** Auto-approve policy for new device pairing requests. */
+  autoApprove?: GatewayDeviceAutoApproveMode;
+};
+
 export type GatewayTlsConfig = {
   /** Enable TLS for the gateway server. */
   enabled?: boolean;
@@ -235,6 +242,8 @@ export type GatewayConfig = {
   tls?: GatewayTlsConfig;
   http?: GatewayHttpConfig;
   nodes?: GatewayNodesConfig;
+  /** Device pairing settings. */
+  devices?: GatewayDevicesConfig;
   /**
    * IPs of trusted reverse proxies (e.g. Traefik, nginx). When a connection
    * arrives from one of these IPs, the Gateway trusts `x-forwarded-for` (or

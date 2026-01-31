@@ -443,6 +443,12 @@ export const OpenClawSchema = z
           })
           .strict()
           .optional(),
+        devices: z
+          .object({
+            autoApprove: z.enum(["none", "tailscale"]).optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),
