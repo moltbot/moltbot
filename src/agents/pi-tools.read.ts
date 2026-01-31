@@ -274,9 +274,57 @@ export function createSandboxedReadTool(root: string) {
   return wrapSandboxPathGuard(createOpenClawReadTool(base), root);
 }
 
+function getJsonErrorContext(content: string, position: number | undefined): string {
+  if (position === undefined || position < 0) {
+    return content.slice(0, 100);
+  }
+  const start = Math.max(0, position - 40);
+  const end = Math.min(content.length, position + 40);
+  const snippet = content.slice(start, end);
+  const pointer = " ".repeat(Math.min(40, position - start)) + "^";
+  return `${snippet}\n${pointer}`;
+}
+
+function validateJsonContent(filePath: string, content: string): void {
+  if (!filePath.toLowerCase().endsWith(".json")) {
+    return;
+  }
+  try {
+    JSON.parse(content);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const positionMatch = message.match(/position\s+(\d+)/i);
+    const position = positionMatch ? parseInt(positionMatch[1], 10) : undefined;
+    const context = getJsonErrorContext(content, position);
+    throw new Error(`Invalid JSON content for ${filePath}:\n${message}\n\nContext:\n${context}`, {
+      cause: err,
+    });
+  }
+}
+
+export function wrapWriteToolWithJsonValidation(tool: AnyAgentTool): AnyAgentTool {
+  return {
+    ...tool,
+    execute: async (toolCallId, params, signal, onUpdate) => {
+      const record =
+        params && typeof params === "object" ? (params as Record<string, unknown>) : undefined;
+      const filePath = record?.path ?? record?.file_path;
+      const content = record?.content;
+      if (typeof filePath === "string" && typeof content === "string") {
+        validateJsonContent(filePath, content);
+      }
+      return tool.execute(toolCallId, params, signal, onUpdate);
+    },
+  };
+}
+
 export function createSandboxedWriteTool(root: string) {
   const base = createWriteTool(root) as unknown as AnyAgentTool;
-  return wrapSandboxPathGuard(wrapToolParamNormalization(base, CLAUDE_PARAM_GROUPS.write), root);
+  const withValidation = wrapWriteToolWithJsonValidation(base);
+  return wrapSandboxPathGuard(
+    wrapToolParamNormalization(withValidation, CLAUDE_PARAM_GROUPS.write),
+    root,
+  );
 }
 
 export function createSandboxedEditTool(root: string) {
