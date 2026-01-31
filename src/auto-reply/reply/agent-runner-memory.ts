@@ -135,7 +135,11 @@ export async function runMemoryFlushIfNeeded(params: {
           prompt: memoryFlushSettings.prompt,
           extraSystemPrompt: flushSystemPrompt,
           ownerNumbers: params.followupRun.run.ownerNumbers,
-          enforceFinalTag: resolveEnforceFinalTag(params.followupRun.run, provider),
+          enforceFinalTag: resolveEnforceFinalTag(
+            params.followupRun.run,
+            provider,
+            params.followupRun.run.config?.models?.providers?.[provider.split("/")[0]],
+          ),
           provider,
           model,
           authProfileId,

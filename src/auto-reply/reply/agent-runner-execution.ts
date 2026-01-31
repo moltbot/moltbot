@@ -258,7 +258,11 @@ export async function runAgentTurnWithFallback(params: {
             prompt: params.commandBody,
             extraSystemPrompt: params.followupRun.run.extraSystemPrompt,
             ownerNumbers: params.followupRun.run.ownerNumbers,
-            enforceFinalTag: resolveEnforceFinalTag(params.followupRun.run, provider),
+            enforceFinalTag: resolveEnforceFinalTag(
+              params.followupRun.run,
+              provider,
+              params.followupRun.run.config?.models?.providers?.[provider.split("/")[0]],
+            ),
             provider,
             model,
             authProfileId,
