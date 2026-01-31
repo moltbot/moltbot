@@ -363,9 +363,11 @@ export const slackPlugin: ChannelPlugin<ResolvedSlackAccount> = {
             limit,
             before: readStringParam(params, "before"),
             after: readStringParam(params, "after"),
+            threadId: readStringParam(params, "threadId"),
             accountId: accountId ?? undefined,
           },
           cfg,
+          toolContext,
         );
       }
 
