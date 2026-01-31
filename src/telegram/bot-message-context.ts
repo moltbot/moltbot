@@ -187,7 +187,6 @@ export const buildTelegramMessageContext = async ({
   // Allow plugins to deterministically refine the canonical room key used for both
   // transcript identity and FIFO lane ordering.
   sessionKey = await resolveCanonicalRoomKey({
-    cfg,
     roomKey: sessionKey,
     baseRoomKey: baseSessionKey,
     event: {

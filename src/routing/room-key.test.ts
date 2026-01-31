@@ -20,7 +20,6 @@ describe("resolve_room_key hook", () => {
     initializeGlobalHookRunner(makeRegistry([]));
 
     const roomKey = await resolveCanonicalRoomKey({
-      cfg: {},
       roomKey: "agent:main:telegram:dm:123",
       baseRoomKey: "agent:main:telegram:dm:123",
       event: {
@@ -52,7 +51,6 @@ describe("resolve_room_key hook", () => {
     initializeGlobalHookRunner(makeRegistry(hooks));
 
     const roomKey = await resolveCanonicalRoomKey({
-      cfg: {},
       roomKey: "agent:main:telegram:dm:123",
       baseRoomKey: "agent:main:telegram:dm:123",
       event: {
@@ -66,5 +64,67 @@ describe("resolve_room_key hook", () => {
 
     expect(roomKey).toBe("agent:main:telegram:dm:123:proj:proj-abc");
     expect(resolveSessionLane(roomKey)).toBe("session:agent:main:telegram:dm:123:proj:proj-abc");
+  });
+
+  it("falls back to computed key when hook returns empty/whitespace", async () => {
+    const hooks = [
+      {
+        hookName: "resolve_room_key",
+        pluginId: "test",
+        priority: 0,
+        handler: async () => ({ roomKey: "   " }),
+      },
+    ];
+
+    resetGlobalHookRunner();
+    initializeGlobalHookRunner(makeRegistry(hooks));
+
+    const roomKey = await resolveCanonicalRoomKey({
+      roomKey: "agent:main:telegram:dm:123",
+      baseRoomKey: "agent:main:telegram:dm:123",
+      event: {
+        agentId: "main",
+        channel: "telegram",
+        accountId: "default",
+        peer: { kind: "dm", id: "123" },
+        messageId: 3,
+      },
+    });
+
+    expect(roomKey).toBe("agent:main:telegram:dm:123");
+  });
+
+  it("uses first valid answer in priority order", async () => {
+    const hooks = [
+      {
+        hookName: "resolve_room_key",
+        pluginId: "high",
+        priority: 10,
+        handler: async () => ({ roomKey: "agent:main:telegram:dm:123:hi" }),
+      },
+      {
+        hookName: "resolve_room_key",
+        pluginId: "low",
+        priority: 0,
+        handler: async () => ({ roomKey: "agent:main:telegram:dm:123:lo" }),
+      },
+    ];
+
+    resetGlobalHookRunner();
+    initializeGlobalHookRunner(makeRegistry(hooks));
+
+    const roomKey = await resolveCanonicalRoomKey({
+      roomKey: "agent:main:telegram:dm:123",
+      baseRoomKey: "agent:main:telegram:dm:123",
+      event: {
+        agentId: "main",
+        channel: "telegram",
+        accountId: "default",
+        peer: { kind: "dm", id: "123" },
+        messageId: 4,
+      },
+    });
+
+    expect(roomKey).toBe("agent:main:telegram:dm:123:hi");
   });
 });

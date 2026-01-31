@@ -210,14 +210,33 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
     event: PluginHookResolveRoomKeyEvent,
     ctx: PluginHookResolveRoomKeyContext,
   ): Promise<PluginHookResolveRoomKeyResult | undefined> {
-    return runModifyingHook<"resolve_room_key", PluginHookResolveRoomKeyResult>(
-      "resolve_room_key",
-      event,
-      ctx,
-      (acc, next) => ({
-        roomKey: next.roomKey ?? acc?.roomKey,
-      }),
-    );
+    // Intentionally non-compositional: selecting a canonical room key must be deterministic.
+    // First valid answer in priority order wins.
+    const hooks = getHooksForName(registry, "resolve_room_key");
+    if (hooks.length === 0) {
+      return undefined;
+    }
+
+    logger?.debug?.(`[hooks] running resolve_room_key (${hooks.length} handlers, sequential)`);
+
+    for (const hook of hooks) {
+      try {
+        const out = await (hook.handler as any)(event, ctx);
+        const proposed = typeof out?.roomKey === "string" ? out.roomKey.trim() : "";
+        if (proposed) {
+          return { roomKey: proposed };
+        }
+      } catch (err) {
+        const msg = `[hooks] resolve_room_key handler from ${hook.pluginId} failed: ${String(err)}`;
+        if (catchErrors) {
+          logger?.error(msg);
+        } else {
+          throw new Error(msg, { cause: err });
+        }
+      }
+    }
+
+    return undefined;
   }
 
   /**
