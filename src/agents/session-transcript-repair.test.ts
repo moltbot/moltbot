@@ -109,4 +109,97 @@ describe("sanitizeToolUseResultPairing", () => {
     expect(out.some((m) => m.role === "toolResult")).toBe(false);
     expect(out.map((m) => m.role)).toEqual(["user", "assistant"]);
   });
+
+  it("deduplicates tool_use IDs across assistant messages", () => {
+    // This test ensures that duplicate tool_use IDs in different assistant messages
+    // are remapped to unique IDs (Anthropic requires unique tool_use IDs)
+    const input = [
+      {
+        role: "assistant",
+        content: [{ type: "toolCall", id: "call_1", name: "read", arguments: {} }],
+      },
+      {
+        role: "toolResult",
+        toolCallId: "call_1",
+        toolName: "read",
+        content: [{ type: "text", text: "first result" }],
+        isError: false,
+      },
+      { role: "user", content: "do it again" },
+      {
+        role: "assistant",
+        content: [{ type: "toolCall", id: "call_1", name: "read", arguments: {} }], // Duplicate ID
+      },
+      {
+        role: "toolResult",
+        toolCallId: "call_1",
+        toolName: "read",
+        content: [{ type: "text", text: "second result" }],
+        isError: false,
+      },
+    ] satisfies AgentMessage[];
+
+    const out = sanitizeToolUseResultPairing(input);
+
+    // Both tool calls should exist but with unique IDs
+    const assistants = out.filter((m) => m.role === "assistant") as Array<{
+      content?: Array<{ type?: string; id?: string }>;
+    }>;
+    expect(assistants).toHaveLength(2);
+
+    const firstToolCallId = assistants[0]?.content?.[0]?.id;
+    const secondToolCallId = assistants[1]?.content?.[0]?.id;
+
+    // First ID should remain unchanged
+    expect(firstToolCallId).toBe("call_1");
+    // Second ID should be remapped to be unique
+    expect(secondToolCallId).not.toBe("call_1");
+    expect(secondToolCallId).toBe("call_1_2");
+
+    // Tool results should have matching IDs
+    const results = out.filter((m) => m.role === "toolResult") as Array<{
+      toolCallId?: string;
+    }>;
+    expect(results).toHaveLength(2);
+    expect(results[0]?.toolCallId).toBe(firstToolCallId);
+    expect(results[1]?.toolCallId).toBe(secondToolCallId);
+  });
+
+  it("handles toolUse type blocks with duplicate IDs", () => {
+    const input = [
+      {
+        role: "assistant",
+        content: [{ type: "toolUse", id: "toolu_1", name: "exec", input: {} }],
+      },
+      {
+        role: "toolResult",
+        toolCallId: "toolu_1",
+        toolName: "exec",
+        content: [{ type: "text", text: "ok" }],
+        isError: false,
+      },
+      { role: "user", content: "again" },
+      {
+        role: "assistant",
+        content: [{ type: "toolUse", id: "toolu_1", name: "exec", input: {} }], // Duplicate
+      },
+      {
+        role: "toolResult",
+        toolCallId: "toolu_1",
+        toolName: "exec",
+        content: [{ type: "text", text: "ok again" }],
+        isError: false,
+      },
+    ] satisfies AgentMessage[];
+
+    const out = sanitizeToolUseResultPairing(input);
+
+    const assistants = out.filter((m) => m.role === "assistant") as Array<{
+      content?: Array<{ type?: string; id?: string }>;
+    }>;
+    const ids = assistants.map((a) => a.content?.[0]?.id);
+
+    // All IDs should be unique
+    expect(new Set(ids).size).toBe(ids.length);
+  });
 });
