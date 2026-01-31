@@ -1,4 +1,4 @@
-export type TtsProvider = "elevenlabs" | "openai" | "edge";
+export type TtsProvider = "elevenlabs" | "openai" | "edge" | "fish";
 
 export type TtsMode = "final" | "all";
 
@@ -72,6 +72,18 @@ export type TtsConfig = {
     saveSubtitles?: boolean;
     proxy?: string;
     timeoutMs?: number;
+  };
+  /** Fish Audio configuration. */
+  fish?: {
+    apiKey?: string;
+    baseUrl?: string;
+    referenceId?: string;
+    temperature?: number;
+    prosody?: {
+      speed?: number;
+      volume?: number;
+    };
+    latency?: "low" | "normal" | "balanced";
   };
   /** Optional path for local TTS user preferences JSON. */
   prefsPath?: string;
