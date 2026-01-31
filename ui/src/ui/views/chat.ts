@@ -108,6 +108,78 @@ function generateAttachmentId(): string {
   return `att-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+const MAX_IMAGE_DIMENSION = 1568;
+const JPEG_QUALITY = 0.8;
+const MAX_DATA_URL_BYTES = 4 * 1024 * 1024; // 4 MB target
+
+function canvasHasAlpha(ctx: CanvasRenderingContext2D, w: number, h: number): boolean {
+  const data = ctx.getImageData(0, 0, w, h).data;
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] < 255) return true;
+  }
+  return false;
+}
+
+async function compressImage(
+  dataUrl: string,
+  mimeType: string,
+): Promise<{ dataUrl: string; mimeType: string }> {
+  const img = new Image();
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+
+  const { width, height } = img;
+  const needsResize = width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION;
+  const needsCompress = dataUrl.length > MAX_DATA_URL_BYTES;
+
+  if (!needsResize && !needsCompress) {
+    return { dataUrl, mimeType };
+  }
+
+  let targetW = width;
+  let targetH = height;
+  if (needsResize) {
+    const scale = MAX_IMAGE_DIMENSION / Math.max(width, height);
+    targetW = Math.round(width * scale);
+    targetH = Math.round(height * scale);
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = targetW;
+  canvas.height = targetH;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(img, 0, 0, targetW, targetH);
+
+  // Only keep PNG if the image actually uses transparency; screenshots are
+  // PNG but fully opaque — JPEG compresses them far better.
+  const hasAlpha = mimeType === "image/png" && canvasHasAlpha(ctx, targetW, targetH);
+
+  if (hasAlpha) {
+    const result = canvas.toDataURL("image/png");
+    if (result.length <= MAX_DATA_URL_BYTES) {
+      return { dataUrl: result, mimeType: "image/png" };
+    }
+    // PNG still too large — fall through to JPEG (alpha will be flattened)
+  }
+
+  // JPEG with decreasing quality until under budget
+  let quality = JPEG_QUALITY;
+  while (quality >= 0.3) {
+    const result = canvas.toDataURL("image/jpeg", quality);
+    if (result.length <= MAX_DATA_URL_BYTES) {
+      return { dataUrl: result, mimeType: "image/jpeg" };
+    }
+    quality -= 0.1;
+  }
+
+  // Last resort: lowest quality JPEG
+  const fallback = canvas.toDataURL("image/jpeg", 0.2);
+  return { dataUrl: fallback, mimeType: "image/jpeg" };
+}
+
 function handlePaste(
   e: ClipboardEvent,
   props: ChatProps,
@@ -132,12 +204,13 @@ function handlePaste(
     if (!file) continue;
 
     const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
+    reader.onload = async () => {
+      const rawDataUrl = reader.result as string;
+      const { dataUrl, mimeType } = await compressImage(rawDataUrl, file.type);
       const newAttachment: ChatAttachment = {
         id: generateAttachmentId(),
         dataUrl,
-        mimeType: file.type,
+        mimeType,
       };
       const current = props.attachments ?? [];
       props.onAttachmentsChange?.([...current, newAttachment]);
