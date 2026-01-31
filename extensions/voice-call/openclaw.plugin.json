@@ -134,6 +134,11 @@
       "label": "ElevenLabs Base URL",
       "advanced": true
     },
+    "tts.elevenlabs.optimizeStreamingLatency": {
+      "label": "ElevenLabs Latency Optimization",
+      "help": "0=default, 1=normal (~50%), 2=strong (~75%), 3=max, 4=max+no normalizer",
+      "advanced": true
+    },
     "publicUrl": {
       "label": "Public Webhook URL",
       "advanced": true
@@ -442,6 +447,11 @@
               },
               "languageCode": {
                 "type": "string"
+              },
+              "optimizeStreamingLatency": {
+                "type": "integer",
+                "enum": [0, 1, 2, 3, 4],
+                "description": "Latency optimization level (0=default, 4=max optimization)"
               },
               "voiceSettings": {
                 "type": "object",

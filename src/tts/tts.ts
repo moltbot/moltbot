@@ -98,6 +98,7 @@ export type ResolvedTtsConfig = {
     seed?: number;
     applyTextNormalization?: "auto" | "on" | "off";
     languageCode?: string;
+    optimizeStreamingLatency?: 0 | 1 | 2 | 3 | 4;
     voiceSettings: {
       stability: number;
       similarityBoost: number;
@@ -267,6 +268,7 @@ export function resolveTtsConfig(cfg: OpenClawConfig): ResolvedTtsConfig {
       seed: raw.elevenlabs?.seed,
       applyTextNormalization: raw.elevenlabs?.applyTextNormalization,
       languageCode: raw.elevenlabs?.languageCode,
+      optimizeStreamingLatency: raw.elevenlabs?.optimizeStreamingLatency,
       voiceSettings: {
         stability:
           raw.elevenlabs?.voiceSettings?.stability ?? DEFAULT_ELEVENLABS_VOICE_SETTINGS.stability,
@@ -1009,6 +1011,7 @@ async function elevenLabsTTS(params: {
   seed?: number;
   applyTextNormalization?: "auto" | "on" | "off";
   languageCode?: string;
+  optimizeStreamingLatency?: 0 | 1 | 2 | 3 | 4;
   voiceSettings: ResolvedTtsConfig["elevenlabs"]["voiceSettings"];
   timeoutMs: number;
 }): Promise<Buffer> {
@@ -1022,6 +1025,7 @@ async function elevenLabsTTS(params: {
     seed,
     applyTextNormalization,
     languageCode,
+    optimizeStreamingLatency,
     voiceSettings,
     timeoutMs,
   } = params;
@@ -1040,6 +1044,9 @@ async function elevenLabsTTS(params: {
     const url = new URL(`${normalizeElevenLabsBaseUrl(baseUrl)}/v1/text-to-speech/${voiceId}`);
     if (outputFormat) {
       url.searchParams.set("output_format", outputFormat);
+    }
+    if (optimizeStreamingLatency != null) {
+      url.searchParams.set("optimize_streaming_latency", String(optimizeStreamingLatency));
     }
 
     const response = await fetch(url.toString(), {
@@ -1284,6 +1291,7 @@ export async function textToSpeech(params: {
           seed: seedOverride ?? config.elevenlabs.seed,
           applyTextNormalization: normalizationOverride ?? config.elevenlabs.applyTextNormalization,
           languageCode: languageOverride ?? config.elevenlabs.languageCode,
+          optimizeStreamingLatency: config.elevenlabs.optimizeStreamingLatency,
           voiceSettings,
           timeoutMs: config.timeoutMs,
         });
@@ -1377,6 +1385,7 @@ export async function textToSpeechTelephony(params: {
           seed: config.elevenlabs.seed,
           applyTextNormalization: config.elevenlabs.applyTextNormalization,
           languageCode: config.elevenlabs.languageCode,
+          optimizeStreamingLatency: config.elevenlabs.optimizeStreamingLatency,
           voiceSettings: config.elevenlabs.voiceSettings,
           timeoutMs: config.timeoutMs,
         });

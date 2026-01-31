@@ -45,6 +45,8 @@ export type TtsConfig = {
     seed?: number;
     applyTextNormalization?: "auto" | "on" | "off";
     languageCode?: string;
+    /** Latency optimization level (0-4). Higher = more optimization. */
+    optimizeStreamingLatency?: 0 | 1 | 2 | 3 | 4;
     voiceSettings?: {
       stability?: number;
       similarityBoost?: number;

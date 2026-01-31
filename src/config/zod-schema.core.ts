@@ -188,6 +188,7 @@ export const TtsConfigSchema = z
         seed: z.number().int().min(0).max(4294967295).optional(),
         applyTextNormalization: z.enum(["auto", "on", "off"]).optional(),
         languageCode: z.string().optional(),
+        optimizeStreamingLatency: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
         voiceSettings: z
           .object({
             stability: z.number().min(0).max(1).optional(),
