@@ -37,6 +37,7 @@ export async function handleDiscordMessageAction(
     const mediaUrl = readStringParam(params, "media", { trim: false });
     const replyTo = readStringParam(params, "replyTo");
     const embeds = Array.isArray(params.embeds) ? params.embeds : undefined;
+    const components = Array.isArray(params.components) ? params.components : undefined;
     return await handleDiscordAction(
       {
         action: "sendMessage",
@@ -46,6 +47,7 @@ export async function handleDiscordMessageAction(
         mediaUrl: mediaUrl ?? undefined,
         replyTo: replyTo ?? undefined,
         embeds,
+        components,
       },
       cfg,
     );
@@ -180,6 +182,10 @@ export async function handleDiscordMessageAction(
   if (action === "thread-create") {
     const name = readStringParam(params, "threadName", { required: true });
     const messageId = readStringParam(params, "messageId");
+    // Optional initial post content (required for forum post creation).
+    const content = readStringParam(params, "message");
+    // Optional forum tag ids.
+    const appliedTagIds = readStringArrayParam(params, "appliedTagIds");
     const autoArchiveMinutes = readNumberParam(params, "autoArchiveMin", {
       integer: true,
     });
@@ -190,6 +196,8 @@ export async function handleDiscordMessageAction(
         channelId: resolveChannelId(),
         name,
         messageId,
+        content,
+        appliedTagIds,
         autoArchiveMinutes,
       },
       cfg,
