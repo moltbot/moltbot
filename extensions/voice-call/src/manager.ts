@@ -841,6 +841,19 @@ export class CallManager {
     // Calls older than maxDurationSeconds are definitely stale (fallback check)
     const maxAgeMs = this.config.maxDurationSeconds * 1000;
     const now = Date.now();
+    const verificationQueue: Array<[CallId, CallRecord]> = [];
+
+    const registerActiveCall = (callId: CallId, call: CallRecord): void => {
+      this.activeCalls.set(callId, call);
+      // Populate providerCallId mapping for lookups
+      if (call.providerCallId) {
+        this.providerCallIdMap.set(call.providerCallId, callId);
+      }
+      // Populate processed event IDs
+      for (const eventId of call.processedEventIds) {
+        this.processedEventIds.add(eventId);
+      }
+    };
 
     // Only keep non-terminal calls that are verified active
     for (const [callId, call] of callMap) {
@@ -856,37 +869,47 @@ export class CallManager {
         continue;
       }
 
-      // Verify with provider if call is still active
-      if (call.providerCallId && this.provider) {
+      // If there's no provider call ID or provider, keep as-is
+      if (!call.providerCallId || !this.provider) {
+        registerActiveCall(callId, call);
+        continue;
+      }
+
+      verificationQueue.push([callId, call]);
+    }
+
+    if (!this.provider || verificationQueue.length === 0) return;
+
+    const concurrency = Math.min(5, verificationQueue.length);
+    const queue = [...verificationQueue];
+
+    const workers = Array.from({ length: concurrency }, async () => {
+      while (queue.length > 0) {
+        const [callId, call] = queue.shift()!;
+
         try {
           const status = await this.provider.getCallStatus({
-            providerCallId: call.providerCallId,
+            providerCallId: call.providerCallId!,
           });
+
           if (status.isTerminal) {
             console.log(
               `[voice-call] Skipping ended call ${callId} (provider status: ${status.status})`,
             );
             continue;
           }
+
+          registerActiveCall(callId, call);
         } catch (err) {
           // If we can't verify, skip the call to be safe
           console.log(
             `[voice-call] Skipping unverifiable call ${callId}: ${err instanceof Error ? err.message : String(err)}`,
           );
-          continue;
         }
       }
+    });
 
-      this.activeCalls.set(callId, call);
-      // Populate providerCallId mapping for lookups
-      if (call.providerCallId) {
-        this.providerCallIdMap.set(call.providerCallId, callId);
-      }
-      // Populate processed event IDs
-      for (const eventId of call.processedEventIds) {
-        this.processedEventIds.add(eventId);
-      }
-    }
+    await Promise.all(workers);
   }
 
   /**

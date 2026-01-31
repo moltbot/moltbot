@@ -399,11 +399,14 @@ export class PlivoProvider implements VoiceCallProvider {
 
   async getCallStatus(input: GetCallStatusInput): Promise<GetCallStatusResult> {
     const terminalStatuses = new Set([
+      "busy",
+      "cancel",
+      "canceled",
+      "cancelled",
       "completed",
       "failed",
-      "busy",
       "no-answer",
-      "cancel",
+      "no_answer",
     ]);
 
     try {
@@ -426,9 +429,10 @@ export class PlivoProvider implements VoiceCallProvider {
 
       const data = (await response.json()) as { call_status?: string };
       const status = data.call_status || "unknown";
+      const normalized = status.toLowerCase();
       return {
         status,
-        isTerminal: terminalStatuses.has(status),
+        isTerminal: terminalStatuses.has(normalized),
       };
     } catch (err) {
       return {

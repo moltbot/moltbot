@@ -166,11 +166,16 @@ export class MockProvider implements VoiceCallProvider {
     // No-op for mock
   }
 
-  async getCallStatus(_input: GetCallStatusInput): Promise<GetCallStatusResult> {
-    // Mock always returns completed (stale) to test cleanup logic
+  async getCallStatus(input: GetCallStatusInput): Promise<GetCallStatusResult> {
+    const normalized = input.providerCallId.toLowerCase();
+    const isTerminal =
+      normalized.includes("stale") ||
+      normalized.includes("ended") ||
+      normalized.includes("completed");
+
     return {
-      status: "completed",
-      isTerminal: true,
+      status: isTerminal ? "completed" : "in-progress",
+      isTerminal,
     };
   }
 }

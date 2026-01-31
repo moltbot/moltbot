@@ -577,11 +577,13 @@ export class TwilioProvider implements VoiceCallProvider {
    */
   async getCallStatus(input: GetCallStatusInput): Promise<GetCallStatusResult> {
     const terminalStatuses = new Set([
+      "busy",
+      "canceled",
+      "cancelled",
       "completed",
       "failed",
-      "busy",
       "no-answer",
-      "canceled",
+      "no_answer",
     ]);
 
     try {
@@ -592,9 +594,10 @@ export class TwilioProvider implements VoiceCallProvider {
       );
 
       const status = result?.status || "unknown";
+      const normalized = status.toLowerCase();
       return {
         status,
-        isTerminal: terminalStatuses.has(status),
+        isTerminal: terminalStatuses.has(normalized),
       };
     } catch (err) {
       // If we can't reach Twilio, assume call is stale
