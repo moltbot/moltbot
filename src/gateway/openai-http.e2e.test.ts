@@ -429,4 +429,177 @@ describe("OpenAI-compatible HTTP API (e2e)", () => {
       // shared server
     }
   });
+
+  it("passes client tools to agentCommand", async () => {
+    const port = enabledPort;
+    agentCommand.mockReset();
+    agentCommand.mockResolvedValueOnce({ payloads: [{ text: "ok" }] } as never);
+
+    const tools = [
+      {
+        type: "function",
+        function: {
+          name: "get_weather",
+          description: "Get current weather",
+          parameters: { type: "object", properties: { location: { type: "string" } } },
+        },
+      },
+    ];
+
+    const res = await postChatCompletions(port, {
+      model: "openclaw",
+      messages: [{ role: "user", content: "What's the weather?" }],
+      tools,
+    });
+    expect(res.status).toBe(200);
+
+    const [opts] = agentCommand.mock.calls[0] ?? [];
+    const clientTools = (opts as { clientTools?: unknown[] } | undefined)?.clientTools;
+    expect(clientTools).toBeDefined();
+    expect(clientTools).toHaveLength(1);
+    expect((clientTools?.[0] as { function?: { name?: string } })?.function?.name).toBe(
+      "get_weather",
+    );
+    await res.text();
+  });
+
+  it("handles tool_choice=none by not passing tools", async () => {
+    const port = enabledPort;
+    agentCommand.mockReset();
+    agentCommand.mockResolvedValueOnce({ payloads: [{ text: "ok" }] } as never);
+
+    const res = await postChatCompletions(port, {
+      model: "openclaw",
+      messages: [{ role: "user", content: "hi" }],
+      tools: [{ type: "function", function: { name: "test_tool" } }],
+      tool_choice: "none",
+    });
+    expect(res.status).toBe(200);
+
+    const [opts] = agentCommand.mock.calls[0] ?? [];
+    const clientTools = (opts as { clientTools?: unknown[] } | undefined)?.clientTools;
+    expect(clientTools).toBeUndefined();
+    await res.text();
+  });
+
+  it("handles tool_choice=required with extra system prompt", async () => {
+    const port = enabledPort;
+    agentCommand.mockReset();
+    agentCommand.mockResolvedValueOnce({ payloads: [{ text: "ok" }] } as never);
+
+    const res = await postChatCompletions(port, {
+      model: "openclaw",
+      messages: [{ role: "user", content: "hi" }],
+      tools: [{ type: "function", function: { name: "test_tool" } }],
+      tool_choice: "required",
+    });
+    expect(res.status).toBe(200);
+
+    const [opts] = agentCommand.mock.calls[0] ?? [];
+    const extraSystemPrompt =
+      (opts as { extraSystemPrompt?: string } | undefined)?.extraSystemPrompt ?? "";
+    expect(extraSystemPrompt).toContain("must call one of the available tools");
+    await res.text();
+  });
+
+  it("returns tool_calls in non-streaming response", async () => {
+    const port = enabledPort;
+    agentCommand.mockReset();
+    agentCommand.mockResolvedValueOnce({
+      payloads: [],
+      meta: {
+        stopReason: "tool_calls",
+        pendingToolCalls: [
+          { id: "call_123", name: "get_weather", arguments: '{"location":"NYC"}' },
+        ],
+      },
+    } as never);
+
+    const res = await postChatCompletions(port, {
+      model: "openclaw",
+      messages: [{ role: "user", content: "What's the weather in NYC?" }],
+      tools: [{ type: "function", function: { name: "get_weather" } }],
+    });
+    expect(res.status).toBe(200);
+
+    const json = (await res.json()) as Record<string, unknown>;
+    expect(json.object).toBe("chat.completion");
+
+    const choice0 = (json.choices as Array<Record<string, unknown>>)[0] ?? {};
+    expect(choice0.finish_reason).toBe("tool_calls");
+
+    const msg = choice0.message as Record<string, unknown>;
+    expect(msg.content).toBeNull();
+    expect(msg.tool_calls).toBeDefined();
+
+    const toolCalls = msg.tool_calls as Array<Record<string, unknown>>;
+    expect(toolCalls).toHaveLength(1);
+    expect(toolCalls[0]?.id).toBe("call_123");
+    expect(toolCalls[0]?.type).toBe("function");
+    expect((toolCalls[0]?.function as Record<string, unknown>)?.name).toBe("get_weather");
+    expect((toolCalls[0]?.function as Record<string, unknown>)?.arguments).toBe(
+      '{"location":"NYC"}',
+    );
+  });
+
+  it("returns tool_calls in streaming response", async () => {
+    const port = enabledPort;
+    agentCommand.mockReset();
+    agentCommand.mockResolvedValueOnce({
+      payloads: [],
+      meta: {
+        stopReason: "tool_calls",
+        pendingToolCalls: [{ id: "call_456", name: "search", arguments: '{"query":"test"}' }],
+      },
+    } as never);
+
+    const res = await postChatCompletions(port, {
+      stream: true,
+      model: "openclaw",
+      messages: [{ role: "user", content: "Search for test" }],
+      tools: [{ type: "function", function: { name: "search" } }],
+    });
+    expect(res.status).toBe(200);
+
+    const text = await res.text();
+    const data = parseSseDataLines(text);
+    expect(data[data.length - 1]).toBe("[DONE]");
+
+    const jsonChunks = data
+      .filter((d) => d !== "[DONE]")
+      .map((d) => JSON.parse(d) as Record<string, unknown>);
+
+    const toolCallChunk = jsonChunks.find((c) => {
+      const choices = c.choices as Array<Record<string, unknown>> | undefined;
+      const delta = choices?.[0]?.delta as Record<string, unknown> | undefined;
+      return delta?.tool_calls !== undefined;
+    });
+    expect(toolCallChunk).toBeDefined();
+
+    const choices = toolCallChunk?.choices as Array<Record<string, unknown>>;
+    const delta = choices?.[0]?.delta as Record<string, unknown>;
+    const toolCalls = delta?.tool_calls as Array<Record<string, unknown>>;
+    expect(toolCalls?.[0]?.id).toBe("call_456");
+    expect((toolCalls?.[0]?.function as Record<string, unknown>)?.name).toBe("search");
+
+    const finishChunk = jsonChunks.find((c) => {
+      const choices = c.choices as Array<Record<string, unknown>> | undefined;
+      return choices?.[0]?.finish_reason === "tool_calls";
+    });
+    expect(finishChunk).toBeDefined();
+  });
+
+  it("rejects tool_choice=required with no tools", async () => {
+    const port = enabledPort;
+    const res = await postChatCompletions(port, {
+      model: "openclaw",
+      messages: [{ role: "user", content: "hi" }],
+      tool_choice: "required",
+    });
+    expect(res.status).toBe(400);
+
+    const json = (await res.json()) as Record<string, unknown>;
+    expect((json.error as Record<string, unknown>)?.type).toBe("invalid_request_error");
+    expect((json.error as Record<string, unknown>)?.message).toContain("no tools were provided");
+  });
 });
