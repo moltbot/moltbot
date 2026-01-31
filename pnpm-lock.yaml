@@ -25,6 +25,9 @@ importers:
       '@clack/prompts':
         specifier: ^0.11.0
         version: 0.11.0
+      '@github/copilot-sdk':
+        specifier: ^0.1.19
+        version: 0.1.19
       '@grammyjs/runner':
         specifier: ^2.0.3
         version: 2.0.3(grammy@1.39.3)
@@ -263,8 +266,6 @@ importers:
         version: 3.15.0(typescript@5.9.3)
 
   extensions/bluebubbles: {}
-
-  extensions/copilot-proxy: {}
 
   extensions/diagnostics-otel:
     dependencies:
@@ -1045,6 +1046,50 @@ packages:
 
   '@eshaz/web-worker@1.2.2':
     resolution: {integrity: sha512-WxXiHFmD9u/owrzempiDlBB1ZYqiLnm9s6aPc8AlFQalq2tKmqdmMr9GXOupDgzXtqnBipj8Un0gkIm7Sjf8mw==}
+
+  '@github/copilot-darwin-arm64@0.0.394':
+    resolution: {integrity: sha512-qDmDFiFaYFW45UhxylN2JyQRLVGLCpkr5UmgbfH5e0aksf+69qytK/MwpD2Cq12KdTjyGMEorlADkSu5eftELA==}
+    cpu: [arm64]
+    os: [darwin]
+    hasBin: true
+
+  '@github/copilot-darwin-x64@0.0.394':
+    resolution: {integrity: sha512-iN4YwSVFxhASiBjLk46f+AzRTNHCvYcmyTKBASxieMIhnDxznYmpo+haFKPCv2lCsEWU8s5LARCnXxxx8J1wKA==}
+    cpu: [x64]
+    os: [darwin]
+    hasBin: true
+
+  '@github/copilot-linux-arm64@0.0.394':
+    resolution: {integrity: sha512-9NeGvmO2tGztuneXZfYAyW3fDk6Pdl6Ffg8MAUaevA/p0awvA+ti/Vh0ZSTcI81nDTjkzONvrcIcjYAN7x0oSg==}
+    cpu: [arm64]
+    os: [linux]
+    hasBin: true
+
+  '@github/copilot-linux-x64@0.0.394':
+    resolution: {integrity: sha512-toahsYQORrP/TPSBQ7sxj4/fJg3YUrD0ksCj/Z4y2vT6EwrE9iC2BspKgQRa4CBoCqxYDNB2blc+mQ1UuzPOxg==}
+    cpu: [x64]
+    os: [linux]
+    hasBin: true
+
+  '@github/copilot-sdk@0.1.19':
+    resolution: {integrity: sha512-h/KvYb6g99v9SurNJGxeXUatmP7GO8KHTAb68GYfmgUqH1EUeN5g0xMUc5lvKxAi7hwj2OxRR73dd37zMMiiiQ==}
+    engines: {node: '>=18.0.0'}
+
+  '@github/copilot-win32-arm64@0.0.394':
+    resolution: {integrity: sha512-R7XBP3l+oeDuBrP0KD80ZBEMsZoxAW8QO2MNsDUV8eVrNJnp6KtGHoA+iCsKYKNOD6wHA/q5qm/jR+gpsz46Aw==}
+    cpu: [arm64]
+    os: [win32]
+    hasBin: true
+
+  '@github/copilot-win32-x64@0.0.394':
+    resolution: {integrity: sha512-/XYV8srP+pMXbf9Gc3wr58zCzBZvsdA3X4poSvr2uU8yCZ6E4pD0agFaZ1c/CikANJi8nb0Id3kulhEhePz/3A==}
+    cpu: [x64]
+    os: [win32]
+    hasBin: true
+
+  '@github/copilot@0.0.394':
+    resolution: {integrity: sha512-koSiaHvVwjgppgh+puxf6dgsR8ql/WST1scS5bjzMsJFfWk7f4xtEXla7TCQfSGoZkCmCsr2Tis27v5TpssiCg==}
+    hasBin: true
 
   '@glideapps/ts-necessities@2.2.3':
     resolution: {integrity: sha512-gXi0awOZLHk3TbW55GZLCPP6O+y/b5X1pBXKBVckFONSwF1z1E5ND2BGJsghQFah+pW7pkkyFb2VhUQI2qhL5w==}
@@ -5515,6 +5560,10 @@ packages:
       jsdom:
         optional: true
 
+  vscode-jsonrpc@8.2.1:
+    resolution: {integrity: sha512-kdjOSJ2lLIn7r1rtrMbbNCHjyMPfRnowdKjBQ+mGq6NAW5QY2bEZC/khaC5OR8svbbjvLEaIXkOq45e2X9BIbQ==}
+    engines: {node: '>=14.0.0'}
+
   web-streams-polyfill@3.3.3:
     resolution: {integrity: sha512-d2JWLCivmZYTSIoge9MsgFCZrt571BikcWGYkjC1khllbTeDlGqZ2D8vD8E/lJa8WGWbb7Plm8/XJYV7IJHZZw==}
     engines: {node: '>= 8'}
@@ -6703,6 +6752,39 @@ snapshots:
 
   '@eshaz/web-worker@1.2.2':
     optional: true
+
+  '@github/copilot-darwin-arm64@0.0.394':
+    optional: true
+
+  '@github/copilot-darwin-x64@0.0.394':
+    optional: true
+
+  '@github/copilot-linux-arm64@0.0.394':
+    optional: true
+
+  '@github/copilot-linux-x64@0.0.394':
+    optional: true
+
+  '@github/copilot-sdk@0.1.19':
+    dependencies:
+      '@github/copilot': 0.0.394
+      vscode-jsonrpc: 8.2.1
+      zod: 4.3.6
+
+  '@github/copilot-win32-arm64@0.0.394':
+    optional: true
+
+  '@github/copilot-win32-x64@0.0.394':
+    optional: true
+
+  '@github/copilot@0.0.394':
+    optionalDependencies:
+      '@github/copilot-darwin-arm64': 0.0.394
+      '@github/copilot-darwin-x64': 0.0.394
+      '@github/copilot-linux-arm64': 0.0.394
+      '@github/copilot-linux-x64': 0.0.394
+      '@github/copilot-win32-arm64': 0.0.394
+      '@github/copilot-win32-x64': 0.0.394
 
   '@glideapps/ts-necessities@2.2.3': {}
 
@@ -11699,6 +11781,8 @@ snapshots:
       - terser
       - tsx
       - yaml
+
+  vscode-jsonrpc@8.2.1: {}
 
   web-streams-polyfill@3.3.3: {}
 

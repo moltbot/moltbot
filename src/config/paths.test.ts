@@ -45,15 +45,23 @@ describe("state + config path candidates", () => {
     expect(resolveStateDir(env, () => "/home/test")).toBe(path.resolve("/new/state"));
   });
 
-  it("orders default config candidates in a stable order", () => {
+  it("returns canonical path when no overrides are set", () => {
     const home = "/home/test";
     const candidates = resolveDefaultConfigCandidates({} as NodeJS.ProcessEnv, () => home);
-    const expectedDirs = [".openclaw", ".clawdbot", ".moltbot", ".moldbot"];
-    const expectedFiles = ["openclaw.json", "clawdbot.json", "moltbot.json", "moldbot.json"];
-    const expected = expectedDirs.flatMap((dir) =>
-      expectedFiles.map((file) => path.join(home, dir, file)),
-    );
-    expect(candidates).toEqual(expected);
+    // When no explicit overrides are set, only the canonical path is returned
+    expect(candidates).toEqual([path.join(home, ".openclaw", "openclaw.json")]);
+  });
+
+  it("returns legacy filenames when state dir override is set", () => {
+    const env = { OPENCLAW_STATE_DIR: "/custom/state" } as NodeJS.ProcessEnv;
+    const candidates = resolveDefaultConfigCandidates(env, () => "/home/test");
+    const base = path.resolve("/custom/state");
+    expect(candidates).toEqual([
+      path.join(base, "openclaw.json"),
+      path.join(base, "clawdbot.json"),
+      path.join(base, "moltbot.json"),
+      path.join(base, "moldbot.json"),
+    ]);
   });
 
   it("prefers ~/.openclaw when it exists and legacy dir is missing", async () => {

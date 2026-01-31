@@ -229,8 +229,7 @@ export async function runEmbeddedPiAgent(
           return;
         }
         if (model.provider === "github-copilot") {
-          const { resolveCopilotApiToken } =
-            await import("../../providers/github-copilot-token.js");
+          const { resolveCopilotApiToken } = await import("../../providers/github-copilot-sdk.js");
           const copilotToken = await resolveCopilotApiToken({
             githubToken: apiKeyInfo.apiKey,
           });

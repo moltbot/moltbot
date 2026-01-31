@@ -180,10 +180,12 @@
           - "docs/cli/security.md"
           - "docs/gateway/security.md"
 
-"extensions: copilot-proxy":
+"provider: github-copilot":
   - changed-files:
       - any-glob-to-any-file:
-          - "extensions/copilot-proxy/**"
+          - "src/providers/github-copilot-*.ts"
+          - "docs/providers/github-copilot.md"
+
 "extensions: diagnostics-otel":
   - changed-files:
       - any-glob-to-any-file:

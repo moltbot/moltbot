@@ -156,21 +156,21 @@ export function resolveDefaultConfigCandidates(
 ): string[] {
   const explicit = env.OPENCLAW_CONFIG_PATH?.trim() || env.CLAWDBOT_CONFIG_PATH?.trim();
   if (explicit) return [resolveUserPath(explicit)];
-
-  const candidates: string[] = [];
+  // By default only prefer the canonical ~/.openclaw/openclaw.json candidate.
+  // When an explicit state dir override is supplied, include legacy filenames
+  // for that override so existing installs continue to work.
   const openclawStateDir = env.OPENCLAW_STATE_DIR?.trim() || env.CLAWDBOT_STATE_DIR?.trim();
   if (openclawStateDir) {
     const resolved = resolveUserPath(openclawStateDir);
-    candidates.push(path.join(resolved, CONFIG_FILENAME));
-    candidates.push(...LEGACY_CONFIG_FILENAMES.map((name) => path.join(resolved, name)));
+    return [
+      path.join(resolved, CONFIG_FILENAME),
+      path.join(resolved, "clawdbot.json"),
+      path.join(resolved, "moltbot.json"),
+      path.join(resolved, "moldbot.json"),
+    ];
   }
 
-  const defaultDirs = [newStateDir(homedir), ...legacyStateDirs(homedir)];
-  for (const dir of defaultDirs) {
-    candidates.push(path.join(dir, CONFIG_FILENAME));
-    candidates.push(...LEGACY_CONFIG_FILENAMES.map((name) => path.join(dir, name)));
-  }
-  return candidates;
+  return [path.join(newStateDir(homedir), CONFIG_FILENAME)];
 }
 
 export const DEFAULT_GATEWAY_PORT = 18789;

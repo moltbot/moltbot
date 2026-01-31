@@ -364,7 +364,7 @@ export function registerModelsCli(program: Command) {
 
   auth
     .command("login-github-copilot")
-    .description("Login to GitHub Copilot via GitHub device flow (TTY required)")
+    .description("Verify GitHub Copilot CLI authentication status")
     .option("--profile-id <id>", "Auth profile id (default: github-copilot:github)")
     .option("--yes", "Overwrite existing profile without prompting", false)
     .action(async (opts) => {

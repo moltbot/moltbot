@@ -51,7 +51,7 @@ describe("models-config", () => {
       try {
         vi.resetModules();
 
-        vi.doMock("../providers/github-copilot-token.js", () => ({
+        vi.doMock("../providers/github-copilot-sdk.js", () => ({
           DEFAULT_COPILOT_API_BASE_URL: "https://api.default.test",
           resolveCopilotApiToken: vi.fn().mockRejectedValue(new Error("boom")),
         }));
@@ -105,7 +105,7 @@ describe("models-config", () => {
           ),
         );
 
-        vi.doMock("../providers/github-copilot-token.js", () => ({
+        vi.doMock("../providers/github-copilot-sdk.js", () => ({
           DEFAULT_COPILOT_API_BASE_URL: "https://api.individual.githubcopilot.com",
           resolveCopilotApiToken: vi.fn().mockResolvedValue({
             token: "copilot",

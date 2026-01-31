@@ -1,4 +1,4 @@
-import { githubCopilotLoginCommand } from "../providers/github-copilot-auth.js";
+import { githubCopilotLoginCommand } from "../providers/github-copilot-login.js";
 import type { ApplyAuthChoiceParams, ApplyAuthChoiceResult } from "./auth-choice.apply.js";
 import { applyAuthProfileConfig } from "./onboard-auth.js";
 
@@ -11,10 +11,11 @@ export async function applyAuthChoiceGitHubCopilot(
 
   await params.prompter.note(
     [
-      "This will open a GitHub device login to authorize Copilot.",
+      "This will verify your GitHub Copilot CLI authentication.",
+      "Run 'copilot auth login' first if not already authenticated.",
       "Requires an active GitHub Copilot subscription.",
     ].join("\n"),
-    "GitHub Copilot",
+    "GitHub Copilot SDK",
   );
 
   if (!process.stdin.isTTY) {

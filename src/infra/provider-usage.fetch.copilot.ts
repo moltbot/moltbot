@@ -1,66 +1,24 @@
-import { fetchJson } from "./provider-usage.fetch.shared.js";
-import { clampPercent, PROVIDER_LABELS } from "./provider-usage.shared.js";
-import type { ProviderUsageSnapshot, UsageWindow } from "./provider-usage.types.js";
+/**
+ * GitHub Copilot usage tracking.
+ *
+ * Note: The official @github/copilot-sdk does not currently expose usage/quota APIs.
+ * This module returns a placeholder indicating that usage tracking is not available.
+ */
 
-type CopilotUsageResponse = {
-  quota_snapshots?: {
-    premium_interactions?: { percent_remaining?: number | null };
-    chat?: { percent_remaining?: number | null };
-  };
-  copilot_plan?: string;
-};
+import { PROVIDER_LABELS } from "./provider-usage.shared.js";
+import type { ProviderUsageSnapshot } from "./provider-usage.types.js";
 
 export async function fetchCopilotUsage(
-  token: string,
-  timeoutMs: number,
-  fetchFn: typeof fetch,
+  _token: string,
+  _timeoutMs: number,
+  _fetchFn: typeof fetch,
 ): Promise<ProviderUsageSnapshot> {
-  const res = await fetchJson(
-    "https://api.github.com/copilot_internal/user",
-    {
-      headers: {
-        Authorization: `token ${token}`,
-        "Editor-Version": "vscode/1.96.2",
-        "User-Agent": "GitHubCopilotChat/0.26.7",
-        "X-Github-Api-Version": "2025-04-01",
-      },
-    },
-    timeoutMs,
-    fetchFn,
-  );
-
-  if (!res.ok) {
-    return {
-      provider: "github-copilot",
-      displayName: PROVIDER_LABELS["github-copilot"],
-      windows: [],
-      error: `HTTP ${res.status}`,
-    };
-  }
-
-  const data = (await res.json()) as CopilotUsageResponse;
-  const windows: UsageWindow[] = [];
-
-  if (data.quota_snapshots?.premium_interactions) {
-    const remaining = data.quota_snapshots.premium_interactions.percent_remaining;
-    windows.push({
-      label: "Premium",
-      usedPercent: clampPercent(100 - (remaining ?? 0)),
-    });
-  }
-
-  if (data.quota_snapshots?.chat) {
-    const remaining = data.quota_snapshots.chat.percent_remaining;
-    windows.push({
-      label: "Chat",
-      usedPercent: clampPercent(100 - (remaining ?? 0)),
-    });
-  }
-
+  // The official SDK does not expose usage/quota APIs
+  // Return a placeholder indicating unavailable status
   return {
     provider: "github-copilot",
     displayName: PROVIDER_LABELS["github-copilot"],
-    windows,
-    plan: data.copilot_plan,
+    windows: [],
+    error: "Usage tracking not available via official SDK",
   };
 }
