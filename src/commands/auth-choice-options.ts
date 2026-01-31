@@ -21,7 +21,8 @@ export type AuthChoiceGroupId =
   | "minimax"
   | "synthetic"
   | "venice"
-  | "qwen";
+  | "qwen"
+  | "litellm";
 
 export type AuthChoiceGroup = {
   value: AuthChoiceGroupId;
@@ -120,6 +121,12 @@ const AUTH_CHOICE_GROUP_DEFS: {
     hint: "API key",
     choices: ["opencode-zen"],
   },
+  {
+    value: "litellm",
+    label: "LiteLLM",
+    hint: "OpenAI-compatible proxy (self-hosted)",
+    choices: ["litellm-api-key"],
+  },
 ];
 
 export function buildAuthChoiceOptions(params: {
@@ -193,6 +200,11 @@ export function buildAuthChoiceOptions(params: {
     value: "minimax-api-lightning",
     label: "MiniMax M2.1 Lightning",
     hint: "Faster, higher output cost",
+  });
+  options.push({
+    value: "litellm-api-key",
+    label: "LiteLLM API key",
+    hint: "OpenAI-compatible proxy (any model)",
   });
   if (params.includeSkip) {
     options.push({ value: "skip", label: "Skip for now" });
