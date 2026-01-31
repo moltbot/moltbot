@@ -41,9 +41,6 @@ Model note: while any model is supported, I strongly recommend **Anthropic Pro/M
 - Auth profile rotation (OAuth vs API keys) + fallbacks: [Model failover](https://docs.openclaw.ai/concepts/model-failover)
 
 ## Install (recommended)
-
-
-
 Runtime: **Node ≥22**.
 
 ```bash
