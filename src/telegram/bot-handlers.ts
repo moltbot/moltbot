@@ -37,6 +37,24 @@ export const registerTelegramHandlers = ({
   shouldSkipUpdate,
   processMessage,
   logger,
+  nativeEnabled,
+  nativeCommandNames,
+}: {
+  cfg: unknown;
+  accountId: string;
+  bot: unknown;
+  opts: unknown;
+  runtime: unknown;
+  mediaMaxBytes: number;
+  telegramCfg: unknown;
+  groupAllowFrom: unknown;
+  resolveGroupPolicy: unknown;
+  resolveTelegramGroupConfig: unknown;
+  shouldSkipUpdate: unknown;
+  processMessage: unknown;
+  logger: unknown;
+  nativeEnabled?: boolean;
+  nativeCommandNames?: Set<string>;
 }) => {
   const TELEGRAM_TEXT_FRAGMENT_START_THRESHOLD_CHARS = 4000;
   const TELEGRAM_TEXT_FRAGMENT_MAX_GAP_MS = 1500;
@@ -483,8 +501,25 @@ export const registerTelegramHandlers = ({
         return;
       }
 
-      const chatId = msg.chat.id;
+      // Skip native commands in DMs - they will be handled by bot.command() handlers.
+      // In groups, we still process commands through the message handler for access
+      // control validation (groupPolicy, groupAllowFrom, etc.) before reply generation.
       const isGroup = msg.chat.type === "group" || msg.chat.type === "supergroup";
+      if (!isGroup && nativeEnabled && nativeCommandNames && nativeCommandNames.size > 0) {
+        const rawText = (msg.text ?? "").trim();
+        if (rawText.startsWith("/")) {
+          const commandMatch = rawText.match(/^\/([a-z0-9_]+)/i);
+          if (commandMatch) {
+            const commandName = commandMatch[1].toLowerCase();
+            if (nativeCommandNames.has(commandName)) {
+              logVerbose(`telegram: skipping native command /${commandName} in DM handler`);
+              return;
+            }
+          }
+        }
+      }
+
+      const chatId = msg.chat.id;
       const messageThreadId = (msg as { message_thread_id?: number }).message_thread_id;
       const isForum = (msg.chat as { is_forum?: boolean }).is_forum === true;
       const resolvedThreadId = resolveTelegramForumThreadId({

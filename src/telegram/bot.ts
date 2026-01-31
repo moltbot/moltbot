@@ -6,6 +6,8 @@ import { Bot, webhookCallback } from "grammy";
 import { resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { isControlCommandMessage } from "../auto-reply/command-detection.js";
 import { resolveTextChunkLimit } from "../auto-reply/chunk.js";
+import { listNativeCommandSpecsForConfig } from "../auto-reply/commands-registry.js";
+import { listSkillCommandsForAgents } from "../auto-reply/skill-commands.js";
 import { DEFAULT_GROUP_HISTORY_LIMIT, type HistoryEntry } from "../auto-reply/reply/history.js";
 import {
   isNativeCommandsExplicitlyDisabled,
@@ -260,6 +262,19 @@ export function createTelegramBot(opts: TelegramBotOptions) {
     providerSetting: telegramCfg.commands?.native,
     globalSetting: cfg.commands?.native,
   });
+  // Build set of native command names for deduplication in regular message handler.
+  // This prevents native commands (e.g., /new) from being processed twice.
+  const nativeCommandNames = new Set<string>();
+  if (nativeEnabled) {
+    const skillCommands = nativeSkillsEnabled ? listSkillCommandsForAgents({ cfg }) : [];
+    const nativeSpecs = listNativeCommandSpecsForConfig(cfg, {
+      skillCommands,
+      provider: "telegram",
+    });
+    for (const spec of nativeSpecs) {
+      nativeCommandNames.add(spec.name.toLowerCase());
+    }
+  }
   const useAccessGroups = cfg.commands?.useAccessGroups !== false;
   const ackReactionScope = cfg.messages?.ackReactionScope ?? "group-mentions";
   const mediaMaxBytes = (opts.mediaMaxMb ?? telegramCfg.mediaMaxMb ?? 5) * 1024 * 1024;
@@ -495,6 +510,8 @@ export function createTelegramBot(opts: TelegramBotOptions) {
     shouldSkipUpdate,
     processMessage,
     logger,
+    nativeEnabled,
+    nativeCommandNames,
   });
 
   return bot;
