@@ -190,8 +190,8 @@ export class TelnyxProvider implements VoiceCallProvider {
       providerCallId: data.payload?.call_control_id,
       timestamp: Date.now(),
       direction: TelnyxProvider.parseDirection(data.payload?.direction),
-      from: data.payload?.from || undefined,
-      to: data.payload?.to || undefined,
+      from: data.payload?.from ?? undefined,
+      to: data.payload?.to ?? undefined,
     };
 
     switch (data.event_type) {
