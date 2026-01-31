@@ -55,7 +55,11 @@ describe("bedrock discovery", () => {
       ],
     });
 
-    const models = await discoverBedrockModels({ region: "us-east-1", clientFactory });
+    const models = await discoverBedrockModels({
+      region: "us-east-1",
+      config: { includeInferenceProfiles: false },
+      clientFactory,
+    });
     expect(models).toHaveLength(1);
     expect(models[0]).toMatchObject({
       id: "anthropic.claude-3-7-sonnet-20250219-v1:0",
@@ -88,7 +92,7 @@ describe("bedrock discovery", () => {
 
     const models = await discoverBedrockModels({
       region: "us-east-1",
-      config: { providerFilter: ["amazon"] },
+      config: { providerFilter: ["amazon"], includeInferenceProfiles: false },
       clientFactory,
     });
     expect(models).toHaveLength(0);
@@ -115,7 +119,11 @@ describe("bedrock discovery", () => {
 
     const models = await discoverBedrockModels({
       region: "us-east-1",
-      config: { defaultContextWindow: 64000, defaultMaxTokens: 8192 },
+      config: {
+        defaultContextWindow: 64000,
+        defaultMaxTokens: 8192,
+        includeInferenceProfiles: false,
+      },
       clientFactory,
     });
     expect(models[0]).toMatchObject({ contextWindow: 64000, maxTokens: 8192 });
@@ -140,8 +148,16 @@ describe("bedrock discovery", () => {
       ],
     });
 
-    await discoverBedrockModels({ region: "us-east-1", clientFactory });
-    await discoverBedrockModels({ region: "us-east-1", clientFactory });
+    await discoverBedrockModels({
+      region: "us-east-1",
+      config: { includeInferenceProfiles: false },
+      clientFactory,
+    });
+    await discoverBedrockModels({
+      region: "us-east-1",
+      config: { includeInferenceProfiles: false },
+      clientFactory,
+    });
     expect(sendMock).toHaveBeenCalledTimes(1);
   });
 
@@ -180,14 +196,175 @@ describe("bedrock discovery", () => {
 
     await discoverBedrockModels({
       region: "us-east-1",
-      config: { refreshInterval: 0 },
+      config: { refreshInterval: 0, includeInferenceProfiles: false },
       clientFactory,
     });
     await discoverBedrockModels({
       region: "us-east-1",
-      config: { refreshInterval: 0 },
+      config: { refreshInterval: 0, includeInferenceProfiles: false },
       clientFactory,
     });
     expect(sendMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("discovers inference profiles and inherits base model metadata", async () => {
+    const { discoverBedrockModels, resetBedrockDiscoveryCacheForTest } =
+      await import("./bedrock-discovery.js");
+    resetBedrockDiscoveryCacheForTest();
+
+    sendMock
+      .mockResolvedValueOnce({
+        modelSummaries: [
+          {
+            modelId: "anthropic.claude-3-7-sonnet-20250219-v1:0",
+            modelName: "Claude 3.7 Sonnet",
+            providerName: "anthropic",
+            inputModalities: ["TEXT", "IMAGE"],
+            outputModalities: ["TEXT"],
+            responseStreamingSupported: true,
+            modelLifecycle: { status: "ACTIVE" },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        inferenceProfileSummaries: [
+          {
+            inferenceProfileId: "us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+            inferenceProfileName: "Claude 3.7 Sonnet (US)",
+            status: "ACTIVE",
+            models: [
+              {
+                modelArn:
+                  "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-7-sonnet-20250219-v1:0",
+              },
+            ],
+          },
+        ],
+      });
+
+    const models = await discoverBedrockModels({
+      region: "us-east-1",
+      config: { includeInferenceProfiles: true },
+      clientFactory,
+    });
+
+    expect(sendMock).toHaveBeenCalledTimes(2);
+    expect(models).toHaveLength(2);
+
+    const baseModel = models.find((m) => m.id === "anthropic.claude-3-7-sonnet-20250219-v1:0");
+    const profile = models.find((m) => m.id === "us.anthropic.claude-3-7-sonnet-20250219-v1:0");
+
+    expect(baseModel).toMatchObject({
+      id: "anthropic.claude-3-7-sonnet-20250219-v1:0",
+      name: "Claude 3.7 Sonnet",
+      reasoning: false,
+      input: ["text", "image"],
+      contextWindow: 32000,
+      maxTokens: 4096,
+    });
+
+    expect(profile).toMatchObject({
+      id: "us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+      name: "Claude 3.7 Sonnet (US)",
+      reasoning: false,
+      input: ["text", "image"],
+      contextWindow: 32000,
+      maxTokens: 4096,
+    });
+  });
+
+  it("filters inference profiles by provider filter", async () => {
+    const { discoverBedrockModels, resetBedrockDiscoveryCacheForTest } =
+      await import("./bedrock-discovery.js");
+    resetBedrockDiscoveryCacheForTest();
+
+    sendMock
+      .mockResolvedValueOnce({
+        modelSummaries: [
+          {
+            modelId: "anthropic.claude-3-7-sonnet-20250219-v1:0",
+            modelName: "Claude 3.7 Sonnet",
+            providerName: "anthropic",
+            inputModalities: ["TEXT"],
+            outputModalities: ["TEXT"],
+            responseStreamingSupported: true,
+            modelLifecycle: { status: "ACTIVE" },
+          },
+          {
+            modelId: "amazon.titan-text-v1",
+            modelName: "Titan Text",
+            providerName: "amazon",
+            inputModalities: ["TEXT"],
+            outputModalities: ["TEXT"],
+            responseStreamingSupported: true,
+            modelLifecycle: { status: "ACTIVE" },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        inferenceProfileSummaries: [
+          {
+            inferenceProfileId: "us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+            inferenceProfileName: "Claude 3.7 Sonnet (US)",
+            status: "ACTIVE",
+            models: [
+              {
+                modelArn:
+                  "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-7-sonnet-20250219-v1:0",
+              },
+            ],
+          },
+          {
+            inferenceProfileId: "us.amazon.titan-text-v1",
+            inferenceProfileName: "Titan Text (US)",
+            status: "ACTIVE",
+            models: [
+              {
+                modelArn: "arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-text-v1",
+              },
+            ],
+          },
+        ],
+      });
+
+    const models = await discoverBedrockModels({
+      region: "us-east-1",
+      config: { providerFilter: ["anthropic"], includeInferenceProfiles: true },
+      clientFactory,
+    });
+
+    expect(models).toHaveLength(2);
+    expect(models.every((m) => m.id.includes("anthropic"))).toBe(true);
+  });
+
+  it("gracefully handles inference profile discovery errors", async () => {
+    const { discoverBedrockModels, resetBedrockDiscoveryCacheForTest } =
+      await import("./bedrock-discovery.js");
+    resetBedrockDiscoveryCacheForTest();
+
+    sendMock
+      .mockResolvedValueOnce({
+        modelSummaries: [
+          {
+            modelId: "anthropic.claude-3-7-sonnet-20250219-v1:0",
+            modelName: "Claude 3.7 Sonnet",
+            providerName: "anthropic",
+            inputModalities: ["TEXT"],
+            outputModalities: ["TEXT"],
+            responseStreamingSupported: true,
+            modelLifecycle: { status: "ACTIVE" },
+          },
+        ],
+      })
+      .mockRejectedValueOnce(new Error("Access denied"));
+
+    const models = await discoverBedrockModels({
+      region: "us-east-1",
+      config: { includeInferenceProfiles: true },
+      clientFactory,
+    });
+
+    expect(models).toHaveLength(1);
+    expect(models[0].id).toBe("anthropic.claude-3-7-sonnet-20250219-v1:0");
   });
 });

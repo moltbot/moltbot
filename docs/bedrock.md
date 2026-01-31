@@ -21,7 +21,8 @@ not an API key.
 
 If AWS credentials are detected, OpenClaw can automatically discover Bedrock
 models that support **streaming** and **text output**. Discovery uses
-`bedrock:ListFoundationModels` and is cached (default: 1 hour).
+`bedrock:ListFoundationModels` and `bedrock:ListInferenceProfiles`, and is 
+cached (default: 1 hour).
 
 Config options live under `models.bedrockDiscovery`:
 
@@ -34,7 +35,8 @@ Config options live under `models.bedrockDiscovery`:
       providerFilter: ["anthropic", "amazon"],
       refreshInterval: 3600,
       defaultContextWindow: 32000,
-      defaultMaxTokens: 4096
+      defaultMaxTokens: 4096,
+      includeInferenceProfiles: true
     }
   }
 }
@@ -47,6 +49,46 @@ Notes:
 - `refreshInterval` is seconds; set to `0` to disable caching.
 - `defaultContextWindow` (default: `32000`) and `defaultMaxTokens` (default: `4096`)
   are used for discovered models (override if you know your model limits).
+- `includeInferenceProfiles` (default: `true`) enables discovery of inference profiles.
+
+### Inference Profiles
+
+AWS Bedrock **inference profiles** provide cross-region routing and improved
+availability for foundation models. When you use an inference profile ID
+(like `us.anthropic.claude-opus-4-5-20251101-v1:0`), Bedrock can automatically
+route your request to the best available region.
+
+**Benefits:**
+- **Higher availability**: Requests route to healthy regions automatically
+- **Lower latency**: Traffic goes to the nearest available region
+- **Same API**: Works identically to base model IDs
+
+**Discovery behavior:**
+- Moltbot discovers both base models and inference profiles by default
+- Inference profiles inherit metadata (context window, reasoning support, etc.) from their base model
+- Both appear in `moltbot models list` output
+- Use either ID interchangeably in your configuration
+
+**Example:**
+```bash
+# List all discovered models (includes inference profiles)
+moltbot models list
+
+# Use an inference profile in config
+moltbot config set agents.defaults.model.primary \
+  "amazon-bedrock/us.anthropic.claude-opus-4-5-20251101-v1:0"
+```
+
+To disable inference profile discovery:
+```json5
+{
+  models: {
+    bedrockDiscovery: {
+      includeInferenceProfiles: false
+    }
+  }
+}
+```
 
 ## Setup (manual)
 
@@ -161,12 +203,15 @@ openclaw models list
 ## Notes
 
 - Bedrock requires **model access** enabled in your AWS account/region.
-- Automatic discovery needs the `bedrock:ListFoundationModels` permission.
+- Automatic discovery needs the `bedrock:ListFoundationModels` and 
+  `bedrock:ListInferenceProfiles` permissions.
 - If you use profiles, set `AWS_PROFILE` on the gateway host.
 - OpenClaw surfaces the credential source in this order: `AWS_BEARER_TOKEN_BEDROCK`,
   then `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`, then `AWS_PROFILE`, then the
   default AWS SDK chain.
 - Reasoning support depends on the model; check the Bedrock model card for
   current capabilities.
+- Inference profiles use the same authentication and permissions as base models.
+- If inference profile discovery fails, base model discovery continues normally.
 - If you prefer a managed key flow, you can also place an OpenAI‑compatible
   proxy in front of Bedrock and configure it as an OpenAI provider instead.
