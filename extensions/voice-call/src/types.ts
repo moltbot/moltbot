@@ -210,7 +210,8 @@ export type InitiateCallResult = {
 };
 
 export type HangupCallInput = {
-  callId: CallId;
+  /** Internal call ID (optional for provider-only hangups like rejected inbound) */
+  callId?: CallId;
   providerCallId: ProviderCallId;
   reason: EndReason;
 };
