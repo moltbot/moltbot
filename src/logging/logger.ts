@@ -11,8 +11,9 @@ import { readLoggingConfig } from "./config.js";
 import { loggingState } from "./state.js";
 
 // Pin to /tmp so mac Debug UI and docs match; os.tmpdir() can be a per-user
-// randomized path on macOS which made the “Open log” button a no-op.
-export const DEFAULT_LOG_DIR = "/tmp/openclaw";
+// randomized path on macOS which made the "Open log" button a no-op.
+// Termux: Allow override via CLAWDBOT_LOG_DIR env var
+export const DEFAULT_LOG_DIR = process.env.CLAWDBOT_LOG_DIR || "/tmp/openclaw";
 export const DEFAULT_LOG_FILE = path.join(DEFAULT_LOG_DIR, "openclaw.log"); // legacy single-file path
 
 const LOG_PREFIX = "openclaw";
