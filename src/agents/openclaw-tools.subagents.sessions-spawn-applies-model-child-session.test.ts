@@ -226,7 +226,9 @@ describe("openclaw-tools: subagents", () => {
       agentSessionKey: "agent:main:main",
       agentChannel: "discord",
     }).find((candidate) => candidate.name === "sessions_spawn");
-    if (!tool) throw new Error("missing sessions_spawn tool");
+    if (!tool) {
+      throw new Error("missing sessions_spawn tool");
+    }
 
     const result = await tool.execute("call-default-thinking", {
       task: "do thing",
@@ -263,7 +265,9 @@ describe("openclaw-tools: subagents", () => {
       agentSessionKey: "agent:main:main",
       agentChannel: "discord",
     }).find((candidate) => candidate.name === "sessions_spawn");
-    if (!tool) throw new Error("missing sessions_spawn tool");
+    if (!tool) {
+      throw new Error("missing sessions_spawn tool");
+    }
 
     const result = await tool.execute("call-override-thinking", {
       task: "do thing",
