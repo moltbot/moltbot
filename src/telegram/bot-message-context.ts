@@ -671,7 +671,8 @@ export const buildTelegramMessageContext = async ({
     msg,
     chatId,
     isGroup,
-    resolvedThreadId,
+    // For DM reply threads use messageThreadId; for forum groups use resolvedThreadId
+    resolvedThreadId: isGroup ? resolvedThreadId : messageThreadId,
     isForum,
     historyKey,
     historyLimit,
