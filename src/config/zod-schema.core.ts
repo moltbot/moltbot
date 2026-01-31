@@ -185,6 +185,7 @@ export const TtsConfigSchema = z
         baseUrl: z.string().optional(),
         voiceId: z.string().optional(),
         modelId: z.string().optional(),
+        outputFormat: z.string().optional(),
         seed: z.number().int().min(0).max(4294967295).optional(),
         applyTextNormalization: z.enum(["auto", "on", "off"]).optional(),
         languageCode: z.string().optional(),

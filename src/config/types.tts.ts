@@ -42,6 +42,8 @@ export type TtsConfig = {
     baseUrl?: string;
     voiceId?: string;
     modelId?: string;
+    /** Output format (e.g. mp3_22050_32, mp3_44100_128, pcm_16000, pcm_22050, pcm_24000). */
+    outputFormat?: string;
     seed?: number;
     applyTextNormalization?: "auto" | "on" | "off";
     languageCode?: string;
