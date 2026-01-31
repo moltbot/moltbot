@@ -75,6 +75,7 @@ import {
 } from "./app-channels";
 import type { NostrProfileFormState } from "./views/channels.nostr-profile-form";
 import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity";
+import { loadUsage as loadUsageInternal } from "./controllers/usage";
 
 declare global {
   interface Window {
@@ -210,6 +211,12 @@ export class OpenClawApp extends LitElement {
   @state() cronRuns: CronRunLogEntry[] = [];
   @state() cronBusy = false;
 
+  @state() usageLoading = false;
+  @state() usageError: string | null = null;
+  @state() usageCostSummary: import("./controllers/usage").CostUsageSummary | null = null;
+  @state() usageProviderSummary: import("./controllers/usage").UsageProviderSummary | null = null;
+  @state() usageDays = 30;
+
   @state() skillsLoading = false;
   @state() skillsReport: SkillStatusReport | null = null;
   @state() skillsError: string | null = null;
@@ -337,6 +344,10 @@ export class OpenClawApp extends LitElement {
 
   async loadCron() {
     await loadCronInternal(this as unknown as Parameters<typeof loadCronInternal>[0]);
+  }
+
+  async loadUsage() {
+    await loadUsageInternal(this);
   }
 
   async handleAbortChat() {

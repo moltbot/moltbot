@@ -26,6 +26,7 @@ import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exe
 import type { DevicePairingList } from "./controllers/devices";
 import type { ExecApprovalRequest } from "./controllers/exec-approval";
 import type { NostrProfileFormState } from "./views/channels.nostr-profile-form";
+import type { CostUsageSummary, UsageProviderSummary } from "./controllers/usage";
 
 export type AppViewState = {
   settings: UiSettings;
@@ -119,6 +120,11 @@ export type AppViewState = {
   cronRunsJobId: string | null;
   cronRuns: CronRunLogEntry[];
   cronBusy: boolean;
+  usageLoading: boolean;
+  usageError: string | null;
+  usageCostSummary: CostUsageSummary | null;
+  usageProviderSummary: UsageProviderSummary | null;
+  usageDays: number;
   skillsLoading: boolean;
   skillsReport: SkillStatusReport | null;
   skillsError: string | null;
@@ -151,6 +157,7 @@ export type AppViewState = {
   loadOverview: () => Promise<void>;
   loadAssistantIdentity: () => Promise<void>;
   loadCron: () => Promise<void>;
+  loadUsage: () => Promise<void>;
   handleWhatsAppStart: (force: boolean) => Promise<void>;
   handleWhatsAppWait: () => Promise<void>;
   handleWhatsAppLogout: () => Promise<void>;

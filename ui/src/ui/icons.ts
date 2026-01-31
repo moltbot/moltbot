@@ -215,6 +215,12 @@ export const icons = {
   circle: html`
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /></svg>
   `,
+  dollarSign: html`
+    <svg viewBox="0 0 24 24">
+      <line x1="12" x2="12" y1="2" y2="22" />
+      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+    </svg>
+  `,
   puzzle: html`
     <svg viewBox="0 0 24 24">
       <path

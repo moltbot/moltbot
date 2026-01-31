@@ -35,6 +35,7 @@ import { renderChat } from "./views/chat";
 import { renderConfig } from "./views/config";
 import { renderChannels } from "./views/channels";
 import { renderCron } from "./views/cron";
+import { renderUsage } from "./views/usage";
 import { renderDebug } from "./views/debug";
 import { renderInstances } from "./views/instances";
 import { renderLogs } from "./views/logs";
@@ -337,6 +338,23 @@ export function renderApp(state: AppViewState) {
                 onRun: (job) => runCronJob(state, job),
                 onRemove: (job) => removeCronJob(state, job),
                 onLoadRuns: (jobId) => loadCronRuns(state, jobId),
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "usage"
+            ? renderUsage({
+                loading: state.usageLoading,
+                error: state.usageError,
+                costSummary: state.usageCostSummary,
+                providerSummary: state.usageProviderSummary,
+                days: state.usageDays,
+                onDaysChange: (days) => {
+                  state.usageDays = days;
+                  state.loadUsage();
+                },
+                onRefresh: () => state.loadUsage(),
               })
             : nothing
         }
