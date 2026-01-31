@@ -280,8 +280,12 @@ function deriveUsedPercent(payload: Record<string, unknown>): number | null {
 // Auto-detect region for usage endpoint (same logic as model endpoint)
 function detectMinimaxUsageRegion(): "cn" | "global" {
   const envRegion = process.env.MINIMAX_REGION?.toLowerCase();
-  if (envRegion === "cn" || envRegion === "china") return "cn";
-  if (envRegion === "global" || envRegion === "overseas") return "global";
+  if (envRegion === "cn" || envRegion === "china") {
+    return "cn";
+  }
+  if (envRegion === "global" || envRegion === "overseas") {
+    return "global";
+  }
 
   try {
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -293,7 +297,9 @@ function detectMinimaxUsageRegion(): "cn" | "global" {
       "Asia/Macau",
       "Asia/Taipei",
     ];
-    if (chinaTzs.includes(timezone)) return "cn";
+    if (chinaTzs.includes(timezone)) {
+      return "cn";
+    }
   } catch {
     // Fallback to global
   }

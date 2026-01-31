@@ -4,8 +4,12 @@ import type { ModelDefinitionConfig } from "../config/types.js";
 function detectMinimaxRegion(): "cn" | "global" {
   // Allow manual override via environment variable
   const envRegion = process.env.MINIMAX_REGION?.toLowerCase();
-  if (envRegion === "cn" || envRegion === "china") return "cn";
-  if (envRegion === "global" || envRegion === "overseas") return "global";
+  if (envRegion === "cn" || envRegion === "china") {
+    return "cn";
+  }
+  if (envRegion === "global" || envRegion === "overseas") {
+    return "global";
+  }
 
   // Auto-detect based on timezone
   try {
@@ -19,7 +23,9 @@ function detectMinimaxRegion(): "cn" | "global" {
       "Asia/Macau",
       "Asia/Taipei",
     ];
-    if (chinaTzs.includes(timezone)) return "cn";
+    if (chinaTzs.includes(timezone)) {
+      return "cn";
+    }
   } catch {
     // Fallback to global if timezone detection fails
   }
