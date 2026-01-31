@@ -1,0 +1,115 @@
+---
+title: Deploy on Dokploy
+---
+
+Deploy Moltbot on [Dokploy](https://dokploy.com) (self-hosted PaaS) using a template. Finish setup in your terminal.
+
+## Prerequisites
+
+- A Dokploy instance ([self-hosted](https://docs.dokploy.com/docs/core/installation#docker) or [Dokploy Cloud](https://app.dokploy.com/))
+- An API key from your preferred [model provider](/providers)
+
+### Discord bot token
+
+1. Go to [Discord Developer Portal](https://discord.com/developers/applications) → **New Application**.
+2. **Bot** → **Add Bot**.
+3. Under **Privileged Gateway Intents**, enable **MESSAGE CONTENT INTENT** (required or the bot may crash on startup).
+4. Go to `Bot` → `Reset Token` to get a new token.
+5. Invite the bot to your server (OAuth2 URL Generator; scopes: `bot`, `applications.commands or administrator(easy setup)`).
+6. Copy the `Generated URL` and paste in the browser, it should redirect to the installation page to select the server and authorize the bot.
+
+
+## Step 1: Create service from template
+
+In your Dokploy project (e.g. **moltbot / production**), click **Create Service** and choose **Template** from the dropdown.
+
+<img src="/assets/showcase/dokploy-create-template.png" alt="Dokploy dashboard: Create Service button with Template option selected" />
+
+This opens the template flow so you can deploy Moltbot from a predefined template.
+
+## Step 2: Select the Moltbot template and create
+
+On the **Create from Template** screen, search for the template (e.g. type **mol** or **Moltbot** in the search box). Select the **Moltbot** card (WhatsApp gateway with Pi RPC agent) and click **Create**.
+
+<img src="/assets/showcase/dokploy-select-template.png" alt="Dokploy Create from Template: search for Moltbot and click Create on the template card" />
+
+## Step 3: Environment tab and model API key
+
+Open your Moltbot service in Dokploy and go to the **Environment** tab. Add or edit the variable for your model provider API key. In this example we use **OpenRouter** (`OPENROUTER_API_KEY`): replace the placeholder `YOUR-API-KEY` with your real key. You can use any [model provider](/providers) supported by Moltbot; see [Models](/concepts/models) for the full list and config.
+
+<img src="/assets/showcase/dokploy-update-environment.png" alt="Dokploy Environment tab: environment variables including OPENROUTER_API_KEY" />
+
+Click **Save** after updating the variables.
+
+## Step 4: Deploy
+
+In the **General** tab, under **Deploy Settings**, click **Deploy** to build and run the service. You can change the **Compose File** (docker-compose.yml) and **Environment** variables to your liking before deploying; the template gives you a working default you can customize.
+
+<img src="/assets/showcase/dokploy-deploy.png" alt="Dokploy General tab: Deploy button and Compose file" />
+
+Wait for the deployment to finish (check **Deployments** and **Logs**).
+
+## Step 5: Check deployment logs
+
+Open the **Deployments** tab and click the latest deployment to view the logs. You should see **Docker Compose Deployed** at the end, with volumes and the gateway container created and started. Warnings about optional env vars (e.g. `CLAUDE_WEB_SESSION_KEY`) are normal if you left them unset; the gateway will still run.
+
+<img src="/assets/showcase/dokploy-deployment-logs.png" alt="Dokploy Deployment logs: Docker Compose deployed successfully" />
+
+Once the deployment is successful, open your service URL at `/setup` to run the wizard, then the Control UI at `/moltbot`.
+
+## Step 6: Verify status in the container
+
+To confirm the gateway is running inside the container, open **Open Terminal** (Docker Terminal) in Dokploy, select the **moltbot-gateway** container, then go to the app directory and run:
+
+```bash
+cd app/
+node dist/index.js gateway probe
+node dist/index.js status
+```
+
+You should see the gateway reachable and an overview (Dashboard URL, OS, Channel, Gateway).
+
+<img src="/assets/showcase/dokploy-terminal-status.png" alt="Dokploy Docker Terminal: node dist/index.js status output" />
+
+## Step 7: Enable Discord plugin and add the channel
+
+From the same Docker Terminal (inside the **moltbot-gateway** container, in `/app`), enable the Discord plugin and add your Discord bot:
+
+```bash
+cd app/
+node dist/index.js plugins enable discord
+node dist/index.js channels add --channel discord --token YOUR_DISCORD_BOT_TOKEN
+```
+
+
+## Step 8: Config and Reload
+
+In the same Docker Terminal (inside the **moltbot-gateway** container, in `/app`), set Discord channel access and command access groups:
+
+```bash
+cd app/
+node dist/index.js config set channels.discord.guilds."*" '{"channels":{"*":{"allow":true}}}'
+node dist/index.js config set commands.useAccessGroups false
+```
+
+Set the primary model for agents. In this example we use **OpenRouter** with `openrouter/google/gemini-3-flash-preview`; you can use any [model](/concepts/models) you prefer:
+
+```bash
+node dist/index.js config set agents.defaults.model.primary openrouter/google/gemini-3-flash-preview
+```
+
+Then close the terminal, go back to the **General** tab in Dokploy, and click **Reload** (under Deploy Settings) so the gateway picks up the new config.
+
+## Step 9: Test connectivity in Discord
+
+In a Discord channel where your bot is present, run the slash command **`/status`**. The bot should reply with the current status (model, tokens, context, session, runtime). That confirms the gateway is reachable and Discord is connected.
+
+<img src="/assets/showcase/dokploy-discord-setup-status.png" alt="Discord: /status command reply showing Moltbot status" />
+
+You can also **mention the bot** and ask a question (e.g. *@YourBot Hey, what's your favorite pizza?*). The bot will reply in the channel with a conversational response, confirming that the agent is active and responding to messages.
+
+<img src="/assets/showcase/dokploy-discord-message.png" alt="Discord: mention the bot and get a conversational reply" />
+
+If you see the status message or a reply to your mention, your Dokploy deployment and Discord setup are working.
+
+
