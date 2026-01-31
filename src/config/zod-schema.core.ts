@@ -89,9 +89,22 @@ export const GroupChatSchema = z
   .strict()
   .optional();
 
+export const DmRoleSchema = z.enum(["owner", "elevated", "family", "limited", "default"]);
+
 export const DmConfigSchema = z
   .object({
     historyLimit: z.number().int().min(0).optional(),
+    role: DmRoleSchema.optional(),
+    tools: z
+      .object({
+        allow: z.array(z.string()).optional(),
+        alsoAllow: z.array(z.string()).optional(),
+        deny: z.array(z.string()).optional(),
+      })
+      .strict()
+      .optional(),
+    requireOwnerConfirmation: z.boolean().optional(),
+    systemPromptSuffix: z.string().optional(),
   })
   .strict();
 

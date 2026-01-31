@@ -37,6 +37,7 @@ import { applySessionHints } from "./body.js";
 import { routeReply } from "./route-reply.js";
 import type { buildCommandContext } from "./commands.js";
 import type { InlineDirectives } from "./directive-handling.js";
+import { resolveDmUserConfig } from "../../config/dm-user-config.js";
 import { buildGroupIntro } from "./groups.js";
 import type { createModelSelectionState } from "./model-selection.js";
 import { resolveQueueSettings } from "./queue.js";
@@ -179,7 +180,21 @@ export async function runPreparedReply(
       })
     : "";
   const groupSystemPrompt = sessionCtx.GroupSystemPrompt?.trim() ?? "";
-  const extraSystemPrompt = [groupIntro, groupSystemPrompt].filter(Boolean).join("\n\n");
+
+  // Resolve per-user DM config for system prompt suffix injection
+  const dmUserConfig = !isGroupChat
+    ? resolveDmUserConfig({
+        cfg,
+        channel: sessionCtx.Provider ?? "",
+        senderId: ctx.SenderE164 ?? ctx.From,
+        accountId: ctx.AccountId,
+      })
+    : undefined;
+  const dmSystemSuffix = dmUserConfig?.systemPromptSuffix?.trim() ?? "";
+
+  const extraSystemPrompt = [groupIntro, groupSystemPrompt, dmSystemSuffix]
+    .filter(Boolean)
+    .join("\n\n");
   const baseBody = sessionCtx.BodyStripped ?? sessionCtx.Body ?? "";
   // Use CommandBody/RawBody for bare reset detection (clean message without structural context).
   const rawBodyTrimmed = (ctx.CommandBody ?? ctx.RawBody ?? ctx.Body ?? "").trim();
@@ -396,6 +411,8 @@ export async function runPreparedReply(
       blockReplyBreak: resolvedBlockStreamingBreak,
       ownerNumbers: command.ownerList.length > 0 ? command.ownerList : undefined,
       extraSystemPrompt: extraSystemPrompt || undefined,
+      dmRole: dmUserConfig?.role,
+      dmRequireOwnerConfirmation: dmUserConfig?.requireOwnerConfirmation || undefined,
       ...(isReasoningTagProvider(provider) ? { enforceFinalTag: true } : {}),
     },
   };

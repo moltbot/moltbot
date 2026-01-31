@@ -6,8 +6,23 @@ export type GroupChatConfig = {
   historyLimit?: number;
 };
 
+/** Per-user role for DM access control. */
+export type DmRole = "owner" | "elevated" | "family" | "limited" | "default";
+
 export type DmConfig = {
   historyLimit?: number;
+  /** User role for access control / prompt injection. */
+  role?: DmRole;
+  /** Tool access policy for this user (allow/deny lists). */
+  tools?: {
+    allow?: string[];
+    alsoAllow?: string[];
+    deny?: string[];
+  };
+  /** If true, the agent must get owner approval before executing actions for this user. */
+  requireOwnerConfirmation?: boolean;
+  /** Extra system prompt text injected when this user is chatting. */
+  systemPromptSuffix?: string;
 };
 
 export type QueueConfig = {

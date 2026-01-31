@@ -78,6 +78,10 @@ export type FollowupRun = {
     ownerNumbers?: string[];
     extraSystemPrompt?: string;
     enforceFinalTag?: boolean;
+    /** Per-user DM role (from dms config). */
+    dmRole?: string;
+    /** Whether this user requires owner confirmation before agent acts. */
+    dmRequireOwnerConfirmation?: boolean;
   };
 };
 
