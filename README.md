@@ -517,3 +517,174 @@ Thanks to all clawtributors:
   <a href="https://github.com/search?q=ddyo"><img src="assets/avatar-placeholder.svg" width="48" height="48" alt="ddyo" title="ddyo"/></a> <a href="https://github.com/search?q=Erik"><img src="assets/avatar-placeholder.svg" width="48" height="48" alt="Erik" title="Erik"/></a> <a href="https://github.com/latitudeki5223"><img src="https://avatars.githubusercontent.com/u/119656367?v=4&s=48" width="48" height="48" alt="latitudeki5223" title="latitudeki5223"/></a> <a href="https://github.com/search?q=Manuel%20Maly"><img src="assets/avatar-placeholder.svg" width="48" height="48" alt="Manuel Maly" title="Manuel Maly"/></a> <a href="https://github.com/search?q=Mourad%20Boustani"><img src="assets/avatar-placeholder.svg" width="48" height="48" alt="Mourad Boustani" title="Mourad Boustani"/></a> <a href="https://github.com/odrobnik"><img src="https://avatars.githubusercontent.com/u/333270?v=4&s=48" width="48" height="48" alt="odrobnik" title="odrobnik"/></a> <a href="https://github.com/pcty-nextgen-ios-builder"><img src="assets/avatar-placeholder.svg" width="48" height="48" alt="pcty-nextgen-ios-builder" title="pcty-nextgen-ios-builder"/></a> <a href="https://github.com/search?q=Quentin"><img src="assets/avatar-placeholder.svg" width="48" height="48" alt="Quentin" title="Quentin"/></a> <a href="https://github.com/search?q=Randy%20Torres"><img src="assets/avatar-placeholder.svg" width="48" height="48" alt="Randy Torres" title="Randy Torres"/></a> <a href="https://github.com/rhjoh"><img src="https://avatars.githubusercontent.com/u/105699450?v=4&s=48" width="48" height="48" alt="rhjoh" title="rhjoh"/></a>
   <a href="https://github.com/ronak-guliani"><img src="https://avatars.githubusercontent.com/u/23518228?v=4&s=48" width="48" height="48" alt="ronak-guliani" title="ronak-guliani"/></a> <a href="https://github.com/search?q=William%20Stock"><img src="assets/avatar-placeholder.svg" width="48" height="48" alt="William Stock" title="William Stock"/></a>
 </p>
+
+---
+
+## 한국어 가이드: macOS 설치 및 사용법
+
+### 사전 요구사항
+
+- **Node.js 22 이상** 설치 필요
+- macOS 13 (Ventura) 이상 권장
+
+### 1. Node.js 설치
+
+Homebrew를 사용하여 Node.js를 설치합니다:
+
+```bash
+# Homebrew가 없다면 먼저 설치
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Node.js 22 설치
+brew install node@22
+
+# 또는 nvm 사용 시
+nvm install 22
+nvm use 22
+```
+
+### 2. OpenClaw 설치
+
+```bash
+# npm으로 전역 설치
+npm install -g openclaw@latest
+
+# 또는 pnpm 사용 시
+pnpm add -g openclaw@latest
+```
+
+### 3. 온보딩 마법사 실행
+
+설치 후 온보딩 마법사를 실행하여 초기 설정을 완료합니다:
+
+```bash
+openclaw onboard --install-daemon
+```
+
+이 명령어는 다음을 설정합니다:
+- Gateway 데몬 설치 (launchd 서비스)
+- AI 모델 인증 설정
+- 채널 연결 (WhatsApp, Telegram, Slack 등)
+
+### 4. AI 모델 인증
+
+#### Claude (Anthropic) 사용 시
+
+```bash
+# Claude CLI 로그인
+claude login
+
+# 또는 API 키 설정
+export ANTHROPIC_API_KEY="your-api-key"
+```
+
+#### OpenAI 사용 시
+
+```bash
+# OpenAI CLI 로그인
+openai auth login
+
+# 또는 API 키 설정
+export OPENAI_API_KEY="your-api-key"
+```
+
+#### Gemini (Google) 사용 시
+
+```bash
+# Gemini CLI 로그인
+gemini auth login
+
+# 또는 API 키 설정
+export GEMINI_API_KEY="your-api-key"
+```
+
+### 5. Gateway 실행
+
+```bash
+# Gateway 시작
+openclaw gateway --port 18789 --verbose
+
+# 또는 백그라운드에서 실행 (데몬 설치 완료 시)
+openclaw gateway start
+```
+
+### 6. 기본 사용법
+
+```bash
+# 상태 확인
+openclaw status
+
+# 메시지 보내기
+openclaw message send --to +821012345678 --message "안녕하세요!"
+
+# AI 에이전트와 대화
+openclaw agent --message "오늘 할 일 정리해줘" --thinking high
+
+# 채널 상태 확인
+openclaw channels status
+```
+
+### 7. CLI 백엔드 설정 (API 대신 CLI 사용)
+
+설정 파일 (`~/.openclaw/openclaw.json`)에서 CLI 백엔드를 지정할 수 있습니다:
+
+```json5
+{
+  agents: {
+    defaults: {
+      cliBackends: {
+        "claude-cli": {
+          command: "claude"
+        },
+        "openai-cli": {
+          command: "openai"
+        },
+        "gemini-cli": {
+          command: "gemini"
+        }
+      }
+    }
+  }
+}
+```
+
+### 8. macOS 앱 (선택사항)
+
+메뉴바 앱을 사용하면 더 편리하게 OpenClaw를 제어할 수 있습니다:
+- Voice Wake (음성 인식)
+- Push-to-Talk
+- WebChat UI
+- 원격 Gateway 제어
+
+자세한 내용: [macOS 앱 문서](https://docs.openclaw.ai/platforms/macos)
+
+### 9. 문제 해결
+
+```bash
+# 시스템 진단
+openclaw doctor
+
+# 로그 확인
+tail -f /tmp/openclaw-gateway.log
+
+# Gateway 재시작
+openclaw gateway restart
+```
+
+### 유용한 채팅 명령어
+
+WhatsApp/Telegram/Slack 등에서 사용 가능:
+
+| 명령어 | 설명 |
+|--------|------|
+| `/status` | 세션 상태 확인 |
+| `/new` 또는 `/reset` | 세션 초기화 |
+| `/think <레벨>` | 사고 레벨 설정 (off/low/medium/high) |
+| `/verbose on/off` | 상세 모드 토글 |
+| `/usage tokens/full` | 토큰 사용량 표시 |
+
+### 추가 리소스
+
+- [공식 문서](https://docs.openclaw.ai)
+- [시작 가이드](https://docs.openclaw.ai/start/getting-started)
+- [Discord 커뮤니티](https://discord.gg/clawd)
