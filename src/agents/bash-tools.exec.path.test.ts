@@ -78,7 +78,7 @@ describe("exec PATH login shell merge", () => {
     expect(shellPathMock).toHaveBeenCalledTimes(1);
   });
 
-  it("skips login-shell PATH when env.PATH is provided", async () => {
+  it("throws security violation when env.PATH is provided", async () => {
     if (isWin) return;
     process.env.PATH = "/usr/bin";
 
@@ -88,13 +88,14 @@ describe("exec PATH login shell merge", () => {
     shellPathMock.mockClear();
 
     const tool = createExecTool({ host: "gateway", security: "full", ask: "off" });
-    const result = await tool.execute("call1", {
-      command: "echo $PATH",
-      env: { PATH: "/explicit/bin" },
-    });
-    const text = normalizeText(result.content.find((c) => c.type === "text")?.text);
 
-    expect(text).toBe("/explicit/bin");
+    await expect(
+      tool.execute("call1", {
+        command: "echo $PATH",
+        env: { PATH: "/explicit/bin" },
+      }),
+    ).rejects.toThrow(/Security Violation: Custom 'PATH' variable is forbidden/);
+
     expect(shellPathMock).not.toHaveBeenCalled();
   });
 });
