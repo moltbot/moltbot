@@ -38,4 +38,17 @@ describe("classifyFailoverReason", () => {
       "rate_limit",
     );
   });
+  it("classifies 404 model not found errors as model_not_found", () => {
+    expect(
+      classifyFailoverReason(
+        '{"error":{"code":404,"message":"models/gemini-1.5-pro is not found for API version v1beta, or is not supported for generateContent.","status":"NOT_FOUND"}}',
+      ),
+    ).toBe("model_not_found");
+    expect(classifyFailoverReason("404 model not found")).toBe("model_not_found");
+    expect(classifyFailoverReason("The model does not exist")).toBe("model_not_found");
+    expect(classifyFailoverReason("model is not available")).toBe("model_not_found");
+    expect(classifyFailoverReason("gemini-1.5-pro is not supported for generateContent")).toBe(
+      "model_not_found",
+    );
+  });
 });
