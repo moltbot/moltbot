@@ -104,7 +104,7 @@ describe("resolveAgentRoute", () => {
       peer: { kind: "dm", id: "+1000" },
     });
     expect(route.agentId).toBe("a");
-    expect(route.sessionKey).toBe("agent:a:main");
+    expect(route.sessionKey).toBe("agent:a:main:biz");
     expect(route.matchedBy).toBe("binding.peer");
   });
 
@@ -224,7 +224,8 @@ describe("resolveAgentRoute", () => {
       peer: { kind: "dm", id: "+1000" },
     });
     expect(route.agentId).toBe("home");
-    expect(route.sessionKey).toBe("agent:home:main");
+    // Updated: Non-default accounts get distinct session keys
+    expect(route.sessionKey).toBe("agent:home:main:biz");
   });
 });
 
