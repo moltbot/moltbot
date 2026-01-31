@@ -163,9 +163,11 @@ export async function processMessage(params: {
         currentMessage: combinedBody,
         excludeLast: false,
         formatEntry: (entry) => {
-          const bodyWithId = entry.messageId
-            ? `${entry.body}\n[message_id: ${entry.messageId}]`
-            : entry.body;
+          const includeIds = params.cfg.messages?.includeIds !== false;
+          const bodyWithId =
+            includeIds && entry.messageId
+              ? `${entry.body}\n[message_id: ${entry.messageId}]`
+              : entry.body;
           return formatInboundEnvelope({
             channel: "WhatsApp",
             from: conversationId,
