@@ -14,6 +14,7 @@ export type AuthChoiceGroupId =
   | "copilot"
   | "openrouter"
   | "ai-gateway"
+  | "cloudflare-ai-gateway"
   | "moonshot"
   | "zai"
   | "xiaomi"
@@ -97,6 +98,12 @@ const AUTH_CHOICE_GROUP_DEFS: {
     choices: ["ai-gateway-api-key"],
   },
   {
+    value: "cloudflare-ai-gateway",
+    label: "Cloudflare AI Gateway",
+    hint: "Account ID + Gateway ID + API key",
+    choices: ["cloudflare-ai-gateway-api-key"],
+  },
+  {
     value: "moonshot",
     label: "Moonshot AI",
     hint: "Kimi K2 + Kimi Code",
@@ -145,6 +152,11 @@ export function buildAuthChoiceOptions(params: {
   options.push({
     value: "ai-gateway-api-key",
     label: "Vercel AI Gateway API key",
+  });
+  options.push({
+    value: "cloudflare-ai-gateway-api-key",
+    label: "Cloudflare AI Gateway",
+    hint: "Account ID + Gateway ID + API key",
   });
   options.push({ value: "moonshot-api-key", label: "Moonshot AI API key" });
   options.push({ value: "kimi-code-api-key", label: "Kimi Code API key" });
