@@ -205,7 +205,7 @@ async function resolveSandboxedImagePath(params: {
   }
 }
 
-async function runImagePrompt(params: {
+export async function runImagePrompt(params: {
   cfg?: OpenClawConfig;
   agentDir: string;
   imageModelConfig: ImageModelConfig;

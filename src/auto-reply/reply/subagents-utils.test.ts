@@ -59,4 +59,14 @@ describe("subagents utils", () => {
     expect(formatDurationShort(45_000)).toBe("45s");
     expect(formatDurationShort(65_000)).toBe("1m5s");
   });
+
+  it("formats zero duration as <1s instead of n/a", () => {
+    expect(formatDurationShort(0)).toBe("<1s");
+    expect(formatDurationShort(499)).toBe("<1s");
+  });
+
+  it("returns n/a for undefined/negative durations", () => {
+    expect(formatDurationShort(undefined)).toBe("n/a");
+    expect(formatDurationShort(-1)).toBe("n/a");
+  });
 });

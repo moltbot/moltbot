@@ -61,6 +61,7 @@ import { resolveDefaultModelForAgent } from "../../model-selection.js";
 import { isAbortError } from "../abort.js";
 import { buildEmbeddedExtensionPaths } from "../extensions.js";
 import { applyExtraParamsToAgent } from "../extra-params.js";
+import { wrapStreamFnForReasoningCompat } from "../reasoning-content-compat.js";
 import { appendCacheTtlTimestamp, isCacheTtlEligibleProvider } from "../cache-ttl.js";
 import {
   logToolSchemasForGoogle,
@@ -526,6 +527,11 @@ export async function runEmbeddedAttempt(
           activeSession.agent.streamFn,
         );
       }
+
+      // Ensure every assistant message includes the provider-specific reasoning field
+      // (e.g. reasoning_content) when any message in the conversation uses it.
+      // Kimi K2.5 rejects requests where tool-call-only messages lack the field.
+      activeSession.agent.streamFn = wrapStreamFnForReasoningCompat(activeSession.agent.streamFn);
 
       try {
         const prior = await sanitizeSessionHistory({

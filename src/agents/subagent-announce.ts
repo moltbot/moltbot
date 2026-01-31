@@ -23,8 +23,10 @@ import { type AnnounceQueueItem, enqueueAnnounce } from "./subagent-announce-que
 import { readLatestAssistantReply } from "./tools/agent-step.js";
 
 function formatDurationShort(valueMs?: number) {
-  if (!valueMs || !Number.isFinite(valueMs) || valueMs <= 0) return undefined;
+  if (valueMs === undefined || valueMs === null || !Number.isFinite(valueMs) || valueMs < 0)
+    return undefined;
   const totalSeconds = Math.round(valueMs / 1000);
+  if (totalSeconds === 0) return "<1s";
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
@@ -79,8 +81,8 @@ async function waitForSessionUsage(params: { sessionKey: string }) {
       typeof entry.inputTokens === "number" ||
       typeof entry.outputTokens === "number");
   if (hasTokens()) return { entry, storePath };
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 200));
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
     entry = loadSessionStore(storePath)[params.sessionKey];
     if (hasTokens()) break;
   }
@@ -362,9 +364,13 @@ export async function runSubagentAnnounceFlow(params: {
     }
 
     if (!reply) {
-      reply = await readLatestAssistantReply({
-        sessionKey: params.childSessionKey,
-      });
+      // Retry with backoff — transcript may not be flushed yet
+      for (let attempt = 0; attempt < 5 && !reply; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        reply = await readLatestAssistantReply({
+          sessionKey: params.childSessionKey,
+        });
+      }
     }
 
     if (!outcome) outcome = { status: "unknown" };

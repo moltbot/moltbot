@@ -2,8 +2,10 @@ import type { SubagentRunRecord } from "../../agents/subagent-registry.js";
 import { truncateUtf16Safe } from "../../utils.js";
 
 export function formatDurationShort(valueMs?: number) {
-  if (!valueMs || !Number.isFinite(valueMs) || valueMs <= 0) return "n/a";
+  if (valueMs === undefined || valueMs === null || !Number.isFinite(valueMs) || valueMs < 0)
+    return "n/a";
   const totalSeconds = Math.round(valueMs / 1000);
+  if (totalSeconds === 0) return "<1s";
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;

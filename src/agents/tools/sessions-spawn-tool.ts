@@ -1,29 +1,10 @@
-import crypto from "node:crypto";
-
 import { Type } from "@sinclair/typebox";
 
-import { formatThinkingLevels, normalizeThinkLevel } from "../../auto-reply/thinking.js";
-import { loadConfig } from "../../config/config.js";
-import { callGateway } from "../../gateway/call.js";
-import {
-  isSubagentSessionKey,
-  normalizeAgentId,
-  parseAgentSessionKey,
-} from "../../routing/session-key.js";
-import { normalizeDeliveryContext } from "../../utils/delivery-context.js";
 import type { GatewayMessageChannel } from "../../utils/message-channel.js";
-import { resolveAgentConfig } from "../agent-scope.js";
-import { AGENT_LANE_SUBAGENT } from "../lanes.js";
 import { optionalStringEnum } from "../schema/typebox.js";
-import { buildSubagentSystemPrompt } from "../subagent-announce.js";
-import { registerSubagentRun } from "../subagent-registry.js";
 import type { AnyAgentTool } from "./common.js";
 import { jsonResult, readStringParam } from "./common.js";
-import {
-  resolveDisplaySessionKey,
-  resolveInternalSessionKey,
-  resolveMainSessionAlias,
-} from "./sessions-helpers.js";
+import { resolveSpawnContext, spawnSingleSubagent, type SpawnOpts } from "./sessions-spawn-core.js";
 
 const SessionsSpawnToolSchema = Type.Object({
   task: Type.String(),
@@ -36,26 +17,6 @@ const SessionsSpawnToolSchema = Type.Object({
   timeoutSeconds: Type.Optional(Type.Number({ minimum: 0 })),
   cleanup: optionalStringEnum(["delete", "keep"] as const),
 });
-
-function splitModelRef(ref?: string) {
-  if (!ref) return { provider: undefined, model: undefined };
-  const trimmed = ref.trim();
-  if (!trimmed) return { provider: undefined, model: undefined };
-  const [provider, model] = trimmed.split("/", 2);
-  if (model) return { provider, model };
-  return { provider: undefined, model: trimmed };
-}
-
-function normalizeModelSelection(value: unknown): string | undefined {
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    return trimmed || undefined;
-  }
-  if (!value || typeof value !== "object") return undefined;
-  const primary = (value as { primary?: unknown }).primary;
-  if (typeof primary === "string" && primary.trim()) return primary.trim();
-  return undefined;
-}
 
 export function createSessionsSpawnTool(opts?: {
   agentSessionKey?: string;
@@ -87,12 +48,6 @@ export function createSessionsSpawnTool(opts?: {
         params.cleanup === "keep" || params.cleanup === "delete"
           ? (params.cleanup as "keep" | "delete")
           : "keep";
-      const requesterOrigin = normalizeDeliveryContext({
-        channel: opts?.agentChannel,
-        accountId: opts?.agentAccountId,
-        to: opts?.agentTo,
-        threadId: opts?.agentThreadId,
-      });
       const runTimeoutSeconds = (() => {
         const explicit =
           typeof params.runTimeoutSeconds === "number" && Number.isFinite(params.runTimeoutSeconds)
@@ -105,165 +60,39 @@ export function createSessionsSpawnTool(opts?: {
             : undefined;
         return legacy ?? 0;
       })();
-      let modelWarning: string | undefined;
-      let modelApplied = false;
 
-      const cfg = loadConfig();
-      const { mainKey, alias } = resolveMainSessionAlias(cfg);
-      const requesterSessionKey = opts?.agentSessionKey;
-      if (typeof requesterSessionKey === "string" && isSubagentSessionKey(requesterSessionKey)) {
-        return jsonResult({
-          status: "forbidden",
-          error: "sessions_spawn is not allowed from sub-agent sessions",
-        });
+      const spawnOpts: SpawnOpts = {
+        agentSessionKey: opts?.agentSessionKey,
+        agentChannel: opts?.agentChannel,
+        agentAccountId: opts?.agentAccountId,
+        agentTo: opts?.agentTo,
+        agentThreadId: opts?.agentThreadId,
+        agentGroupId: opts?.agentGroupId,
+        agentGroupChannel: opts?.agentGroupChannel,
+        agentGroupSpace: opts?.agentGroupSpace,
+        sandboxed: opts?.sandboxed,
+        requesterAgentIdOverride: opts?.requesterAgentIdOverride,
+      };
+
+      const ctx = resolveSpawnContext(spawnOpts);
+      if (ctx.forbidden) {
+        return jsonResult({ status: "forbidden", error: ctx.error });
       }
-      const requesterInternalKey = requesterSessionKey
-        ? resolveInternalSessionKey({
-            key: requesterSessionKey,
-            alias,
-            mainKey,
-          })
-        : alias;
-      const requesterDisplayKey = resolveDisplaySessionKey({
-        key: requesterInternalKey,
-        alias,
-        mainKey,
-      });
 
-      const requesterAgentId = normalizeAgentId(
-        opts?.requesterAgentIdOverride ?? parseAgentSessionKey(requesterInternalKey)?.agentId,
+      const result = await spawnSingleSubagent(
+        {
+          task,
+          label,
+          agentId: requestedAgentId,
+          model: modelOverride,
+          thinking: thinkingOverrideRaw,
+          runTimeoutSeconds,
+          cleanup,
+        },
+        ctx,
       );
-      const targetAgentId = requestedAgentId
-        ? normalizeAgentId(requestedAgentId)
-        : requesterAgentId;
-      if (targetAgentId !== requesterAgentId) {
-        const allowAgents = resolveAgentConfig(cfg, requesterAgentId)?.subagents?.allowAgents ?? [];
-        const allowAny = allowAgents.some((value) => value.trim() === "*");
-        const normalizedTargetId = targetAgentId.toLowerCase();
-        const allowSet = new Set(
-          allowAgents
-            .filter((value) => value.trim() && value.trim() !== "*")
-            .map((value) => normalizeAgentId(value).toLowerCase()),
-        );
-        if (!allowAny && !allowSet.has(normalizedTargetId)) {
-          const allowedText = allowAny
-            ? "*"
-            : allowSet.size > 0
-              ? Array.from(allowSet).join(", ")
-              : "none";
-          return jsonResult({
-            status: "forbidden",
-            error: `agentId is not allowed for sessions_spawn (allowed: ${allowedText})`,
-          });
-        }
-      }
-      const childSessionKey = `agent:${targetAgentId}:subagent:${crypto.randomUUID()}`;
-      const spawnedByKey = requesterInternalKey;
-      const targetAgentConfig = resolveAgentConfig(cfg, targetAgentId);
-      const resolvedModel =
-        normalizeModelSelection(modelOverride) ??
-        normalizeModelSelection(targetAgentConfig?.subagents?.model) ??
-        normalizeModelSelection(cfg.agents?.defaults?.subagents?.model);
-      let thinkingOverride: string | undefined;
-      if (thinkingOverrideRaw) {
-        const normalized = normalizeThinkLevel(thinkingOverrideRaw);
-        if (!normalized) {
-          const { provider, model } = splitModelRef(resolvedModel);
-          const hint = formatThinkingLevels(provider, model);
-          return jsonResult({
-            status: "error",
-            error: `Invalid thinking level "${thinkingOverrideRaw}". Use one of: ${hint}.`,
-          });
-        }
-        thinkingOverride = normalized;
-      }
-      if (resolvedModel) {
-        try {
-          await callGateway({
-            method: "sessions.patch",
-            params: { key: childSessionKey, model: resolvedModel },
-            timeoutMs: 10_000,
-          });
-          modelApplied = true;
-        } catch (err) {
-          const messageText =
-            err instanceof Error ? err.message : typeof err === "string" ? err : "error";
-          const recoverable =
-            messageText.includes("invalid model") || messageText.includes("model not allowed");
-          if (!recoverable) {
-            return jsonResult({
-              status: "error",
-              error: messageText,
-              childSessionKey,
-            });
-          }
-          modelWarning = messageText;
-        }
-      }
-      const childSystemPrompt = buildSubagentSystemPrompt({
-        requesterSessionKey,
-        requesterOrigin,
-        childSessionKey,
-        label: label || undefined,
-        task,
-      });
 
-      const childIdem = crypto.randomUUID();
-      let childRunId: string = childIdem;
-      try {
-        const response = (await callGateway({
-          method: "agent",
-          params: {
-            message: task,
-            sessionKey: childSessionKey,
-            channel: requesterOrigin?.channel,
-            idempotencyKey: childIdem,
-            deliver: false,
-            lane: AGENT_LANE_SUBAGENT,
-            extraSystemPrompt: childSystemPrompt,
-            thinking: thinkingOverride,
-            timeout: runTimeoutSeconds > 0 ? runTimeoutSeconds : undefined,
-            label: label || undefined,
-            spawnedBy: spawnedByKey,
-            groupId: opts?.agentGroupId ?? undefined,
-            groupChannel: opts?.agentGroupChannel ?? undefined,
-            groupSpace: opts?.agentGroupSpace ?? undefined,
-          },
-          timeoutMs: 10_000,
-        })) as { runId?: string };
-        if (typeof response?.runId === "string" && response.runId) {
-          childRunId = response.runId;
-        }
-      } catch (err) {
-        const messageText =
-          err instanceof Error ? err.message : typeof err === "string" ? err : "error";
-        return jsonResult({
-          status: "error",
-          error: messageText,
-          childSessionKey,
-          runId: childRunId,
-        });
-      }
-
-      registerSubagentRun({
-        runId: childRunId,
-        childSessionKey,
-        requesterSessionKey: requesterInternalKey,
-        requesterOrigin,
-        requesterDisplayKey,
-        task,
-        cleanup,
-        label: label || undefined,
-        runTimeoutSeconds,
-      });
-
-      return jsonResult({
-        status: "accepted",
-        childSessionKey,
-        runId: childRunId,
-        modelApplied: resolvedModel ? modelApplied : undefined,
-        warning: modelWarning,
-      });
+      return jsonResult(result);
     },
   };
 }

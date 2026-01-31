@@ -17,6 +17,16 @@ vi.mock("../tools/canvas-tool.js", () => ({
 
 vi.mock("../tools/image-tool.js", () => ({
   createImageTool: () => stubTool("image"),
+  resolveImageModelConfigForTool: () => null,
+  runImagePrompt: vi.fn(),
+}));
+
+vi.mock("../tools/image-to-code-tool.js", () => ({
+  createImageToCodeTool: () => null,
+}));
+
+vi.mock("../tools/sessions-spawn-batch-tool.js", () => ({
+  createSessionsSpawnBatchTool: () => stubTool("sessions_spawn_batch"),
 }));
 
 vi.mock("../tools/web-tools.js", () => ({
