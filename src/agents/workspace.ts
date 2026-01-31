@@ -171,22 +171,30 @@ export async function ensureAgentWorkspace(params?: {
     return existing.every((v) => !v);
   })();
 
-  const agentsTemplate = await loadTemplate(DEFAULT_AGENTS_FILENAME);
-  const soulTemplate = await loadTemplate(DEFAULT_SOUL_FILENAME);
-  const toolsTemplate = await loadTemplate(DEFAULT_TOOLS_FILENAME);
-  const identityTemplate = await loadTemplate(DEFAULT_IDENTITY_FILENAME);
-  const userTemplate = await loadTemplate(DEFAULT_USER_FILENAME);
-  const heartbeatTemplate = await loadTemplate(DEFAULT_HEARTBEAT_FILENAME);
-  const bootstrapTemplate = await loadTemplate(DEFAULT_BOOTSTRAP_FILENAME);
+  // Check if workspace is incomplete and copy missing files
+  const filesToEnsure = [agentsPath, soulPath, toolsPath, identityPath, userPath, heartbeatPath];
+  const templates = [
+    DEFAULT_AGENTS_FILENAME,
+    DEFAULT_SOUL_FILENAME,
+    DEFAULT_TOOLS_FILENAME,
+    DEFAULT_IDENTITY_FILENAME,
+    DEFAULT_USER_FILENAME,
+    DEFAULT_HEARTBEAT_FILENAME,
+  ];
 
-  await writeFileIfMissing(agentsPath, agentsTemplate);
-  await writeFileIfMissing(soulPath, soulTemplate);
-  await writeFileIfMissing(toolsPath, toolsTemplate);
-  await writeFileIfMissing(identityPath, identityTemplate);
-  await writeFileIfMissing(userPath, userTemplate);
-  await writeFileIfMissing(heartbeatPath, heartbeatTemplate);
+  for (let i = 0; i < filesToEnsure.length; i++) {
+    try {
+      await fs.access(filesToEnsure[i]);
+    } catch {
+      await writeFileIfMissing(filesToEnsure[i], await loadTemplate(templates[i]));
+    }
+  }
   if (isBrandNewWorkspace) {
-    await writeFileIfMissing(bootstrapPath, bootstrapTemplate);
+    try {
+      await fs.access(bootstrapPath);
+    } catch {
+      await writeFileIfMissing(bootstrapPath, await loadTemplate(DEFAULT_BOOTSTRAP_FILENAME));
+    }
   }
   await ensureGitRepo(dir, isBrandNewWorkspace);
 
