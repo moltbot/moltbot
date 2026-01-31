@@ -109,7 +109,11 @@ export const googlechatPlugin: ChannelPlugin<ResolvedGoogleChatAccount> = {
       }
       const user = normalizeGoogleChatTarget(id) ?? id;
       const target = isGoogleChatUserTarget(user) ? user : `users/${user}`;
-      const space = await resolveGoogleChatOutboundSpace({ account, target });
+      const space = await resolveGoogleChatOutboundSpace({
+        account,
+        target,
+        cfg: cfg as MoltbotConfig,
+      });
       await sendGoogleChatMessage({
         account,
         space,
@@ -416,7 +420,11 @@ export const googlechatPlugin: ChannelPlugin<ResolvedGoogleChatAccount> = {
         cfg: cfg,
         accountId,
       });
-      const space = await resolveGoogleChatOutboundSpace({ account, target: to });
+      const space = await resolveGoogleChatOutboundSpace({
+        account,
+        target: to,
+        cfg: cfg as MoltbotConfig,
+      });
       const thread = (threadId ?? replyToId ?? undefined) as string | undefined;
       const result = await sendGoogleChatMessage({
         account,
@@ -438,7 +446,11 @@ export const googlechatPlugin: ChannelPlugin<ResolvedGoogleChatAccount> = {
         cfg: cfg,
         accountId,
       });
-      const space = await resolveGoogleChatOutboundSpace({ account, target: to });
+      const space = await resolveGoogleChatOutboundSpace({
+        account,
+        target: to,
+        cfg: cfg as MoltbotConfig,
+      });
       const thread = (threadId ?? replyToId ?? undefined) as string | undefined;
       const runtime = getGoogleChatRuntime();
       const maxBytes = resolveChannelMediaMaxBytes({
