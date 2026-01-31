@@ -51,6 +51,7 @@ See [Venice AI](/providers/venice).
 ## Transcription providers
 
 - [Deepgram (audio transcription)](/providers/deepgram)
+- [Telnyx (audio transcription)](/providers/telnyx)
 
 ## Community tools
 
