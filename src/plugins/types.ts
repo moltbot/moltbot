@@ -296,6 +296,7 @@ export type PluginHookName =
   | "message_sent"
   | "before_tool_call"
   | "after_tool_call"
+  | "tool_result_transform"
   | "tool_result_persist"
   | "session_start"
   | "session_end"
@@ -404,6 +405,46 @@ export type PluginHookAfterToolCallEvent = {
   durationMs?: number;
 };
 
+// tool_result_transform hook
+// This hook runs AFTER tool execution but BEFORE the result is sent to the model.
+// Unlike tool_result_persist (which only affects storage), this hook can modify
+// what the model actually sees in the current turn.
+//
+// SECURITY MODEL:
+// - Hooks can only PREPEND content, never remove or modify original content
+// - Original tool output is always preserved (append-only)
+// - Hooks receive a COPY of result (cannot mutate original)
+// - prependContent is validated for structure and size
+// - Hook execution has a timeout (default 5s)
+export type PluginHookToolResultTransformContext = {
+  agentId?: string;
+  sessionKey?: string;
+  toolName: string;
+  toolCallId: string;
+};
+
+export type PluginHookToolResultTransformEvent = {
+  toolName: string;
+  toolCallId: string;
+  params: Record<string, unknown>;
+  /**
+   * The tool result content (copy - mutations won't affect original).
+   * Typically an array of content blocks like [{ type: "text", text: "..." }]
+   */
+  result: unknown;
+  isError: boolean;
+};
+
+export type PluginHookToolResultTransformResult = {
+  /**
+   * Content blocks to PREPEND to the tool result.
+   * Must be an array of valid content blocks: [{ type: "text", text: "..." }, ...]
+   * Original content is always preserved after prepended content.
+   * Maximum size: 10000 chars (to prevent DoS).
+   */
+  prependContent?: Array<{ type: string; [key: string]: unknown }>;
+};
+
 // tool_result_persist hook
 export type PluginHookToolResultPersistContext = {
   agentId?: string;
@@ -497,6 +538,13 @@ export type PluginHookHandlerMap = {
     event: PluginHookAfterToolCallEvent,
     ctx: PluginHookToolContext,
   ) => Promise<void> | void;
+  tool_result_transform: (
+    event: PluginHookToolResultTransformEvent,
+    ctx: PluginHookToolResultTransformContext,
+  ) =>
+    | Promise<PluginHookToolResultTransformResult | void>
+    | PluginHookToolResultTransformResult
+    | void;
   tool_result_persist: (
     event: PluginHookToolResultPersistEvent,
     ctx: PluginHookToolResultPersistContext,

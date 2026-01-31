@@ -30,6 +30,9 @@ import type {
   PluginHookSessionEndEvent,
   PluginHookSessionStartEvent,
   PluginHookToolContext,
+  PluginHookToolResultTransformContext,
+  PluginHookToolResultTransformEvent,
+  PluginHookToolResultTransformResult,
   PluginHookToolResultPersistContext,
   PluginHookToolResultPersistEvent,
   PluginHookToolResultPersistResult,
@@ -52,6 +55,9 @@ export type {
   PluginHookBeforeToolCallEvent,
   PluginHookBeforeToolCallResult,
   PluginHookAfterToolCallEvent,
+  PluginHookToolResultTransformContext,
+  PluginHookToolResultTransformEvent,
+  PluginHookToolResultTransformResult,
   PluginHookToolResultPersistContext,
   PluginHookToolResultPersistEvent,
   PluginHookToolResultPersistResult,
@@ -313,6 +319,36 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
   }
 
   /**
+   * Run tool_result_transform hook.
+   *
+   * This hook runs AFTER tool execution but BEFORE the result is sent to the model.
+   * Unlike tool_result_persist (which only affects storage), this hook can modify
+   * what the model actually sees in the current turn.
+   *
+   * SECURITY MODEL:
+   * - Hooks can only PREPEND content (append-only, original always preserved)
+   * - Multiple hooks' prependContent are concatenated (not replaced)
+   * - Hooks run in priority order (higher first)
+   *
+   * Use this for security plugins like prompt injection defenders that need to
+   * add warnings the model sees immediately.
+   */
+  async function runToolResultTransform(
+    event: PluginHookToolResultTransformEvent,
+    ctx: PluginHookToolResultTransformContext,
+  ): Promise<PluginHookToolResultTransformResult | undefined> {
+    return runModifyingHook<"tool_result_transform", PluginHookToolResultTransformResult>(
+      "tool_result_transform",
+      event,
+      ctx,
+      // Concatenate prependContent from all hooks (append-only semantics)
+      (acc, next) => ({
+        prependContent: [...(acc?.prependContent ?? []), ...(next.prependContent ?? [])],
+      }),
+    );
+  }
+
+  /**
    * Run tool_result_persist hook.
    *
    * This hook is intentionally synchronous: it runs in hot paths where session
@@ -452,6 +488,7 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
     // Tool hooks
     runBeforeToolCall,
     runAfterToolCall,
+    runToolResultTransform,
     runToolResultPersist,
     // Session hooks
     runSessionStart,
