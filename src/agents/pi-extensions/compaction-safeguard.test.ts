@@ -12,6 +12,10 @@ const {
   formatToolFailuresSection,
   computeAdaptiveChunkRatio,
   isOversizedForSummary,
+  computeRecencyBufferSlice,
+  formatRecencyBufferSection,
+  formatMessageForRecencyBuffer,
+  extractMessageText,
   BASE_CHUNK_RATIO,
   MIN_CHUNK_RATIO,
   SAFETY_MARGIN,
@@ -210,6 +214,149 @@ describe("isOversizedForSummary", () => {
     const isOversized = isOversizedForSummary(msg, CONTEXT_WINDOW);
     // Due to token estimation, this could be either true or false at the boundary
     expect(typeof isOversized).toBe("boolean");
+  });
+});
+
+describe("extractMessageText", () => {
+  it("extracts text from string content", () => {
+    const msg: AgentMessage = {
+      role: "user",
+      content: "Hello, world!",
+      timestamp: Date.now(),
+    };
+    expect(extractMessageText(msg)).toBe("Hello, world!");
+  });
+
+  it("extracts text from array content blocks", () => {
+    const msg: AgentMessage = {
+      role: "assistant",
+      content: [
+        { type: "text", text: "First part." },
+        { type: "text", text: "Second part." },
+      ],
+      timestamp: Date.now(),
+    };
+    expect(extractMessageText(msg)).toBe("First part.\nSecond part.");
+  });
+
+  it("returns empty string for non-text content", () => {
+    const msg: AgentMessage = {
+      role: "user",
+      content: [{ type: "image", source: "data:..." }],
+      timestamp: Date.now(),
+    };
+    expect(extractMessageText(msg)).toBe("");
+  });
+});
+
+describe("formatMessageForRecencyBuffer", () => {
+  it("formats user message with role label", () => {
+    const msg: AgentMessage = {
+      role: "user",
+      content: "What is 2+2?",
+      timestamp: Date.now(),
+    };
+    expect(formatMessageForRecencyBuffer(msg)).toBe("**User:** What is 2+2?");
+  });
+
+  it("formats assistant message with role label", () => {
+    const msg: AgentMessage = {
+      role: "assistant",
+      content: [{ type: "text", text: "The answer is 4." }],
+      timestamp: Date.now(),
+    };
+    expect(formatMessageForRecencyBuffer(msg)).toBe("**Assistant:** The answer is 4.");
+  });
+});
+
+describe("computeRecencyBufferSlice", () => {
+  const makeMessage = (role: string, content: string): AgentMessage => ({
+    role: role as "user" | "assistant",
+    content,
+    timestamp: Date.now(),
+  });
+
+  it("returns all messages as older when disabled", () => {
+    const messages = [makeMessage("user", "hello"), makeMessage("assistant", "hi")];
+    const result = computeRecencyBufferSlice(messages, { enabled: false });
+    expect(result.recentMessages).toHaveLength(0);
+    expect(result.olderMessages).toHaveLength(2);
+  });
+
+  it("returns all messages as older when config is empty", () => {
+    const messages = [makeMessage("user", "hello"), makeMessage("assistant", "hi")];
+    const result = computeRecencyBufferSlice(messages, {});
+    expect(result.recentMessages).toHaveLength(0);
+    expect(result.olderMessages).toHaveLength(2);
+  });
+
+  it("keeps last N messages when keepMessages is set", () => {
+    const messages = [
+      makeMessage("user", "msg1"),
+      makeMessage("assistant", "msg2"),
+      makeMessage("user", "msg3"),
+      makeMessage("assistant", "msg4"),
+      makeMessage("user", "msg5"),
+    ];
+    const result = computeRecencyBufferSlice(messages, { enabled: true, keepMessages: 2 });
+    expect(result.recentMessages).toHaveLength(2);
+    expect(result.olderMessages).toHaveLength(3);
+    expect((result.recentMessages[0] as { content: string }).content).toBe("msg4");
+    expect((result.recentMessages[1] as { content: string }).content).toBe("msg5");
+  });
+
+  it("respects keepTokens limit", () => {
+    // Short messages that fit within token limit
+    const messages = [
+      makeMessage("user", "short"),
+      makeMessage("assistant", "tiny"),
+      makeMessage("user", "x".repeat(10000)), // Large message
+    ];
+    // With a small token limit, should only keep the last message if it's under limit
+    const result = computeRecencyBufferSlice(messages, {
+      enabled: true,
+      keepMessages: 10,
+      keepTokens: 100, // Very small token limit
+    });
+    // The large message exceeds the token limit on its own, but we keep at least 1
+    expect(result.recentMessages.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("handles empty messages array", () => {
+    const result = computeRecencyBufferSlice([], { enabled: true, keepMessages: 5 });
+    expect(result.recentMessages).toHaveLength(0);
+    expect(result.olderMessages).toHaveLength(0);
+  });
+
+  it("handles case where all messages fit in buffer", () => {
+    const messages = [makeMessage("user", "a"), makeMessage("assistant", "b")];
+    const result = computeRecencyBufferSlice(messages, {
+      enabled: true,
+      keepMessages: 10,
+      keepTokens: 10000,
+    });
+    expect(result.recentMessages).toHaveLength(2);
+    expect(result.olderMessages).toHaveLength(0);
+  });
+});
+
+describe("formatRecencyBufferSection", () => {
+  const makeMessage = (role: string, content: string): AgentMessage => ({
+    role: role as "user" | "assistant",
+    content,
+    timestamp: Date.now(),
+  });
+
+  it("returns empty string for empty messages", () => {
+    expect(formatRecencyBufferSection([])).toBe("");
+  });
+
+  it("formats multiple messages with header", () => {
+    const messages = [makeMessage("user", "hello"), makeMessage("assistant", "hi there")];
+    const result = formatRecencyBufferSection(messages);
+    expect(result).toContain("## Recent Context (preserved verbatim)");
+    expect(result).toContain("**User:** hello");
+    expect(result).toContain("**Assistant:** hi there");
   });
 });
 

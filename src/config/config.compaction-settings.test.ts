@@ -76,4 +76,41 @@ describe("config compaction settings", () => {
       expect(cfg.agents?.defaults?.compaction?.reserveTokensFloor).toBe(9000);
     });
   });
+
+  it("preserves recency buffer config values", async () => {
+    await withTempHome(async (home) => {
+      const configDir = path.join(home, ".clawdbot");
+      await fs.mkdir(configDir, { recursive: true });
+      await fs.writeFile(
+        path.join(configDir, "moltbot.json"),
+        JSON.stringify(
+          {
+            agents: {
+              defaults: {
+                compaction: {
+                  mode: "safeguard",
+                  recencyBuffer: {
+                    enabled: true,
+                    keepMessages: 15,
+                    keepTokens: 3000,
+                  },
+                },
+              },
+            },
+          },
+          null,
+          2,
+        ),
+        "utf-8",
+      );
+
+      vi.resetModules();
+      const { loadConfig } = await import("./config.js");
+      const cfg = loadConfig();
+
+      expect(cfg.agents?.defaults?.compaction?.recencyBuffer?.enabled).toBe(true);
+      expect(cfg.agents?.defaults?.compaction?.recencyBuffer?.keepMessages).toBe(15);
+      expect(cfg.agents?.defaults?.compaction?.recencyBuffer?.keepTokens).toBe(3000);
+    });
+  });
 });

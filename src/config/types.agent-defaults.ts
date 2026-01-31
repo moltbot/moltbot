@@ -239,6 +239,15 @@ export type AgentDefaultsConfig = {
 
 export type AgentCompactionMode = "default" | "safeguard";
 
+export type AgentCompactionRecencyBufferConfig = {
+  /** Enable the recency buffer (default: false). */
+  enabled?: boolean;
+  /** Max messages to keep raw (default: 10). */
+  keepMessages?: number;
+  /** Max tokens to keep raw; whichever limit hits first wins (default: 2000). */
+  keepTokens?: number;
+};
+
 export type AgentCompactionConfig = {
   /** Compaction summarization mode. */
   mode?: AgentCompactionMode;
@@ -248,6 +257,8 @@ export type AgentCompactionConfig = {
   maxHistoryShare?: number;
   /** Pre-compaction memory flush (agentic turn). Default: enabled. */
   memoryFlush?: AgentCompactionMemoryFlushConfig;
+  /** Recency buffer: preserve recent messages as raw text instead of summarizing them. */
+  recencyBuffer?: AgentCompactionRecencyBufferConfig;
 };
 
 export type AgentCompactionMemoryFlushConfig = {

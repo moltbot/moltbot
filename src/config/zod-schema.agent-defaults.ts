@@ -100,6 +100,14 @@ export const AgentDefaultsSchema = z
           })
           .strict()
           .optional(),
+        recencyBuffer: z
+          .object({
+            enabled: z.boolean().optional(),
+            keepMessages: z.number().int().positive().optional(),
+            keepTokens: z.number().int().positive().optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),

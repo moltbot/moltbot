@@ -1,5 +1,6 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { ExtensionAPI, FileOperations } from "@mariozechner/pi-coding-agent";
+import { estimateTokens } from "@mariozechner/pi-coding-agent";
 import {
   BASE_CHUNK_RATIO,
   MIN_CHUNK_RATIO,
@@ -11,7 +12,10 @@ import {
   resolveContextWindowTokens,
   summarizeInStages,
 } from "../compaction.js";
-import { getCompactionSafeguardRuntime } from "./compaction-safeguard-runtime.js";
+import {
+  getCompactionSafeguardRuntime,
+  type RecencyBufferConfig,
+} from "./compaction-safeguard-runtime.js";
 const FALLBACK_SUMMARY =
   "Summary unavailable due to context limits. Older messages were truncated.";
 const TURN_PREFIX_INSTRUCTIONS =
@@ -158,6 +162,86 @@ function formatFileOperations(readFiles: string[], modifiedFiles: string[]): str
   return `\n\n${sections.join("\n\n")}`;
 }
 
+/**
+ * Extract text content from a message for raw preservation in recency buffer.
+ */
+function extractMessageText(message: AgentMessage): string {
+  const content = (message as { content?: unknown }).content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    const parts: string[] = [];
+    for (const block of content) {
+      if (!block || typeof block !== "object") continue;
+      const rec = block as { type?: unknown; text?: unknown };
+      if (rec.type === "text" && typeof rec.text === "string") {
+        parts.push(rec.text);
+      }
+    }
+    return parts.join("\n");
+  }
+  return "";
+}
+
+/**
+ * Format a single message as raw text for the recency buffer section.
+ */
+function formatMessageForRecencyBuffer(message: AgentMessage): string {
+  const role = (message as { role?: string }).role ?? "unknown";
+  const text = extractMessageText(message);
+  const roleLabel = role === "user" ? "User" : role === "assistant" ? "Assistant" : role;
+  return `**${roleLabel}:** ${text}`;
+}
+
+/**
+ * Compute the recency buffer slice: messages to keep raw at the end.
+ * Returns { recentMessages, olderMessages } where recentMessages are kept raw.
+ */
+function computeRecencyBufferSlice(
+  messages: AgentMessage[],
+  config: RecencyBufferConfig,
+): { recentMessages: AgentMessage[]; olderMessages: AgentMessage[] } {
+  if (!config.enabled || messages.length === 0) {
+    return { recentMessages: [], olderMessages: messages };
+  }
+
+  const keepMessages = config.keepMessages ?? 10;
+  const keepTokens = config.keepTokens ?? 2000;
+
+  // Walk backwards from the end, counting messages and tokens
+  let recentCount = 0;
+  let recentTokens = 0;
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msgTokens = estimateTokens(messages[i]);
+
+    // Check if adding this message would exceed either limit
+    if (recentCount >= keepMessages) break;
+    if (recentTokens + msgTokens > keepTokens && recentCount > 0) break;
+
+    recentCount++;
+    recentTokens += msgTokens;
+  }
+
+  if (recentCount === 0) {
+    return { recentMessages: [], olderMessages: messages };
+  }
+
+  const splitIndex = messages.length - recentCount;
+  return {
+    recentMessages: messages.slice(splitIndex),
+    olderMessages: messages.slice(0, splitIndex),
+  };
+}
+
+/**
+ * Format the recency buffer section to append to the summary.
+ */
+function formatRecencyBufferSection(messages: AgentMessage[]): string {
+  if (messages.length === 0) return "";
+  const formatted = messages.map(formatMessageForRecencyBuffer).join("\n\n");
+  return `\n\n---\n\n## Recent Context (preserved verbatim)\n\n${formatted}`;
+}
+
 export default function compactionSafeguardExtension(api: ExtensionAPI): void {
   api.on("session_before_compact", async (event, ctx) => {
     const { preparation, customInstructions, signal } = event;
@@ -201,6 +285,18 @@ export default function compactionSafeguardExtension(api: ExtensionAPI): void {
 
       const runtime = getCompactionSafeguardRuntime(ctx.sessionManager);
       const maxHistoryShare = runtime?.maxHistoryShare ?? 0.5;
+      const recencyBufferConfig = runtime?.recencyBuffer;
+
+      // Apply recency buffer: slice off recent messages to keep raw
+      let recencyBufferMessages: AgentMessage[] = [];
+      if (recencyBufferConfig?.enabled) {
+        const { recentMessages, olderMessages } = computeRecencyBufferSlice(
+          messagesToSummarize,
+          recencyBufferConfig,
+        );
+        recencyBufferMessages = recentMessages;
+        messagesToSummarize = olderMessages;
+      }
 
       const tokensBefore =
         typeof preparation.tokensBefore === "number" && Number.isFinite(preparation.tokensBefore)
@@ -305,6 +401,8 @@ export default function compactionSafeguardExtension(api: ExtensionAPI): void {
         summary = `${historySummary}\n\n---\n\n**Turn Context (split turn):**\n\n${prefixSummary}`;
       }
 
+      // Append recency buffer (raw recent messages) before tool failures and file ops
+      summary += formatRecencyBufferSection(recencyBufferMessages);
       summary += toolFailureSection;
       summary += fileOpsSummary;
 
@@ -339,6 +437,10 @@ export const __testing = {
   formatToolFailuresSection,
   computeAdaptiveChunkRatio,
   isOversizedForSummary,
+  computeRecencyBufferSlice,
+  formatRecencyBufferSection,
+  formatMessageForRecencyBuffer,
+  extractMessageText,
   BASE_CHUNK_RATIO,
   MIN_CHUNK_RATIO,
   SAFETY_MARGIN,
