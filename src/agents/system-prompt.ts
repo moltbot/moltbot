@@ -61,7 +61,14 @@ function buildTimeSection(params: { userTimezone?: string }) {
   if (!params.userTimezone) {
     return [];
   }
-  return ["## Current Date & Time", `Time zone: ${params.userTimezone}`, ""];
+  const dateStr = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: params.userTimezone,
+  });
+  return ["## Current Date & Time", dateStr, `Time zone: ${params.userTimezone}`, ""];
 }
 
 function buildReplyTagsSection(isMinimal: boolean) {
