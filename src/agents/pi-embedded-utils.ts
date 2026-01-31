@@ -171,12 +171,6 @@ export function stripThinkingTagsFromText(text: string): string {
 }
 
 export function extractAssistantText(msg: AssistantMessage): string {
-  const isTextBlock = (block: unknown): block is { type: "text"; text: string } => {
-    if (!block || typeof block !== "object") return false;
-    const rec = block as Record<string, unknown>;
-    return rec.type === "text" && typeof rec.text === "string";
-  };
-
   const extractTextFromBlock = (block: unknown): string | null => {
     if (!block || typeof block !== "object") return null;
     const rec = block as Record<string, unknown>;
