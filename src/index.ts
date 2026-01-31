@@ -85,16 +85,22 @@ if (isMain) {
   process.on("uncaughtException", (error) => {
     const msg = formatUncaughtError(error);
     console.error("[moltbot] Uncaught exception:", msg);
-    // Don't exit for known Discord/Carbon recoverable errors so gateway stays up (e.g. WhatsApp).
-    // - 4014: Discord Disallowed Intents; Carbon may still throw from internal close/reconnect.
-    // - "zombie connection": Carbon heartbeat tries to reconnect after Discord already closed.
+    // Don't exit for known recoverable errors so gateway stays up (e.g. WhatsApp).
+    // - 4014 / zombie: Discord/Carbon gateway errors when Discord disabled or intents wrong.
+    // - EPIPE: stdout/stderr closed (terminal closed, background run, systemd); logging/heartbeat writes throw.
     if (
       msg.includes("Fatal Gateway error: 4014") ||
-      msg.includes("Attempted to reconnect zombie connection after disconnecting first")
+      msg.includes("Attempted to reconnect zombie connection after disconnecting first") ||
+      msg.includes("write EPIPE") ||
+      (error instanceof Error && (error as NodeJS.ErrnoException).code === "EPIPE")
     ) {
-      console.warn(
-        "[moltbot] Suppressing exit for Discord gateway recoverable error; other channels continue.",
-      );
+      try {
+        console.warn(
+          "[moltbot] Suppressing exit for recoverable error (Discord/EPIPE); gateway continues.",
+        );
+      } catch {
+        // ignore if console also broken (e.g. EPIPE)
+      }
       return;
     }
     process.exit(1);
