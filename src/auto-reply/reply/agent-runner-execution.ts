@@ -318,6 +318,12 @@ export async function runAgentTurnWithFallback(params: {
                 const phase = typeof evt.data.phase === "string" ? evt.data.phase : "";
                 if (phase === "start" || phase === "update") {
                   await params.typingSignals.signalToolStart();
+                  // Notify placeholder of tool usage
+                  const toolName = typeof evt.data.name === "string" ? evt.data.name : undefined;
+                  if (toolName && params.opts?.onToolStart) {
+                    const args = evt.data.args as Record<string, unknown> | undefined;
+                    await params.opts.onToolStart(toolName, args);
+                  }
                 }
               }
               // Track auto-compaction completion

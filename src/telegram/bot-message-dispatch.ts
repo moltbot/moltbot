@@ -9,6 +9,7 @@ import { resolveDefaultModelForAgent } from "../agents/model-selection.js";
 import { resolveChunkMode } from "../auto-reply/chunk.js";
 import { clearHistoryEntriesIfEnabled } from "../auto-reply/reply/history.js";
 import { dispatchReplyWithBufferedBlockDispatcher } from "../auto-reply/reply/provider-dispatcher.js";
+import { createPlaceholderController } from "../auto-reply/reply/placeholder.js";
 import { removeAckReactionAfterReply } from "../channels/ack-reactions.js";
 import { logAckFailure, logTypingFailure } from "../channels/logging.js";
 import { createReplyPrefixContext } from "../channels/reply-prefix.js";
@@ -20,6 +21,7 @@ import { resolveTelegramDraftStreamingChunking } from "./draft-chunking.js";
 import { createTelegramDraftStream } from "./draft-stream.js";
 import { cacheSticker, describeStickerImage } from "./sticker-cache.js";
 import { resolveAgentDir } from "../agents/agent-scope.js";
+import { sendMessageTelegram, deleteMessageTelegram, editMessageTelegram } from "./send.js";
 
 const EMPTY_RESPONSE_FALLBACK = "No response generated. Please try again.";
 
@@ -223,6 +225,39 @@ export const dispatchTelegramMessage = async ({
     skippedNonSilent: 0,
   };
 
+  // Create placeholder controller if enabled
+  const placeholderConfig = telegramCfg.placeholder ?? {};
+  const placeholder = createPlaceholderController({
+    config: placeholderConfig,
+    sender: {
+      send: async (text) => {
+        const result = await sendMessageTelegram(String(chatId), text, {
+          token: opts.token,
+          messageThreadId: resolvedThreadId,
+          textMode: "html",
+        });
+        return { messageId: result.messageId, chatId: result.chatId };
+      },
+      edit: async (messageId, text) => {
+        await editMessageTelegram(String(chatId), Number(messageId), text, {
+          token: opts.token,
+          textMode: "html",
+        });
+      },
+      delete: async (messageId) => {
+        await deleteMessageTelegram(String(chatId), Number(messageId), {
+          token: opts.token,
+        });
+      },
+    },
+    log: logVerbose,
+  });
+
+  // Send placeholder immediately when processing starts
+  if (placeholderConfig.enabled) {
+    await placeholder.start();
+  }
+
   const { queuedFinal } = await dispatchReplyWithBufferedBlockDispatcher({
     ctx: ctxPayload,
     cfg,
@@ -233,6 +268,8 @@ export const dispatchTelegramMessage = async ({
         if (info.kind === "final") {
           await flushDraft();
           draftStream?.stop();
+          // Clean up placeholder before sending final reply
+          await placeholder.cleanup();
         }
         const result = await deliverReplies({
           replies: [payload],
@@ -280,6 +317,11 @@ export const dispatchTelegramMessage = async ({
       onModelSelected: (ctx) => {
         prefixContext.onModelSelected(ctx);
       },
+      onToolStart: placeholderConfig.enabled
+        ? async (toolName, args) => {
+            await placeholder.onTool(toolName, args);
+          }
+        : undefined,
     },
   });
   draftStream?.stop();
