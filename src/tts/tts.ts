@@ -48,6 +48,7 @@ const DEFAULT_ELEVENLABS_VOICE_ID = "pMsXgVXv3BLzUgSXRplE";
 const DEFAULT_ELEVENLABS_MODEL_ID = "eleven_multilingual_v2";
 const DEFAULT_OPENAI_MODEL = "gpt-4o-mini-tts";
 const DEFAULT_OPENAI_VOICE = "alloy";
+const DEFAULT_OPENAI_SPEED = 1.0;
 const DEFAULT_EDGE_VOICE = "en-US-MichelleNeural";
 const DEFAULT_EDGE_LANG = "en-US";
 const DEFAULT_EDGE_OUTPUT_FORMAT = "audio-24khz-48kbitrate-mono-mp3";
@@ -110,6 +111,7 @@ export type ResolvedTtsConfig = {
     apiKey?: string;
     model: string;
     voice: string;
+    speed: number;
   };
   edge: {
     enabled: boolean;
@@ -282,6 +284,7 @@ export function resolveTtsConfig(cfg: OpenClawConfig): ResolvedTtsConfig {
       apiKey: raw.openai?.apiKey,
       model: raw.openai?.model ?? DEFAULT_OPENAI_MODEL,
       voice: raw.openai?.voice ?? DEFAULT_OPENAI_VOICE,
+      speed: raw.openai?.speed ?? DEFAULT_OPENAI_SPEED,
     },
     edge: {
       enabled: raw.edge?.enabled ?? true,
@@ -1003,10 +1006,11 @@ async function openaiTTS(params: {
   apiKey: string;
   model: string;
   voice: string;
+  speed: number;
   responseFormat: "mp3" | "opus" | "pcm";
   timeoutMs: number;
 }): Promise<Buffer> {
-  const { text, apiKey, model, voice, responseFormat, timeoutMs } = params;
+  const { text, apiKey, model, voice, speed, responseFormat, timeoutMs } = params;
 
   if (!isValidOpenAIModel(model)) {
     throw new Error(`Invalid model: ${model}`);
@@ -1029,6 +1033,7 @@ async function openaiTTS(params: {
         model,
         input: text,
         voice,
+        speed,
         response_format: responseFormat,
       }),
       signal: controller.signal,
@@ -1211,6 +1216,7 @@ export async function textToSpeech(params: {
           apiKey,
           model: openaiModelOverride ?? config.openai.model,
           voice: openaiVoiceOverride ?? config.openai.voice,
+          speed: config.openai.speed,
           responseFormat: output.openai,
           timeoutMs: config.timeoutMs,
         });
@@ -1313,6 +1319,7 @@ export async function textToSpeechTelephony(params: {
         apiKey,
         model: config.openai.model,
         voice: config.openai.voice,
+        speed: config.openai.speed,
         responseFormat: output.format,
         timeoutMs: config.timeoutMs,
       });
