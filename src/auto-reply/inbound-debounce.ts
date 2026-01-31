@@ -80,7 +80,10 @@ export function createInboundDebouncer<T>(params: {
       if (key && buffers.has(key)) {
         await flushKey(key);
       }
-      await params.onFlush([item]);
+      // When debounceMs=0, fire-and-forget to allow concurrent message processing.
+      // This enables the queue system to properly detect active runs and route
+      // subsequent messages to the followup queue instead of blocking.
+      void params.onFlush([item]).catch((err) => params.onError?.(err, [item]));
       return;
     }
 

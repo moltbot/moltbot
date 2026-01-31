@@ -39,6 +39,7 @@ import type { buildCommandContext } from "./commands.js";
 import type { InlineDirectives } from "./directive-handling.js";
 import { buildGroupIntro } from "./groups.js";
 import type { createModelSelectionState } from "./model-selection.js";
+import { getFollowupQueueDepth } from "./queue/enqueue.js";
 import { resolveQueueSettings } from "./queue.js";
 import { ensureSkillSnapshot, prependSystemEvents } from "./session-updates.js";
 import type { TypingController } from "./typing.js";
@@ -333,6 +334,39 @@ export async function runPreparedReply(
   const queueKey = sessionKey ?? sessionIdFinal;
   const isActive = isEmbeddedPiRunActive(sessionIdFinal);
   const isStreaming = isEmbeddedPiRunStreaming(sessionIdFinal);
+
+  // Notify user when their message is queued behind active tasks
+  const followupDepth = getFollowupQueueDepth(queueKey);
+  const isBusy = isActive || followupDepth > 0;
+  if (isBusy && resolvedQueue.mode !== "interrupt") {
+    const notifyChannel = ctx.OriginatingChannel || (command.channel as any);
+    const notifyTo = ctx.OriginatingTo || command.from || command.to;
+    if (notifyChannel && notifyTo) {
+      const runningCount = isActive ? 1 : 0;
+      const queuedCount = followupDepth;
+      let queueText = "📋 Your message is queued";
+      if (runningCount > 0 && queuedCount > 0) {
+        queueText += ` (${runningCount} running, ${queuedCount} queued)`;
+      } else if (runningCount > 0) {
+        queueText += " (1 task running)";
+      } else if (queuedCount > 0) {
+        queueText += ` (${queuedCount} queued)`;
+      }
+      void routeReply({
+        payload: { text: queueText },
+        channel: notifyChannel,
+        to: notifyTo,
+        sessionKey,
+        accountId: ctx.AccountId,
+        threadId: ctx.MessageThreadId,
+        cfg,
+        mirror: false,
+      }).catch(() => {
+        // Ignore notification failures - don't block the main flow
+      });
+    }
+  }
+
   const shouldSteer = resolvedQueue.mode === "steer" || resolvedQueue.mode === "steer-backlog";
   const shouldFollowup =
     resolvedQueue.mode === "followup" ||
