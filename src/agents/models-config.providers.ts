@@ -165,7 +165,8 @@ export async function probeOllama(timeoutMs = 2000, attempts = 2): Promise<boole
     const ok = res.ok;
     providerHealth.set("ollama", ok);
     return ok;
-  } catch (err) {
+  } catch {
+    // failure handled via providerHealth flag
     providerHealth.set("ollama", false);
     return false;
   }

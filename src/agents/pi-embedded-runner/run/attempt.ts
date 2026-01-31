@@ -430,7 +430,7 @@ export async function runEmbeddedAttempt(
         minReserveTokens: resolveCompactionReserveTokensFloor(params.config),
       });
 
-      const additionalExtensionPaths = buildEmbeddedExtensionPaths({
+      const _additionalExtensionPaths = buildEmbeddedExtensionPaths({
         cfg: params.config,
         sessionManager,
         provider: params.provider,
