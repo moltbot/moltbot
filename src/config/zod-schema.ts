@@ -88,6 +88,14 @@ export const OpenClawSchema = z
           })
           .strict()
           .optional(),
+        phoenix: z
+          .object({
+            enabled: z.boolean().optional(),
+            url: z.string().optional(),
+            projectName: z.string().optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),

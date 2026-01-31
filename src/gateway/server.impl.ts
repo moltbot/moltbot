@@ -15,6 +15,7 @@ import {
 } from "../config/config.js";
 import { isDiagnosticsEnabled } from "../infra/diagnostic-events.js";
 import { logAcceptedEnvOption } from "../infra/env.js";
+import { initializePhoenix, isPhoenixEnabled } from "../infra/phoenix-instrumentation.js";
 import { applyPluginAutoEnable } from "../config/plugin-auto-enable.js";
 import { clearAgentRunContext, onAgentEvent } from "../infra/agent-events.js";
 import { onHeartbeatEvent } from "../infra/heartbeat-events.js";
@@ -214,6 +215,12 @@ export async function startGatewayServer(
   if (diagnosticsEnabled) {
     startDiagnosticHeartbeat();
   }
+
+  // Initialize Phoenix instrumentation if enabled
+  if (isPhoenixEnabled(cfgAtStart)) {
+    await initializePhoenix(cfgAtStart);
+  }
+
   setGatewaySigusr1RestartPolicy({ allowExternal: cfgAtStart.commands?.restart === true });
   initSubagentRegistry();
   const defaultAgentId = resolveDefaultAgentId(cfgAtStart);

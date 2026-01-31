@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -39,7 +40,35 @@ function ensureExperimentalWarningSuppressed(): boolean {
   }
 
   process.env.OPENCLAW_NODE_OPTIONS_READY = "1";
-  process.env.NODE_OPTIONS = `${nodeOptions} ${EXPERIMENTAL_WARNING_FLAG}`.trim();
+
+  // Check if Phoenix is enabled in config and set env var
+  // This must be done before respawning so the child process has the env var set
+  if (!process.env.OPENCLAW_PHOENIX_ENABLED) {
+    try {
+      // Safely check config file for Phoenix setting
+      const configPath = path.join(process.env.HOME || "", ".openclaw", "config.json");
+      if (existsSync(configPath)) {
+        const configData = readFileSync(configPath, "utf-8");
+        const config = JSON.parse(configData);
+        if (config?.diagnostics?.phoenix?.enabled === true) {
+          process.env.OPENCLAW_PHOENIX_ENABLED = "true";
+        }
+      }
+    } catch {
+      // Ignore errors reading config
+    }
+  }
+
+  // Add Phoenix preload if enabled (must be loaded BEFORE any application code)
+  let updatedOptions = nodeOptions;
+  if (process.env.OPENCLAW_PHOENIX_ENABLED === "true") {
+    // phoenix-preload.mjs is in the project root, not in dist
+    const projectRoot = path.resolve(path.dirname(process.argv[1]), "..");
+    const phoenixPreload = path.join(projectRoot, "phoenix-preload.mjs");
+    updatedOptions = `${updatedOptions} --import ${phoenixPreload}`.trim();
+  }
+
+  process.env.NODE_OPTIONS = `${updatedOptions} ${EXPERIMENTAL_WARNING_FLAG}`.trim();
 
   const child = spawn(process.execPath, [...process.execArgv, ...process.argv.slice(1)], {
     stdio: "inherit",
