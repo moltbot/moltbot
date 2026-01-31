@@ -172,7 +172,7 @@ NanoGPT exposes OpenAI-compatible endpoints:
 ```json5
 {
   agents: {
-    defaults: { model: { primary: "nanogpt/zai-org/glm-4.7" } }
+    defaults: { model: { primary: "nanogpt/zai-org/glm-4.7" } },
   },
   models: {
     mode: "merge",
@@ -181,10 +181,10 @@ NanoGPT exposes OpenAI-compatible endpoints:
         baseUrl: "https://nano-gpt.com/api/v1",
         apiKey: "${NANOGPT_API_KEY}",
         api: "openai-completions",
-        models: [{ id: "zai-org/glm-4.7", name: "GLM 4.7" }]
-      }
-    }
-  }
+        models: [{ id: "zai-org/glm-4.7", name: "GLM 4.7" }],
+      },
+    },
+  },
 }
 ```
 

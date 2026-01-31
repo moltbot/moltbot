@@ -4,6 +4,7 @@ read_when:
   - You want to use NanoGPT as a model provider
   - You need a NanoGPT API key or base URL setup
 ---
+
 # NanoGPT
 
 NanoGPT exposes OpenAI-compatible endpoints. OpenClaw registers it as the
@@ -29,8 +30,8 @@ openclaw models auth login-nanogpt --set-default
 
 ### Option 2: API key
 
-1) Set `NANOGPT_API_KEY` (or run the wizard below).
-2) Run onboarding:
+1. Set `NANOGPT_API_KEY` (or run the wizard below).
+2. Run onboarding:
 
 ```bash
 openclaw onboard --auth-choice nanogpt-api-key
@@ -50,8 +51,8 @@ nanogpt/zai-org/glm-4.7
   agents: {
     defaults: {
       model: { primary: "nanogpt/zai-org/glm-4.7" },
-      models: { "nanogpt/zai-org/glm-4.7": { alias: "GLM 4.7" } }
-    }
+      models: { "nanogpt/zai-org/glm-4.7": { alias: "GLM 4.7" } },
+    },
   },
   models: {
     mode: "merge",
@@ -68,12 +69,12 @@ nanogpt/zai-org/glm-4.7
             input: ["text"],
             cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
             contextWindow: 200000,
-            maxTokens: 65535
-          }
-        ]
-      }
-    }
-  }
+            maxTokens: 65535,
+          },
+        ],
+      },
+    },
+  },
 }
 ```
 
