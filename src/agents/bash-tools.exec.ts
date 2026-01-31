@@ -59,13 +59,13 @@ import { parseAgentSessionKey, resolveAgentIdFromSessionKey } from "../routing/s
 
 const DEFAULT_MAX_OUTPUT = clampNumber(
   readEnvInt("PI_BASH_MAX_OUTPUT_CHARS"),
-  200_000,
+  80_000,
   1_000,
   200_000,
 );
 const DEFAULT_PENDING_MAX_OUTPUT = clampNumber(
   readEnvInt("OPENCLAW_BASH_PENDING_MAX_OUTPUT_CHARS"),
-  200_000,
+  80_000,
   1_000,
   200_000,
 );
