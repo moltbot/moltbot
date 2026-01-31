@@ -9,6 +9,7 @@ Docs: https://docs.openclaw.ai
 ### Fixes
 
 - Telegram: restore draft streaming partials. (#5543) Thanks @obviyus.
+- OAuth: fix refresh only refreshing one profile per provider, leaving other accounts expired. (#3803) Thanks @Daviey.
 
 ## 2026.1.30
 
