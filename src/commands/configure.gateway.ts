@@ -42,6 +42,11 @@ export async function promptGatewayConfig(
           hint: "Bind to your Tailscale IP only (100.x.x.x)",
         },
         {
+          value: "wireguard",
+          label: "WireGuard (WireGuard IP)",
+          hint: "Bind to your WireGuard mesh IP (wg0/wt0 interface)",
+        },
+        {
           value: "auto",
           label: "Auto (Loopback → LAN)",
           hint: "Prefer loopback; fall back to all interfaces if unavailable",
