@@ -191,6 +191,145 @@ function normalizeDeps(overrides: ConfigIoDeps = {}): Required<ConfigIoDeps> {
   };
 }
 
+export type DuplicateKeyWarning = { path: string; message: string };
+
+/**
+ * Detects duplicate keys in JSON/JSON5 text using a simple state machine.
+ * Returns warnings for each duplicate key found.
+ */
+export function detectDuplicateKeys(raw: string): DuplicateKeyWarning[] {
+  const warnings: DuplicateKeyWarning[] = [];
+  const pathStack: string[] = [];
+  let i = 0;
+
+  const skipWs = () => {
+    while (i < raw.length) {
+      const c = raw[i];
+      if (c === " " || c === "\t" || c === "\n" || c === "\r") {
+        i++;
+      } else if (c === "/" && i + 1 < raw.length && raw[i + 1] === "/") {
+        while (i < raw.length && raw[i] !== "\n") {
+          i++;
+        }
+      } else if (c === "/" && i + 1 < raw.length && raw[i + 1] === "*") {
+        i += 2;
+        while (i + 1 < raw.length && !(raw[i] === "*" && raw[i + 1] === "/")) {
+          i++;
+        }
+        if (i + 1 < raw.length && raw[i] === "*" && raw[i + 1] === "/") {
+          i += 2;
+        }
+      } else {
+        break;
+      }
+    }
+  };
+
+  const readString = (): string | null => {
+    const q = raw[i];
+    if (q !== '"' && q !== "'") {
+      return null;
+    }
+    i++;
+    let s = "";
+    while (i < raw.length && raw[i] !== q) {
+      if (raw[i] === "\\") {
+        i++;
+        if (i < raw.length) {
+          s += raw[i++];
+        }
+      } else {
+        s += raw[i++];
+      }
+    }
+    if (i < raw.length && raw[i] === q) {
+      i++;
+    }
+    return s;
+  };
+
+  const readUnquoted = (): string | null => {
+    const start = i;
+    while (i < raw.length && /[a-zA-Z0-9_$]/.test(raw[i])) {
+      i++;
+    }
+    return i > start ? raw.slice(start, i) : null;
+  };
+
+  const skipValue = (): void => {
+    skipWs();
+    if (raw[i] === "{") {
+      parseObj();
+    } else if (raw[i] === "[") {
+      parseArr();
+    } else if (raw[i] === '"' || raw[i] === "'") {
+      readString();
+    } else {
+      while (i < raw.length && !/[,}\]\s]/.test(raw[i])) {
+        i++;
+      }
+    }
+  };
+
+  const parseArr = (): void => {
+    i++;
+    while (i < raw.length) {
+      skipWs();
+      if (raw[i] === "]") {
+        i++;
+        return;
+      }
+      skipValue();
+      skipWs();
+      if (raw[i] === ",") {
+        i++;
+      }
+    }
+  };
+
+  const parseObj = (): void => {
+    i++;
+    const keys = new Set<string>();
+    while (i < raw.length) {
+      skipWs();
+      if (raw[i] === "}") {
+        i++;
+        return;
+      }
+      const key = raw[i] === '"' || raw[i] === "'" ? readString() : readUnquoted();
+      if (!key) {
+        i++;
+        continue;
+      }
+      if (keys.has(key)) {
+        const path = [...pathStack, key].join(".");
+        warnings.push({ path, message: `Duplicate key "${key}"` });
+      } else {
+        keys.add(key);
+      }
+      skipWs();
+      if (raw[i] === ":") {
+        i++;
+      }
+      pathStack.push(key);
+      skipValue();
+      pathStack.pop();
+      skipWs();
+      if (raw[i] === ",") {
+        i++;
+      }
+    }
+  };
+
+  skipWs();
+  if (raw[i] === "{") {
+    parseObj();
+  } else if (raw[i] === "[") {
+    parseArr();
+  }
+  return warnings;
+}
+
 export function parseConfigJson5(
   raw: string,
   json5: { parse: (value: string) => unknown } = JSON5,
@@ -353,6 +492,10 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
     try {
       const raw = deps.fs.readFileSync(configPath, "utf-8");
       const hash = hashConfigRaw(raw);
+
+      // Detect duplicate keys before parsing
+      const duplicateKeyWarnings = detectDuplicateKeys(raw);
+
       const parsedRes = parseConfigJson5(raw, deps.json5);
       if (!parsedRes.ok) {
         return {
@@ -364,7 +507,7 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
           config: {},
           hash,
           issues: [{ path: "", message: `JSON5 parse failed: ${parsedRes.error}` }],
-          warnings: [],
+          warnings: duplicateKeyWarnings,
           legacyIssues: [],
         };
       }
@@ -390,7 +533,7 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
           config: coerceConfig(parsedRes.parsed),
           hash,
           issues: [{ path: "", message }],
-          warnings: [],
+          warnings: duplicateKeyWarnings,
           legacyIssues: [],
         };
       }
@@ -418,7 +561,7 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
           config: coerceConfig(resolved),
           hash,
           issues: [{ path: "", message }],
-          warnings: [],
+          warnings: duplicateKeyWarnings,
           legacyIssues: [],
         };
       }
@@ -437,7 +580,7 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
           config: coerceConfig(resolvedConfigRaw),
           hash,
           issues: validated.issues,
-          warnings: validated.warnings,
+          warnings: [...duplicateKeyWarnings, ...validated.warnings],
           legacyIssues,
         };
       }
@@ -460,7 +603,7 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
         ),
         hash,
         issues: [],
-        warnings: validated.warnings,
+        warnings: [...duplicateKeyWarnings, ...validated.warnings],
         legacyIssues,
       };
     } catch (err) {
