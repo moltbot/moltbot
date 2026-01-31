@@ -76,6 +76,17 @@ const OLLAMA_DEFAULT_COST = {
   cacheWrite: 0,
 };
 
+function normalizeProviderBaseUrl(url: string): string {
+  return url.trim().replace(/\/+$/, "");
+}
+
+function resolveZaiBaseUrlEnv(env: NodeJS.ProcessEnv): string | null {
+  // Keep a legacy alias to mirror Z_AI_API_KEY support.
+  const raw = env.ZAI_BASE_URL?.trim() || env.Z_AI_BASE_URL?.trim() || "";
+  if (!raw) return null;
+  return normalizeProviderBaseUrl(raw);
+}
+
 interface OllamaModel {
   name: string;
   modified_at: string;
@@ -398,6 +409,12 @@ export async function resolveImplicitProviders(params: {
   agentDir: string;
 }): Promise<ModelsConfig["providers"]> {
   const providers: Record<string, ProviderConfig> = {};
+  const zaiBaseUrl = resolveZaiBaseUrlEnv(process.env);
+  if (zaiBaseUrl) {
+    // Override baseUrl for pi-ai built-in z.ai models without redefining models.
+    // This matches the "models: [] means baseUrl override only" pattern used for Copilot.
+    providers.zai = { baseUrl: zaiBaseUrl, models: [] };
+  }
   const authStore = ensureAuthProfileStore(params.agentDir, {
     allowKeychainPrompt: false,
   });
