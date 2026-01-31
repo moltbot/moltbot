@@ -14,6 +14,59 @@ import type { CommandHandler } from "./commands-types.js";
 const PAGE_SIZE_DEFAULT = 20;
 const PAGE_SIZE_MAX = 100;
 
+const TELEGRAM_MENU_COLS = 3;
+const TELEGRAM_MENU_ROWS = 3;
+// Max 9 buttons per screen (3x3). Reserve the last row for navigation.
+const TELEGRAM_MENU_ITEMS_PER_PAGE = (TELEGRAM_MENU_ROWS - 1) * TELEGRAM_MENU_COLS; // 6
+
+type TelegramButtons = Array<Array<{ text: string; callback_data: string }>>;
+
+type MenuItem = { text: string; callback_data: string };
+
+function truncateButtonText(text: string, max = 36): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= max) return trimmed;
+  return trimmed.slice(0, Math.max(0, max - 1)).trimEnd() + "…";
+}
+
+function chunkIntoRows(items: MenuItem[], cols: number): MenuItem[][] {
+  const rows: MenuItem[][] = [];
+  for (let i = 0; i < items.length; i += cols) {
+    rows.push(items.slice(i, i + cols));
+  }
+  return rows;
+}
+
+function buildPagedMenuButtons(params: {
+  items: MenuItem[];
+  page: number;
+  pageCount: number;
+  prevCallback: string;
+  nextCallback: string;
+  middle: MenuItem;
+}): TelegramButtons {
+  const safePage = Math.max(1, Math.min(params.page, params.pageCount || 1));
+  const startIndex = (safePage - 1) * TELEGRAM_MENU_ITEMS_PER_PAGE;
+  const pageItems = params.items.slice(startIndex, startIndex + TELEGRAM_MENU_ITEMS_PER_PAGE);
+
+  const rows = chunkIntoRows(pageItems, TELEGRAM_MENU_COLS).slice(0, TELEGRAM_MENU_ROWS - 1);
+
+  // Navigation row always present (3 buttons).
+  rows.push([
+    { text: "Prev", callback_data: params.prevCallback },
+    params.middle,
+    { text: "Next", callback_data: params.nextCallback },
+  ]);
+
+  // Normalize text (no emojis, keep short)
+  return rows.map((row) =>
+    row.map((btn) => ({
+      text: truncateButtonText(btn.text),
+      callback_data: btn.callback_data,
+    })),
+  );
+}
+
 function formatProviderLine(params: { provider: string; count: number }): string {
   return `- ${params.provider} (${params.count})`;
 }
@@ -30,11 +83,22 @@ function parseModelsArgs(raw: string): {
   }
 
   const tokens = trimmed.split(/\s+/g).filter(Boolean);
-  const provider = tokens[0]?.trim();
+
+  const first = tokens[0]?.trim();
+  const firstLower = first?.toLowerCase();
+  const firstIsProvider =
+    Boolean(first) &&
+    !/^[0-9]+$/.test(firstLower ?? "") &&
+    !(firstLower ?? "").startsWith("page=") &&
+    firstLower !== "all" &&
+    firstLower !== "--all";
+
+  const provider = firstIsProvider ? normalizeProviderId(first!) : undefined;
+  const parseTokens = firstIsProvider ? tokens.slice(1) : tokens;
 
   let page = 1;
   let all = false;
-  for (const token of tokens.slice(1)) {
+  for (const token of parseTokens) {
     const lower = token.toLowerCase();
     if (lower === "all" || lower === "--all") {
       all = true;
@@ -68,7 +132,7 @@ function parseModelsArgs(raw: string): {
   }
 
   return {
-    provider: provider ? normalizeProviderId(provider) : undefined,
+    provider,
     page,
     pageSize,
     all,
@@ -78,6 +142,7 @@ function parseModelsArgs(raw: string): {
 export async function resolveModelsCommandReply(params: {
   cfg: OpenClawConfig;
   commandBodyNormalized: string;
+  channel?: string;
 }): Promise<ReplyPayload | null> {
   const body = params.commandBodyNormalized.trim();
   if (!body.startsWith("/models")) {
@@ -85,7 +150,10 @@ export async function resolveModelsCommandReply(params: {
   }
 
   const argText = body.replace(/^\/models\b/i, "").trim();
-  const { provider, page, pageSize, all } = parseModelsArgs(argText);
+  const { provider, page, pageSize: parsedPageSize, all } = parseModelsArgs(argText);
+  const isTelegram = params.channel?.toLowerCase() === "telegram";
+  // When rendering a Telegram inline menu for models, force the page size to match the 3x3 UI.
+  const pageSize = isTelegram && !all && provider ? TELEGRAM_MENU_ITEMS_PER_PAGE : parsedPageSize;
 
   const resolvedDefault = resolveConfiguredModelRef({
     cfg: params.cfg,
@@ -178,7 +246,37 @@ export async function resolveModelsCommandReply(params: {
       "Use: /models <provider>",
       "Switch: /model <provider/model>",
     ];
-    return { text: lines.join("\n") };
+
+    const payload: ReplyPayload = { text: lines.join("\n") };
+
+    if (isTelegram && providers.length > 0) {
+      const providerItems: MenuItem[] = providers.map((p) => ({
+        text: `${p} (${byProvider.get(p)?.size ?? 0})`,
+        callback_data: `/models ${p}`,
+      }));
+      const pageCount = Math.max(1, Math.ceil(providerItems.length / TELEGRAM_MENU_ITEMS_PER_PAGE));
+      const safePage = Math.max(1, Math.min(page, pageCount));
+      const prevPage = safePage > 1 ? safePage - 1 : safePage;
+      const nextPage = safePage < pageCount ? safePage + 1 : safePage;
+
+      const buttons = buildPagedMenuButtons({
+        items: providerItems,
+        page: safePage,
+        pageCount,
+        prevCallback: `/models ${prevPage}`,
+        nextCallback: `/models ${nextPage}`,
+        middle: { text: "Status", callback_data: "/model status" },
+      });
+
+      payload.channelData = {
+        ...(payload.channelData ?? {}),
+        telegram: {
+          buttons,
+        },
+      };
+    }
+
+    return payload;
   }
 
   if (!byProvider.has(provider)) {
@@ -190,7 +288,32 @@ export async function resolveModelsCommandReply(params: {
       "",
       "Use: /models <provider>",
     ];
-    return { text: lines.join("\n") };
+
+    const payload: ReplyPayload = { text: lines.join("\n") };
+    if (isTelegram && providers.length > 0) {
+      const providerItems: MenuItem[] = providers.map((p) => ({
+        text: `${p} (${byProvider.get(p)?.size ?? 0})`,
+        callback_data: `/models ${p}`,
+      }));
+      const pageCount = Math.max(1, Math.ceil(providerItems.length / TELEGRAM_MENU_ITEMS_PER_PAGE));
+      const safePage = 1;
+      const prevPage = safePage;
+      const nextPage = safePage < pageCount ? safePage + 1 : safePage;
+      const buttons = buildPagedMenuButtons({
+        items: providerItems,
+        page: safePage,
+        pageCount,
+        prevCallback: `/models ${prevPage}`,
+        nextCallback: `/models ${nextPage}`,
+        middle: { text: "Status", callback_data: "/model status" },
+      });
+      payload.channelData = {
+        ...(payload.channelData ?? {}),
+        telegram: { buttons },
+      };
+    }
+
+    return payload;
   }
 
   const models = [...(byProvider.get(provider) ?? new Set<string>())].toSorted();
@@ -240,6 +363,38 @@ export async function resolveModelsCommandReply(params: {
   }
 
   const payload: ReplyPayload = { text: lines.join("\n") };
+
+  if (isTelegram && !all) {
+    const allModelItems: MenuItem[] = models.map((id) => {
+      const fullRef = `${provider}/${id}`;
+      const aliases = aliasIndex.byKey.get(fullRef);
+      const alias = aliases?.[0];
+      const callback = alias ? `/model ${alias}` : `/model ${fullRef}`;
+      const label = alias ? alias : id;
+      return { text: label, callback_data: callback };
+    });
+
+    const safeMenuPage = Math.max(1, Math.min(safePage, pageCount));
+    const prevPage = safeMenuPage > 1 ? safeMenuPage - 1 : safeMenuPage;
+    const nextPage = safeMenuPage < pageCount ? safeMenuPage + 1 : safeMenuPage;
+
+    const buttons = buildPagedMenuButtons({
+      items: allModelItems,
+      page: safeMenuPage,
+      pageCount,
+      prevCallback: `/models ${provider} ${prevPage}`,
+      nextCallback: `/models ${provider} ${nextPage}`,
+      middle: { text: "Providers", callback_data: "/models" },
+    });
+
+    payload.channelData = {
+      ...(payload.channelData ?? {}),
+      telegram: {
+        buttons,
+      },
+    };
+  }
+
   return payload;
 }
 
@@ -251,6 +406,7 @@ export const handleModelsCommand: CommandHandler = async (params, allowTextComma
   const reply = await resolveModelsCommandReply({
     cfg: params.cfg,
     commandBodyNormalized: params.command.commandBodyNormalized,
+    channel: params.command.channel,
   });
   if (!reply) {
     return null;
