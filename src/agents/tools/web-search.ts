@@ -232,9 +232,13 @@ function resolvePerplexityConfig(search?: WebSearchConfig): PerplexityConfig {
 }
 
 function resolveSearxngConfig(search?: WebSearchConfig): SearxngConfig {
-  if (!search || typeof search !== "object") return {};
+  if (!search || typeof search !== "object") {
+    return {};
+  }
   const searxng = "searxng" in search ? (search as Record<string, unknown>).searxng : undefined;
-  if (!searxng || typeof searxng !== "object") return {};
+  if (!searxng || typeof searxng !== "object") {
+    return {};
+  }
   return searxng as SearxngConfig;
 }
 
@@ -321,7 +325,9 @@ function resolveSearxngBaseUrl(searxng?: SearxngConfig): string | undefined {
     searxng && "baseUrl" in searxng && typeof searxng.baseUrl === "string" ? searxng.baseUrl : "";
   const fromEnv = (process.env.SEARXNG_BASE_URL ?? "").trim();
   const baseUrl = (fromConfig ?? "").trim() || fromEnv;
-  if (!baseUrl) return undefined;
+  if (!baseUrl) {
+    return undefined;
+  }
   return baseUrl.replace(/\/$/, "");
 }
 
@@ -330,7 +336,9 @@ function resolveSearxngHeaders(searxng?: SearxngConfig): Record<string, string> 
     Accept: "application/json",
   };
 
-  if (!searxng || typeof searxng !== "object") return headers;
+  if (!searxng || typeof searxng !== "object") {
+    return headers;
+  }
 
   if (searxng.headers && typeof searxng.headers === "object") {
     for (const [key, value] of Object.entries(searxng.headers)) {
@@ -455,10 +463,16 @@ function addSearxngParams(
   searchParams: URLSearchParams,
   params?: Record<string, string | number | boolean>,
 ): void {
-  if (!params) return;
+  if (!params) {
+    return;
+  }
   for (const [key, value] of Object.entries(params)) {
-    if (!key.trim()) continue;
-    if (value === undefined) continue;
+    if (!key.trim()) {
+      continue;
+    }
+    if (value === undefined) {
+      continue;
+    }
     searchParams.set(key, String(value));
   }
 }
@@ -482,10 +496,18 @@ async function runSearxngSearch(params: {
   url.searchParams.set("q", params.query);
   url.searchParams.set("format", "json");
 
-  if (params.categories) url.searchParams.set("categories", params.categories);
-  if (params.engines) url.searchParams.set("engines", params.engines);
-  if (params.language) url.searchParams.set("language", params.language);
-  if (params.time_range) url.searchParams.set("time_range", params.time_range);
+  if (params.categories) {
+    url.searchParams.set("categories", params.categories);
+  }
+  if (params.engines) {
+    url.searchParams.set("engines", params.engines);
+  }
+  if (params.language) {
+    url.searchParams.set("language", params.language);
+  }
+  if (params.time_range) {
+    url.searchParams.set("time_range", params.time_range);
+  }
   if (typeof params.safesearch === "number" && Number.isFinite(params.safesearch)) {
     url.searchParams.set("safesearch", String(params.safesearch));
   }
@@ -691,7 +713,9 @@ export function createWebSearchTool(options?: {
         provider === "searxng" ? resolveSearxngBaseUrl(searxngConfig) : undefined;
 
       if (provider === "searxng") {
-        if (!searxngBaseUrl) return jsonResult(missingSearchKeyPayload(provider));
+        if (!searxngBaseUrl) {
+          return jsonResult(missingSearchKeyPayload(provider));
+        }
       } else if (!apiKey) {
         return jsonResult(missingSearchKeyPayload(provider));
       }
