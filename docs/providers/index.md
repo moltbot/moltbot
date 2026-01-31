@@ -43,6 +43,7 @@ See [Venice AI](/providers/venice).
 - [OpenCode Zen](/providers/opencode)
 - [Amazon Bedrock](/bedrock)
 - [Z.AI](/providers/zai)
+- [Chutes AI](/providers/chutes)
 - [Xiaomi](/providers/xiaomi)
 - [GLM models](/providers/glm)
 - [MiniMax](/providers/minimax)

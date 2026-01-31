@@ -14,6 +14,8 @@ export type ChutesPkce = { verifier: string; challenge: string };
 export type ChutesUserInfo = {
   sub?: string;
   username?: string;
+  email?: string;
+  name?: string;
   created_at?: string;
 };
 
@@ -140,7 +142,7 @@ export async function exchangeChutesCodeForTokens(params: {
     access,
     refresh,
     expires: coerceExpiresAt(expiresIn, now),
-    email: info?.username,
+    email: info?.email || info?.username,
     accountId: info?.sub,
     clientId: params.app.clientId,
   } as unknown as ChutesStoredOAuth;

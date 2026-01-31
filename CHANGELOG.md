@@ -6,6 +6,9 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Agents: add comprehensive integration tests and documentation for Chutes AI. (#4504)
+- Docs: add rate limits and error handling for Chutes AI provider.
+
 ### Fixes
 
 - Telegram: restore draft streaming partials. (#5543) Thanks @obviyus.

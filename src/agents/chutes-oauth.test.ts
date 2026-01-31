@@ -4,6 +4,7 @@ import {
   CHUTES_TOKEN_ENDPOINT,
   CHUTES_USERINFO_ENDPOINT,
   exchangeChutesCodeForTokens,
+  fetchChutesUserInfo,
   refreshChutesTokens,
 } from "./chutes-oauth.js";
 
@@ -94,5 +95,82 @@ describe("chutes-oauth", () => {
     expect(refreshed.access).toBe("at_new");
     expect(refreshed.refresh).toBe("rt_old");
     expect(refreshed.expires).toBe(now + 1800 * 1000 - 5 * 60 * 1000);
+  });
+
+  describe("negative cases", () => {
+    it("throws when token exchange returns non-OK status", async () => {
+      const fetchFn: typeof fetch = async () => new Response("Invalid code", { status: 400 });
+      await expect(
+        exchangeChutesCodeForTokens({
+          app: { clientId: "c", redirectUri: "r", scopes: [] },
+          code: "c",
+          codeVerifier: "v",
+          fetchFn,
+        }),
+      ).rejects.toThrow("Chutes token exchange failed: Invalid code");
+    });
+
+    it("throws when token exchange returns no access token", async () => {
+      const fetchFn: typeof fetch = async () =>
+        new Response(JSON.stringify({ refresh_token: "rt" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      await expect(
+        exchangeChutesCodeForTokens({
+          app: { clientId: "c", redirectUri: "r", scopes: [] },
+          code: "c",
+          codeVerifier: "v",
+          fetchFn,
+        }),
+      ).rejects.toThrow("Chutes token exchange returned no access_token");
+    });
+
+    it("throws when token exchange returns no refresh token", async () => {
+      const fetchFn: typeof fetch = async () =>
+        new Response(JSON.stringify({ access_token: "at" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      await expect(
+        exchangeChutesCodeForTokens({
+          app: { clientId: "c", redirectUri: "r", scopes: [] },
+          code: "c",
+          codeVerifier: "v",
+          fetchFn,
+        }),
+      ).rejects.toThrow("Chutes token exchange returned no refresh_token");
+    });
+
+    it("returns null user info on 401", async () => {
+      const fetchFn: typeof fetch = async () => new Response("Unauthorized", { status: 401 });
+      const info = await fetchChutesUserInfo({ accessToken: "bad", fetchFn });
+      expect(info).toBeNull();
+    });
+
+    it("throws when refresh fails with 400/401", async () => {
+      const fetchFn: typeof fetch = async () => new Response("Token revoked", { status: 400 });
+      await expect(
+        refreshChutesTokens({
+          credential: { refresh: "rt", clientId: "cid" } as any,
+          fetchFn,
+        }),
+      ).rejects.toThrow("Chutes token refresh failed: Token revoked");
+    });
+
+    it("throws when refreshing without client id", async () => {
+      const originalEnv = process.env.CHUTES_CLIENT_ID;
+      delete process.env.CHUTES_CLIENT_ID;
+      try {
+        await expect(
+          refreshChutesTokens({
+            credential: { refresh: "rt" } as any,
+            fetchFn: async () => new Response(""),
+          }),
+        ).rejects.toThrow("Missing CHUTES_CLIENT_ID");
+      } finally {
+        process.env.CHUTES_CLIENT_ID = originalEnv;
+      }
+    });
   });
 });

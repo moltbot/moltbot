@@ -13,8 +13,12 @@ import {
 } from "./google-gemini-model-default.js";
 import {
   applyAuthProfileConfig,
+  applyChutesConfig,
+  applyChutesProviderConfig,
   applyKimiCodeConfig,
   applyKimiCodeProviderConfig,
+  applyKimiCodingConfig,
+  applyKimiCodingProviderConfig,
   applyMoonshotConfig,
   applyMoonshotProviderConfig,
   applyOpencodeZenConfig,
@@ -30,14 +34,18 @@ import {
   applyXiaomiConfig,
   applyXiaomiProviderConfig,
   applyZaiConfig,
+  CHUTES_DEFAULT_MODEL_REF,
+  KIMI_CODE_MODEL_REF,
   KIMI_CODING_MODEL_REF,
   MOONSHOT_DEFAULT_MODEL_REF,
   OPENROUTER_DEFAULT_MODEL_REF,
   SYNTHETIC_DEFAULT_MODEL_REF,
   VENICE_DEFAULT_MODEL_REF,
   VERCEL_AI_GATEWAY_DEFAULT_MODEL_REF,
+  setChutesApiKey,
   XIAOMI_DEFAULT_MODEL_REF,
   setGeminiApiKey,
+  setKimiCodeApiKey,
   setKimiCodingApiKey,
   setMoonshotApiKey,
   setOpencodeZenApiKey,
@@ -79,6 +87,8 @@ export async function applyAuthChoiceApiProviders(
       authChoice = "ai-gateway-api-key";
     } else if (params.opts.tokenProvider === "moonshot") {
       authChoice = "moonshot-api-key";
+    } else if (params.opts.tokenProvider === "chutes") {
+      authChoice = "chutes-api-key";
     } else if (
       params.opts.tokenProvider === "kimi-code" ||
       params.opts.tokenProvider === "kimi-coding"
@@ -276,15 +286,68 @@ export async function applyAuthChoiceApiProviders(
     return { config: nextConfig, agentModelOverride };
   }
 
+  if (authChoice === "chutes-api-key") {
+    let hasCredential = false;
+
+    if (!hasCredential && params.opts?.token && params.opts?.tokenProvider === "chutes") {
+      await setChutesApiKey(normalizeApiKeyInput(params.opts.token), params.agentDir);
+      hasCredential = true;
+    }
+
+    const envKey = process.env.CHUTES_API_KEY?.trim();
+    if (envKey) {
+      const useExisting = await params.prompter.confirm({
+        message: `Use existing CHUTES_API_KEY (env, ${formatApiKeyPreview(envKey)})?`,
+        initialValue: true,
+      });
+      if (useExisting) {
+        await setChutesApiKey(envKey, params.agentDir);
+        hasCredential = true;
+      }
+    }
+    if (!hasCredential) {
+      const key = await params.prompter.text({
+        message: "Enter Chutes API key",
+        validate: validateApiKeyInput,
+      });
+      await setChutesApiKey(normalizeApiKeyInput(String(key)), params.agentDir);
+    }
+    nextConfig = applyAuthProfileConfig(nextConfig, {
+      profileId: "chutes:default",
+      provider: "chutes",
+      mode: "api_key",
+    });
+    {
+      const applied = await applyDefaultModelChoice({
+        config: nextConfig,
+        setDefaultModel: params.setDefaultModel,
+        defaultModel: CHUTES_DEFAULT_MODEL_REF,
+        applyDefaultConfig: applyChutesConfig,
+        applyProviderConfig: applyChutesProviderConfig,
+        noteAgentModel,
+        prompter: params.prompter,
+      });
+      nextConfig = applied.config;
+      agentModelOverride = applied.agentModelOverride ?? agentModelOverride;
+    }
+    return { config: nextConfig, agentModelOverride };
+  }
+
   if (authChoice === "kimi-code-api-key") {
     let hasCredential = false;
     const tokenProvider = params.opts?.tokenProvider?.trim().toLowerCase();
+    const isKimiCode = tokenProvider === "kimi-code";
+
     if (
       !hasCredential &&
       params.opts?.token &&
       (tokenProvider === "kimi-code" || tokenProvider === "kimi-coding")
     ) {
-      await setKimiCodingApiKey(normalizeApiKeyInput(params.opts.token), params.agentDir);
+      if (isKimiCode) {
+        await setKimiCodeApiKey(normalizeApiKeyInput(params.opts.token), params.agentDir);
+      } else {
+        await setKimiCodingApiKey(normalizeApiKeyInput(params.opts.token), params.agentDir);
+      }
       hasCredential = true;
     }
 
@@ -297,14 +360,18 @@ export async function applyAuthChoiceApiProviders(
         "Kimi Coding",
       );
     }
-    const envKey = resolveEnvApiKey("kimi-coding");
+    const envKey = resolveEnvApiKey("kimi-coding") || resolveEnvApiKey("kimi-code");
     if (envKey) {
       const useExisting = await params.prompter.confirm({
         message: `Use existing KIMI_API_KEY (${envKey.source}, ${formatApiKeyPreview(envKey.apiKey)})?`,
         initialValue: true,
       });
       if (useExisting) {
-        await setKimiCodingApiKey(envKey.apiKey, params.agentDir);
+        if (isKimiCode) {
+          await setKimiCodeApiKey(envKey.apiKey, params.agentDir);
+        } else {
+          await setKimiCodingApiKey(envKey.apiKey, params.agentDir);
+        }
         hasCredential = true;
       }
     }
@@ -313,20 +380,45 @@ export async function applyAuthChoiceApiProviders(
         message: "Enter Kimi Coding API key",
         validate: validateApiKeyInput,
       });
-      await setKimiCodingApiKey(normalizeApiKeyInput(String(key)), params.agentDir);
+      const normalizedKey = normalizeApiKeyInput(String(key));
+      if (isKimiCode) {
+        await setKimiCodeApiKey(normalizedKey, params.agentDir);
+      } else {
+        await setKimiCodingApiKey(normalizedKey, params.agentDir);
+      }
+      hasCredential = true;
     }
-    nextConfig = applyAuthProfileConfig(nextConfig, {
-      profileId: "kimi-coding:default",
-      provider: "kimi-coding",
-      mode: "api_key",
-    });
-    {
+
+    if (isKimiCode) {
+      nextConfig = applyAuthProfileConfig(nextConfig, {
+        profileId: "kimi-coding:default",
+        provider: "kimi-coding",
+        mode: "api_key",
+      });
+      const applied = await applyDefaultModelChoice({
+        config: nextConfig,
+        setDefaultModel: params.setDefaultModel,
+        defaultModel: KIMI_CODE_MODEL_REF,
+        applyDefaultConfig: applyKimiCodeConfig,
+        applyProviderConfig: applyKimiCodeProviderConfig,
+        noteDefault: KIMI_CODE_MODEL_REF,
+        noteAgentModel,
+        prompter: params.prompter,
+      });
+      nextConfig = applied.config;
+      agentModelOverride = applied.agentModelOverride ?? agentModelOverride;
+    } else {
+      nextConfig = applyAuthProfileConfig(nextConfig, {
+        profileId: "kimi-coding:default",
+        provider: "kimi-coding",
+        mode: "api_key",
+      });
       const applied = await applyDefaultModelChoice({
         config: nextConfig,
         setDefaultModel: params.setDefaultModel,
         defaultModel: KIMI_CODING_MODEL_REF,
-        applyDefaultConfig: applyKimiCodeConfig,
-        applyProviderConfig: applyKimiCodeProviderConfig,
+        applyDefaultConfig: applyKimiCodingConfig,
+        applyProviderConfig: applyKimiCodingProviderConfig,
         noteDefault: KIMI_CODING_MODEL_REF,
         noteAgentModel,
         prompter: params.prompter,

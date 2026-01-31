@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { RuntimeEnv } from "../runtime.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
+import type { ProviderPlugin } from "../plugins/types.js";
 import { applyAuthChoice, resolvePreferredProviderForAuthChoice } from "./auth-choice.js";
 import type { AuthChoice } from "./onboard-types.js";
 
@@ -13,7 +14,7 @@ vi.mock("../providers/github-copilot-auth.js", () => ({
   githubCopilotLoginCommand: vi.fn(async () => {}),
 }));
 
-const resolvePluginProviders = vi.hoisted(() => vi.fn(() => []));
+const resolvePluginProviders = vi.hoisted(() => vi.fn(() => [] as ProviderPlugin[]));
 vi.mock("../plugins/providers.js", () => ({
   resolvePluginProviders,
 }));
@@ -494,6 +495,117 @@ describe("applyAuthChoice", () => {
     });
   });
 
+  it("prompts and writes Chutes API key when selecting chutes-api-key", async () => {
+    tempStateDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-auth-"));
+    process.env.OPENCLAW_STATE_DIR = tempStateDir;
+    process.env.OPENCLAW_AGENT_DIR = path.join(tempStateDir, "agent");
+    process.env.PI_CODING_AGENT_DIR = process.env.OPENCLAW_AGENT_DIR;
+
+    const text = vi.fn().mockResolvedValue("sk-chutes-test");
+    const select: WizardPrompter["select"] = vi.fn(
+      async (params) => params.options[0]?.value as never,
+    );
+    const multiselect: WizardPrompter["multiselect"] = vi.fn(async () => []);
+    const prompter: WizardPrompter = {
+      intro: vi.fn(noopAsync),
+      outro: vi.fn(noopAsync),
+      note: vi.fn(noopAsync),
+      select,
+      multiselect,
+      text,
+      confirm: vi.fn(async () => false),
+      progress: vi.fn(() => ({ update: noop, stop: noop })),
+    };
+    const runtime: RuntimeEnv = {
+      log: vi.fn(),
+      error: vi.fn(),
+      exit: vi.fn((code: number) => {
+        throw new Error(`exit:${code}`);
+      }),
+    };
+
+    const result = await applyAuthChoice({
+      authChoice: "chutes-api-key",
+      config: {},
+      prompter,
+      runtime,
+      setDefaultModel: true,
+    });
+
+    expect(text).toHaveBeenCalledWith(expect.objectContaining({ message: "Enter Chutes API key" }));
+    expect(result.config.auth?.profiles?.["chutes:default"]).toMatchObject({
+      provider: "chutes",
+      mode: "api_key",
+    });
+
+    const authProfilePath = authProfilePathFor(requireAgentDir());
+    const raw = await fs.readFile(authProfilePath, "utf8");
+    const parsed = JSON.parse(raw) as {
+      profiles?: Record<string, { key?: string }>;
+    };
+    expect(parsed.profiles?.["chutes:default"]?.key).toBe("sk-chutes-test");
+  });
+
+  it("uses existing CHUTES_API_KEY when selecting chutes-api-key", async () => {
+    tempStateDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-auth-"));
+    process.env.OPENCLAW_STATE_DIR = tempStateDir;
+    process.env.OPENCLAW_AGENT_DIR = path.join(tempStateDir, "agent");
+    process.env.PI_CODING_AGENT_DIR = process.env.OPENCLAW_AGENT_DIR;
+    process.env.CHUTES_API_KEY = "sk-chutes-env-test";
+
+    const text = vi.fn();
+    const select: WizardPrompter["select"] = vi.fn(
+      async (params) => params.options[0]?.value as never,
+    );
+    const multiselect: WizardPrompter["multiselect"] = vi.fn(async () => []);
+    const confirm = vi.fn(async () => true);
+    const prompter: WizardPrompter = {
+      intro: vi.fn(noopAsync),
+      outro: vi.fn(noopAsync),
+      note: vi.fn(noopAsync),
+      select,
+      multiselect,
+      text,
+      confirm,
+      progress: vi.fn(() => ({ update: noop, stop: noop })),
+    };
+    const runtime: RuntimeEnv = {
+      log: vi.fn(),
+      error: vi.fn(),
+      exit: vi.fn((code: number) => {
+        throw new Error(`exit:${code}`);
+      }),
+    };
+
+    const result = await applyAuthChoice({
+      authChoice: "chutes-api-key",
+      config: {},
+      prompter,
+      runtime,
+      setDefaultModel: true,
+    });
+
+    expect(confirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining("CHUTES_API_KEY"),
+      }),
+    );
+    expect(text).not.toHaveBeenCalled();
+    expect(result.config.auth?.profiles?.["chutes:default"]).toMatchObject({
+      provider: "chutes",
+      mode: "api_key",
+    });
+
+    const authProfilePath = authProfilePathFor(requireAgentDir());
+    const raw = await fs.readFile(authProfilePath, "utf8");
+    const parsed = JSON.parse(raw) as {
+      profiles?: Record<string, { key?: string }>;
+    };
+    expect(parsed.profiles?.["chutes:default"]?.key).toBe("sk-chutes-env-test");
+
+    delete process.env.CHUTES_API_KEY;
+  });
+
   it("writes Qwen credentials when selecting qwen-portal", async () => {
     tempStateDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-auth-"));
     process.env.OPENCLAW_STATE_DIR = tempStateDir;
@@ -514,7 +626,7 @@ describe("applyAuthChoice", () => {
                 {
                   profileId: "qwen-portal:default",
                   credential: {
-                    type: "oauth",
+                    type: "oauth" as const,
                     provider: "qwen-portal",
                     access: "access",
                     refresh: "refresh",
@@ -528,7 +640,7 @@ describe("applyAuthChoice", () => {
                     "qwen-portal": {
                       baseUrl: "https://portal.qwen.ai/v1",
                       apiKey: "qwen-oauth",
-                      api: "openai-completions",
+                      api: "openai-completions" as const,
                       models: [],
                     },
                   },

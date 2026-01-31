@@ -19,7 +19,14 @@ import {
   ZAI_DEFAULT_MODEL_REF,
 } from "./onboard-auth.credentials.js";
 import {
+  buildChutesModelDefinition,
+  buildKimiCodeModelDefinition,
   buildMoonshotModelDefinition,
+  CHUTES_BASE_URL,
+  CHUTES_DEFAULT_MODEL_REF,
+  KIMI_CODE_BASE_URL,
+  KIMI_CODE_MODEL_ID,
+  KIMI_CODE_MODEL_REF,
   KIMI_CODING_MODEL_REF,
   MOONSHOT_BASE_URL,
   MOONSHOT_DEFAULT_MODEL_ID,
@@ -201,7 +208,133 @@ export function applyMoonshotConfig(cfg: OpenClawConfig): OpenClawConfig {
   };
 }
 
+export function applyChutesProviderConfig(cfg: OpenClawConfig): OpenClawConfig {
+  const models = { ...cfg.agents?.defaults?.models };
+  models[CHUTES_DEFAULT_MODEL_REF] = {
+    ...models[CHUTES_DEFAULT_MODEL_REF],
+    alias: models[CHUTES_DEFAULT_MODEL_REF]?.alias ?? "GLM 4.7 Flash",
+  };
+
+  const providers = { ...cfg.models?.providers };
+  const existingProvider = providers.chutes;
+  const { apiKey: existingApiKey, ...existingProviderRest } = (existingProvider ?? {}) as Record<
+    string,
+    unknown
+  > as { apiKey?: string; teeOnly?: boolean };
+  const resolvedApiKey = typeof existingApiKey === "string" ? existingApiKey : undefined;
+  const normalizedApiKey = resolvedApiKey?.trim();
+  providers.chutes = {
+    ...existingProviderRest,
+    baseUrl: CHUTES_BASE_URL,
+    api: "openai-completions",
+    ...(normalizedApiKey ? { apiKey: normalizedApiKey } : {}),
+    models: existingProvider?.models || [buildChutesModelDefinition()],
+  };
+
+  return {
+    ...cfg,
+    agents: {
+      ...cfg.agents,
+      defaults: {
+        ...cfg.agents?.defaults,
+        models,
+      },
+    },
+    models: {
+      mode: cfg.models?.mode ?? "merge",
+      providers,
+    },
+  };
+}
+
+export function applyChutesConfig(cfg: OpenClawConfig): OpenClawConfig {
+  const next = applyChutesProviderConfig(cfg);
+  const existingModel = next.agents?.defaults?.model;
+  return {
+    ...next,
+    agents: {
+      ...next.agents,
+      defaults: {
+        ...next.agents?.defaults,
+        model: {
+          ...(existingModel && "fallbacks" in (existingModel as Record<string, unknown>)
+            ? {
+                fallbacks: (existingModel as { fallbacks?: string[] }).fallbacks,
+              }
+            : undefined),
+          primary: CHUTES_DEFAULT_MODEL_REF,
+        },
+      },
+    },
+  };
+}
+
 export function applyKimiCodeProviderConfig(cfg: OpenClawConfig): OpenClawConfig {
+  const models = { ...cfg.agents?.defaults?.models };
+  models[KIMI_CODE_MODEL_REF] = {
+    ...models[KIMI_CODE_MODEL_REF],
+    alias: models[KIMI_CODE_MODEL_REF]?.alias ?? "Kimi Code",
+  };
+
+  const providers = { ...cfg.models?.providers };
+  const existingProvider = providers["kimi-coding"];
+  const existingModels = Array.isArray(existingProvider?.models) ? existingProvider.models : [];
+  const defaultModel = buildKimiCodeModelDefinition();
+  const hasDefaultModel = existingModels.some((model) => model.id === KIMI_CODE_MODEL_ID);
+  const mergedModels = hasDefaultModel ? existingModels : [...existingModels, defaultModel];
+  const { apiKey: existingApiKey, ...existingProviderRest } = (existingProvider ?? {}) as Record<
+    string,
+    unknown
+  > as { apiKey?: string };
+  const resolvedApiKey = typeof existingApiKey === "string" ? existingApiKey : undefined;
+  const normalizedApiKey = resolvedApiKey?.trim();
+  providers["kimi-coding"] = {
+    ...existingProviderRest,
+    baseUrl: KIMI_CODE_BASE_URL,
+    api: "openai-completions",
+    ...(normalizedApiKey ? { apiKey: normalizedApiKey } : {}),
+    models: mergedModels.length > 0 ? mergedModels : [defaultModel],
+  };
+
+  return {
+    ...cfg,
+    agents: {
+      ...cfg.agents,
+      defaults: {
+        ...cfg.agents?.defaults,
+        models,
+      },
+    },
+    models: {
+      mode: cfg.models?.mode ?? "merge",
+      providers,
+    },
+  };
+}
+
+export function applyKimiCodeConfig(cfg: OpenClawConfig): OpenClawConfig {
+  const next = applyKimiCodeProviderConfig(cfg);
+  const existingModel = next.agents?.defaults?.model;
+  return {
+    ...next,
+    agents: {
+      ...next.agents,
+      defaults: {
+        ...next.agents?.defaults,
+        model: {
+          ...(existingModel && "fallbacks" in (existingModel as Record<string, unknown>)
+            ? {
+                fallbacks: (existingModel as { fallbacks?: string[] }).fallbacks,
+              }
+            : undefined),
+          primary: KIMI_CODE_MODEL_REF,
+        },
+      },
+    },
+  };
+}
+
+export function applyKimiCodingProviderConfig(cfg: OpenClawConfig): OpenClawConfig {
   const models = { ...cfg.agents?.defaults?.models };
   models[KIMI_CODING_MODEL_REF] = {
     ...models[KIMI_CODING_MODEL_REF],
@@ -220,8 +353,8 @@ export function applyKimiCodeProviderConfig(cfg: OpenClawConfig): OpenClawConfig
   };
 }
 
-export function applyKimiCodeConfig(cfg: OpenClawConfig): OpenClawConfig {
-  const next = applyKimiCodeProviderConfig(cfg);
+export function applyKimiCodingConfig(cfg: OpenClawConfig): OpenClawConfig {
+  const next = applyKimiCodingProviderConfig(cfg);
   const existingModel = next.agents?.defaults?.model;
   return {
     ...next,

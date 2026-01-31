@@ -175,4 +175,69 @@ describe("loginChutes", () => {
       }),
     ).rejects.toThrow("Missing 'state' parameter");
   });
+
+  it("rejects mismatched state in manual flow", async () => {
+    const fetchFn: typeof fetch = async () => new Response("not found", { status: 404 });
+
+    await expect(
+      loginChutes({
+        app: {
+          clientId: "cid_test",
+          redirectUri: "http://127.0.0.1:1456/oauth-callback",
+          scopes: ["openid"],
+        },
+        manual: true,
+        createPkce: () => ({ verifier: "verifier_123", challenge: "chal_123" }),
+        createState: () => "state_expected",
+        onAuth: async () => {},
+        onPrompt: async () => "http://127.0.0.1:1456/oauth-callback?code=code&state=state_wrong",
+        fetchFn,
+      }),
+    ).rejects.toThrow("Invalid OAuth state");
+  });
+
+  it("rejects local callback with mismatched state and falls back to manual prompt", async () => {
+    const port = await getFreePort();
+    const redirectUri = `http://127.0.0.1:${port}/oauth-callback`;
+
+    const fetchFn: typeof fetch = async (input, init) => {
+      const url = String(input);
+      if (url === CHUTES_TOKEN_ENDPOINT) {
+        return new Response(
+          JSON.stringify({ access_token: "at", refresh_token: "rt", expires_in: 3600 }),
+          { status: 200 },
+        );
+      }
+      if (url === CHUTES_USERINFO_ENDPOINT) {
+        return new Response(JSON.stringify({ username: "user" }), { status: 200 });
+      }
+      return fetch(input, init);
+    };
+
+    let promptCalled = false;
+    const creds = await loginChutes({
+      app: { clientId: "cid_test", redirectUri, scopes: ["openid"] },
+      timeoutMs: 500, // Short timeout for test
+      onAuth: async ({ url: _url }) => {
+        // 1. Send WRONG state to local server
+        const response = await fetch(`${redirectUri}?code=code_local&state=wrong_state`);
+        expect(response.status).toBe(400);
+        const text = await response.text();
+        expect(text).toBe("Invalid state");
+        // Local server should still be running or it might have closed?
+        // Actually waitForLocalCallback only resolves on SUCCESS.
+        // On error in the request handler, it doesn't reject the whole promise unless it throws.
+        // So it will eventually timeout and trigger the fallback.
+      },
+      onPrompt: async () => {
+        promptCalled = true;
+        return `${redirectUri}?code=code_manual&state=state_correct`;
+      },
+      createState: () => "state_correct",
+      fetchFn,
+    });
+
+    expect(promptCalled).toBe(true);
+    expect(creds.access).toBe("at");
+  });
 });
