@@ -13,6 +13,9 @@ import type {
   PluginHookAgentEndEvent,
   PluginHookBeforeAgentStartEvent,
   PluginHookBeforeAgentStartResult,
+  PluginHookResolveRoomKeyEvent,
+  PluginHookResolveRoomKeyContext,
+  PluginHookResolveRoomKeyResult,
   PluginHookBeforeCompactionEvent,
   PluginHookBeforeToolCallEvent,
   PluginHookBeforeToolCallResult,
@@ -82,9 +85,17 @@ function getHooksForName<K extends PluginHookName>(
   registry: PluginRegistry,
   hookName: K,
 ): PluginHookRegistration<K>[] {
+  // Deterministic order is important for hooks that "select a winner" (e.g. resolve_room_key).
+  // Sort by priority (higher first), then by pluginId (stable tie-breaker), then by source.
   return (registry.typedHooks as PluginHookRegistration<K>[])
     .filter((h) => h.hookName === hookName)
-    .toSorted((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+    .toSorted((a, b) => {
+      const prio = (b.priority ?? 0) - (a.priority ?? 0);
+      if (prio !== 0) return prio;
+      const plugin = a.pluginId.localeCompare(b.pluginId);
+      if (plugin !== 0) return plugin;
+      return a.source.localeCompare(b.source);
+    });
 }
 
 /**
@@ -196,6 +207,44 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
             : (next.prependContext ?? acc?.prependContext),
       }),
     );
+  }
+
+  /**
+   * Run resolve_room_key hook.
+   * Allows plugins to deterministically refine the canonical room key.
+   * This key should be used for both transcript identity and FIFO lane ordering.
+   */
+  async function runResolveRoomKey(
+    event: PluginHookResolveRoomKeyEvent,
+    ctx: PluginHookResolveRoomKeyContext,
+  ): Promise<PluginHookResolveRoomKeyResult | undefined> {
+    // Intentionally non-compositional: selecting a canonical room key must be deterministic.
+    // First valid answer in priority order wins.
+    const hooks = getHooksForName(registry, "resolve_room_key");
+    if (hooks.length === 0) {
+      return undefined;
+    }
+
+    logger?.debug?.(`[hooks] running resolve_room_key (${hooks.length} handlers, sequential)`);
+
+    for (const hook of hooks) {
+      try {
+        const out = await (hook.handler as any)(event, ctx);
+        const proposed = typeof out?.roomKey === "string" ? out.roomKey.trim() : "";
+        if (proposed) {
+          return { roomKey: proposed };
+        }
+      } catch (err) {
+        const msg = `[hooks] resolve_room_key handler from ${hook.pluginId} failed: ${String(err)}`;
+        if (catchErrors) {
+          logger?.error(msg);
+        } else {
+          throw new Error(msg, { cause: err });
+        }
+      }
+    }
+
+    return undefined;
   }
 
   /**
@@ -442,6 +491,7 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
   return {
     // Agent hooks
     runBeforeAgentStart,
+    runResolveRoomKey,
     runAgentEnd,
     runBeforeCompaction,
     runAfterCompaction,

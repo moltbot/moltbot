@@ -27,6 +27,7 @@ import { logVerbose, shouldLogVerbose } from "../globals.js";
 import { recordChannelActivity } from "../infra/channel-activity.js";
 import { resolveAgentRoute } from "../routing/resolve-route.js";
 import { resolveThreadSessionKeys } from "../routing/session-key.js";
+import { resolveCanonicalRoomKey } from "../routing/room-key.js";
 import { shouldAckReaction as shouldAckReactionGate } from "../channels/ack-reactions.js";
 import { resolveMentionGatingWithBypass } from "../channels/mention-gating.js";
 import { resolveControlCommandGate } from "../channels/command-gating.js";
@@ -182,7 +183,22 @@ export const buildTelegramMessageContext = async ({
     dmThreadId != null
       ? resolveThreadSessionKeys({ baseSessionKey, threadId: String(dmThreadId) })
       : null;
-  const sessionKey = threadKeys?.sessionKey ?? baseSessionKey;
+  let sessionKey = threadKeys?.sessionKey ?? baseSessionKey;
+
+  // Allow plugins to deterministically refine the canonical room key used for both
+  // transcript identity and FIFO lane ordering.
+  sessionKey = await resolveCanonicalRoomKey({
+    roomKey: sessionKey,
+    baseRoomKey: baseSessionKey,
+    event: {
+      agentId: route.agentId,
+      channel: "telegram",
+      accountId: account.accountId,
+      peer: { kind: isGroup ? "group" : "dm", id: peerId },
+      messageId: msg.message_id,
+      threadId: messageThreadId,
+    },
+  });
   const mentionRegexes = buildMentionRegexes(cfg, route.agentId);
   const effectiveDmAllow = normalizeAllowFromWithStore({ allowFrom, storeAllowFrom });
   const groupAllowOverride = firstDefined(topicConfig?.allowFrom, groupConfig?.allowFrom);

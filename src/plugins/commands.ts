@@ -232,8 +232,22 @@ export async function executePluginCommand(params: {
   isAuthorizedSender: boolean;
   commandBody: string;
   config: OpenClawConfig;
+  messageId?: number;
+  threadId?: number;
+  chatId?: string | number;
 }): Promise<PluginCommandResult> {
-  const { command, args, senderId, channel, isAuthorizedSender, commandBody, config } = params;
+  const {
+    command,
+    args,
+    senderId,
+    channel,
+    isAuthorizedSender,
+    commandBody,
+    config,
+    messageId,
+    threadId,
+    chatId,
+  } = params;
 
   // Check authorization
   const requireAuth = command.requireAuth !== false; // Default to true
@@ -254,6 +268,9 @@ export async function executePluginCommand(params: {
     args: sanitizedArgs,
     commandBody,
     config,
+    messageId,
+    threadId,
+    chatId,
   };
 
   // Lock registry during execution to prevent concurrent modifications

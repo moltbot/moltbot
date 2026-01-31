@@ -80,6 +80,7 @@ See [Hooks](/hooks) for setup and examples.
 
 These run inside the agent loop or gateway pipeline:
 
+- **`resolve_room_key`**: refine the canonical RoomKey used for *both* session identity (transcripts/history) and FIFO lane ordering. The returned key is treated as untrusted: it is sanitized (control characters removed), clamped to a fixed max length with a deterministic hash suffix, and ignored if empty/whitespace.
 - **`before_agent_start`**: inject context or override system prompt before the run starts.
 - **`agent_end`**: inspect the final message list and run metadata after completion.
 - **`before_compaction` / `after_compaction`**: observe or annotate compaction cycles.

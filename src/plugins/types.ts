@@ -150,6 +150,12 @@ export type PluginCommandContext = {
   commandBody: string;
   /** Current OpenClaw configuration */
   config: OpenClawConfig;
+
+  // Optional message metadata (channel-specific).
+  // Useful for deterministic semantics tied to monotonic message ids.
+  messageId?: number;
+  threadId?: number;
+  chatId?: string | number;
 };
 
 /**
@@ -288,6 +294,7 @@ export type PluginDiagnostic = {
 
 export type PluginHookName =
   | "before_agent_start"
+  | "resolve_room_key"
   | "agent_end"
   | "before_compaction"
   | "after_compaction"
@@ -319,6 +326,34 @@ export type PluginHookBeforeAgentStartEvent = {
 export type PluginHookBeforeAgentStartResult = {
   systemPrompt?: string;
   prependContext?: string;
+};
+
+// resolve_room_key hook
+export type PluginHookResolveRoomKeyPeer = {
+  kind: string;
+  id: string;
+};
+
+export type PluginHookResolveRoomKeyEvent = {
+  /** Current canonical room key (defaults to the route/session key). */
+  roomKey: string;
+  /** Base room key before any thread suffixes or overrides. */
+  baseRoomKey: string;
+  agentId?: string;
+  channel: string;
+  accountId?: string;
+  peer: PluginHookResolveRoomKeyPeer;
+  messageId?: number;
+  threadId?: number;
+};
+
+export type PluginHookResolveRoomKeyResult = {
+  roomKey: string;
+};
+
+export type PluginHookResolveRoomKeyContext = {
+  channelId: string;
+  sessionKey?: string;
 };
 
 // agent_end hook
@@ -468,6 +503,10 @@ export type PluginHookHandlerMap = {
     event: PluginHookBeforeAgentStartEvent,
     ctx: PluginHookAgentContext,
   ) => Promise<PluginHookBeforeAgentStartResult | void> | PluginHookBeforeAgentStartResult | void;
+  resolve_room_key: (
+    event: PluginHookResolveRoomKeyEvent,
+    ctx: PluginHookResolveRoomKeyContext,
+  ) => Promise<PluginHookResolveRoomKeyResult | void> | PluginHookResolveRoomKeyResult | void;
   agent_end: (event: PluginHookAgentEndEvent, ctx: PluginHookAgentContext) => Promise<void> | void;
   before_compaction: (
     event: PluginHookBeforeCompactionEvent,
