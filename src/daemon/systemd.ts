@@ -3,7 +3,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { colorize, isRich, theme } from "../terminal/theme.js";
-import { formatGatewayServiceDescription, resolveGatewaySystemdServiceName } from "./constants.js";
+import {
+  formatGatewayServiceDescription,
+  LEGACY_GATEWAY_SYSTEMD_SERVICE_NAMES,
+  resolveGatewaySystemdServiceName,
+} from "./constants.js";
 import { parseKeyValueOutput } from "./runtime-parse.js";
 import type { GatewayServiceRuntime } from "./service-runtime.js";
 import { resolveHomeDir } from "./paths.js";
@@ -58,31 +62,6 @@ export function resolveSystemdUserUnitPath(env: Record<string, string | undefine
   return resolveSystemdUnitPath(env);
 }
 
-export type LegacySystemdUnit = {
-  name: string;
-  enabled: boolean;
-  exists: boolean;
-  unitPath: string;
-};
-
-export function findLegacySystemdUnits(
-  _env: Record<string, string | undefined>,
-): Promise<LegacySystemdUnit[]> {
-  // TODO: Implement search for legacy unit names
-  return Promise.resolve([]);
-}
-
-export function uninstallLegacySystemdUnits({
-  env: _env,
-  stdout: _stdout,
-}: {
-  env: Record<string, string | undefined>;
-  stdout: NodeJS.WritableStream;
-}): Promise<LegacySystemdUnit[]> {
-  // TODO: Implement removal of legacy units
-  return Promise.resolve([]);
-}
-
 export { enableSystemdUserLinger, readSystemdUserLingerStatus };
 export type { SystemdUserLingerStatus };
 
@@ -134,6 +113,46 @@ export async function readSystemdServiceExecStart(
   return null;
 }
 
+export type SystemdServiceInfo = {
+  activeState?: string;
+  subState?: string;
+  mainPid?: number;
+  execMainStatus?: number;
+  execMainCode?: string;
+};
+
+export function parseSystemdShow(output: string): SystemdServiceInfo {
+  const entries = parseKeyValueOutput(output, "=");
+  const info: SystemdServiceInfo = {};
+  const activeState = entries.activestate;
+  if (activeState) {
+    info.activeState = activeState;
+  }
+  const subState = entries.substate;
+  if (subState) {
+    info.subState = subState;
+  }
+  const mainPidValue = entries.mainpid;
+  if (mainPidValue) {
+    const pid = Number.parseInt(mainPidValue, 10);
+    if (Number.isFinite(pid) && pid > 0) {
+      info.mainPid = pid;
+    }
+  }
+  const execMainStatusValue = entries.execmainstatus;
+  if (execMainStatusValue) {
+    const status = Number.parseInt(execMainStatusValue, 10);
+    if (Number.isFinite(status)) {
+      info.execMainStatus = status;
+    }
+  }
+  const execMainCode = entries.execmaincode;
+  if (execMainCode) {
+    info.execMainCode = execMainCode;
+  }
+  return info;
+}
+
 async function execSystemctl(
   args: string[],
   options?: { useSudo?: boolean },
@@ -167,14 +186,28 @@ async function execSystemctl(
 
 export async function isSystemdUserServiceAvailable(): Promise<boolean> {
   const res = await execSystemctl(["--user", "status"]);
-  if (res.code === 0) return true;
+  if (res.code === 0) {
+    return true;
+  }
   const detail = `${res.stderr} ${res.stdout}`.toLowerCase();
-  if (!detail) return false;
-  if (detail.includes("not found")) return false;
-  if (detail.includes("failed to connect")) return false;
-  if (detail.includes("not been booted")) return false;
-  if (detail.includes("no such file or directory")) return false;
-  if (detail.includes("not supported")) return false;
+  if (!detail) {
+    return false;
+  }
+  if (detail.includes("not found")) {
+    return false;
+  }
+  if (detail.includes("failed to connect")) {
+    return false;
+  }
+  if (detail.includes("not been booted")) {
+    return false;
+  }
+  if (detail.includes("no such file or directory")) {
+    return false;
+  }
+  if (detail.includes("not supported")) {
+    return false;
+  }
   return false;
 }
 
@@ -190,7 +223,9 @@ export async function isSystemdSystemServiceAvailable(): Promise<boolean> {
 
 async function assertSystemdAvailable() {
   const res = await execSystemctl(["--user", "status"]);
-  if (res.code === 0) return;
+  if (res.code === 0) {
+    return;
+  }
   const detail = res.stderr || res.stdout;
   if (detail.toLowerCase().includes("not found")) {
     throw new Error("systemctl not available; systemd user services are required on Linux.");
@@ -262,7 +297,7 @@ export async function uninstallSystemdService({
   stdout: NodeJS.WritableStream;
 }): Promise<void> {
   await assertSystemdAvailable();
-  const serviceName = resolveSystemdServiceName(env);
+  const serviceName = resolveGatewaySystemdServiceName(env.OPENCLAW_PROFILE);
   const unitName = `${serviceName}.service`;
   await execSystemctl(["--user", "disable", "--now", unitName]);
 
@@ -345,36 +380,6 @@ export async function isSystemdServiceEnabled(args: {
   return systemRes.code === 0;
 }
 
-export type SystemdServiceInfo = {
-  activeState?: string;
-  subState?: string;
-  mainPid?: number;
-  execMainStatus?: number;
-  execMainCode?: string;
-};
-
-export function parseSystemdShow(output: string): SystemdServiceInfo {
-  const entries = parseKeyValueOutput(output, "=");
-  const info: SystemdServiceInfo = {};
-  const activeState = entries.activestate;
-  if (activeState) info.activeState = activeState;
-  const subState = entries.substate;
-  if (subState) info.subState = subState;
-  const mainPidValue = entries.mainpid;
-  if (mainPidValue) {
-    const pid = Number.parseInt(mainPidValue, 10);
-    if (Number.isFinite(pid) && pid > 0) info.mainPid = pid;
-  }
-  const execMainStatusValue = entries.execmainstatus;
-  if (execMainStatusValue) {
-    const status = Number.parseInt(execMainStatusValue, 10);
-    if (Number.isFinite(status)) info.execMainStatus = status;
-  }
-  const execMainCode = entries.execmaincode;
-  if (execMainCode) info.execMainCode = execMainCode;
-  return info;
-}
-
 export async function readSystemdServiceRuntime(
   env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
 ): Promise<GatewayServiceRuntime> {
@@ -438,4 +443,77 @@ export async function readSystemdServiceRuntime(
     detail: detail || undefined,
     missingUnit: missing,
   };
+}
+
+export type LegacySystemdUnit = {
+  name: string;
+  unitPath: string;
+  enabled: boolean;
+  exists: boolean;
+};
+
+async function isSystemctlAvailable(): Promise<boolean> {
+  const res = await execSystemctl(["--user", "status"]);
+  if (res.code === 0) {
+    return true;
+  }
+  const detail = `${res.stderr || res.stdout}`.toLowerCase();
+  return !detail.includes("not found");
+}
+
+export async function findLegacySystemdUnits(
+  env: Record<string, string | undefined>,
+): Promise<LegacySystemdUnit[]> {
+  const results: LegacySystemdUnit[] = [];
+  const systemctlAvailable = await isSystemctlAvailable();
+  for (const name of LEGACY_GATEWAY_SYSTEMD_SERVICE_NAMES) {
+    const unitPath = resolveSystemdUnitPathForName(env, name);
+    let exists = false;
+    try {
+      await fs.access(unitPath);
+      exists = true;
+    } catch {
+      // ignore
+    }
+    let enabled = false;
+    if (systemctlAvailable) {
+      const res = await execSystemctl(["--user", "is-enabled", `${name}.service`]);
+      enabled = res.code === 0;
+    }
+    if (exists || enabled) {
+      results.push({ name, unitPath, enabled, exists });
+    }
+  }
+  return results;
+}
+
+export async function uninstallLegacySystemdUnits({
+  env,
+  stdout,
+}: {
+  env: Record<string, string | undefined>;
+  stdout: NodeJS.WritableStream;
+}): Promise<LegacySystemdUnit[]> {
+  const units = await findLegacySystemdUnits(env);
+  if (units.length === 0) {
+    return units;
+  }
+
+  const systemctlAvailable = await isSystemctlAvailable();
+  for (const unit of units) {
+    if (systemctlAvailable) {
+      await execSystemctl(["--user", "disable", "--now", `${unit.name}.service`]);
+    } else {
+      stdout.write(`systemctl unavailable; removed legacy unit file only: ${unit.name}.service\n`);
+    }
+
+    try {
+      await fs.unlink(unit.unitPath);
+      stdout.write(`${formatLine("Removed legacy systemd service", unit.unitPath)}\n`);
+    } catch {
+      stdout.write(`Legacy systemd unit not found at ${unit.unitPath}\n`);
+    }
+  }
+
+  return units;
 }
