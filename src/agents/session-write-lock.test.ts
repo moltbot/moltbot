@@ -159,4 +159,76 @@ describe("acquireSessionWriteLock", () => {
     expect(process.listeners("SIGINT")).toContain(keepAlive);
     process.off("SIGINT", keepAlive);
   });
+
+  it("includes comm in lock payload", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-lock-"));
+    try {
+      const sessionFile = path.join(root, "sessions.json");
+      const lockPath = `${sessionFile}.lock`;
+      const lock = await acquireSessionWriteLock({ sessionFile, timeoutMs: 500 });
+      const raw = await fs.readFile(lockPath, "utf8");
+      const payload = JSON.parse(raw) as { pid: number; comm?: string };
+
+      expect(payload.pid).toBe(process.pid);
+      expect(typeof payload.comm).toBe("string");
+      expect(payload.comm!.length).toBeGreaterThan(0);
+      expect(payload.comm!.length).toBeLessThanOrEqual(15);
+      await lock.release();
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("reclaims lock when PID is reused by a different process", async () => {
+    // Skip on non-Linux where /proc is not available
+    if (process.platform !== "linux") {
+      expect(true).toBe(true);
+      return;
+    }
+
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-lock-"));
+    try {
+      const sessionFile = path.join(root, "sessions.json");
+      const lockPath = `${sessionFile}.lock`;
+
+      // Create a stale lock file with our PID but a different comm
+      // This simulates a container rebuild where PID 1 is now a different process
+      await fs.writeFile(
+        lockPath,
+        JSON.stringify({
+          pid: process.pid,
+          createdAt: new Date().toISOString(),
+          comm: "some-other-proc", // Different command name
+        }),
+        "utf8",
+      );
+
+      // Should reclaim the lock because comm doesn't match
+      const lock = await acquireSessionWriteLock({ sessionFile, timeoutMs: 500 });
+      const raw = await fs.readFile(lockPath, "utf8");
+      const payload = JSON.parse(raw) as { pid: number; comm: string };
+
+      expect(payload.pid).toBe(process.pid);
+      expect(payload.comm).not.toBe("some-other-proc");
+      await lock.release();
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("getProcessComm returns a non-empty string", () => {
+    const comm = __testing.getProcessComm();
+    expect(typeof comm).toBe("string");
+    expect(comm.length).toBeGreaterThan(0);
+    expect(comm.length).toBeLessThanOrEqual(15);
+  });
+
+  it("isAlive returns false for non-existent PID", () => {
+    // Use a very high PID that's unlikely to exist
+    expect(__testing.isAlive(999999999)).toBe(false);
+  });
+
+  it("isAlive returns true for current process", () => {
+    expect(__testing.isAlive(process.pid)).toBe(true);
+  });
 });
