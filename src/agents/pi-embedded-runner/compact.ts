@@ -59,6 +59,7 @@ import {
   sanitizeToolsForGoogle,
 } from "./google.js";
 import { getDmHistoryLimitFromSessionKey, limitHistoryTurns } from "./history.js";
+import { sanitizeToolUseResultPairing } from "../session-transcript-repair.js";
 import { resolveGlobalLane, resolveSessionLane } from "./lanes.js";
 import { log } from "./logger.js";
 import { buildModelAliasLines, resolveModel } from "./model.js";
@@ -427,10 +428,14 @@ export async function compactEmbeddedPiSessionDirect(
         const validated = transcriptPolicy.validateAnthropicTurns
           ? validateAnthropicTurns(validatedGemini)
           : validatedGemini;
-        const limited = limitHistoryTurns(
+        const truncated = limitHistoryTurns(
           validated,
           getDmHistoryLimitFromSessionKey(params.sessionKey, params.config),
         );
+        // Re-repair tool_use/tool_result pairing after truncation, since
+        // limitHistoryTurns may slice in the middle of a paired exchange.
+        const limited =
+          truncated.length < validated.length ? sanitizeToolUseResultPairing(truncated) : truncated;
         if (limited.length > 0) {
           session.agent.replaceMessages(limited);
         }
