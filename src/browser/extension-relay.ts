@@ -98,6 +98,36 @@ function isLoopbackHost(host: string) {
   );
 }
 
+/**
+ * Validate Host header to prevent DNS rebinding attacks.
+ * Accepts host:port format and validates the host part against loopback values.
+ */
+function isValidLoopbackHostHeader(hostHeader: string | undefined): boolean {
+  if (!hostHeader) {
+    return false;
+  }
+  const trimmed = hostHeader.trim().toLowerCase();
+  if (!trimmed) {
+    return false;
+  }
+  // Extract host part (strip port if present)
+  // Handle IPv6 addresses like [::1]:8080
+  let host: string;
+  if (trimmed.startsWith("[")) {
+    // IPv6 format: [host]:port or [host]
+    const closeBracket = trimmed.indexOf("]");
+    if (closeBracket === -1) {
+      return false;
+    }
+    host = trimmed.slice(1, closeBracket);
+  } else {
+    // IPv4 or hostname format: host:port or host
+    const colonIndex = trimmed.lastIndexOf(":");
+    host = colonIndex !== -1 ? trimmed.slice(0, colonIndex) : trimmed;
+  }
+  return isLoopbackHost(host);
+}
+
 function isLoopbackAddress(ip: string | undefined): boolean {
   if (!ip) {
     return false;
@@ -315,6 +345,23 @@ export async function ensureChromeExtensionRelayServer(opts: {
     const url = new URL(req.url ?? "/", info.baseUrl);
     const path = url.pathname;
 
+    // Validate Host header to prevent DNS rebinding attacks (CVE: #5253).
+    // Reject requests where Host doesn't match expected loopback values.
+    const rawHostHeader = req.headers.host;
+    if (!isValidLoopbackHostHeader(rawHostHeader)) {
+      res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Forbidden: invalid Host header");
+      return;
+    }
+
+    // Also validate remote IP for defense in depth (same check as WebSocket upgrade)
+    const remoteAddress = req.socket.remoteAddress;
+    if (!isLoopbackAddress(remoteAddress)) {
+      res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Forbidden: non-loopback remote address");
+      return;
+    }
+
     if (req.method === "HEAD" && path === "/") {
       res.writeHead(200);
       res.end();
@@ -333,8 +380,10 @@ export async function ensureChromeExtensionRelayServer(opts: {
       return;
     }
 
-    const hostHeader = req.headers.host?.trim() || `${info.host}:${info.port}`;
-    const wsHost = `ws://${hostHeader}`;
+    // Use a sanitized, known-good host value in responses instead of raw header
+    // to prevent response injection via malicious Host header values.
+    const safeHost = `${info.host}:${info.port}`;
+    const wsHost = `ws://${safeHost}`;
     const cdpWsUrl = `${wsHost}/cdp`;
 
     if (
