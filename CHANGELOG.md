@@ -12,6 +12,7 @@ Status: stable.
 - Config: auto-migrate legacy state/config paths and keep config resolution consistent across legacy filenames.
 - Gateway: warn on hook tokens via query params; document header auth preference. (#2200) Thanks @YuriNachos.
 - Gateway: add dangerous Control UI device auth bypass flag + audit warnings. (#2248)
+- Security: add prompt injection defense with pattern detection, risk scoring, and configurable responses. (#3958)
 - Doctor: warn on gateway exposure without auth. (#2016) Thanks @Alex-Alaniz.
 - Web UI: keep sub-agent announce replies visible in WebChat. (#1977) Thanks @andrescardonas7.
 - Browser: route browser control via gateway/node; remove standalone browser control command and control URL config.
