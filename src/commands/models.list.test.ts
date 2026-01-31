@@ -17,11 +17,6 @@ const modelRegistryState = {
   models: [] as Array<Record<string, unknown>>,
   available: [] as Array<Record<string, unknown>>,
 };
-const discoverAuthStorage = vi.fn().mockReturnValue({});
-const discoverModels = vi.fn().mockReturnValue({
-  getAll: () => modelRegistryState.models,
-  getAvailable: () => modelRegistryState.available,
-});
 
 vi.mock("../config/config.js", () => ({
   CONFIG_PATH: "/tmp/openclaw.json",
@@ -52,8 +47,15 @@ vi.mock("../agents/model-auth.js", () => ({
 }));
 
 vi.mock("@mariozechner/pi-coding-agent", () => ({
-  AuthStorage,
-  ModelRegistry,
+  AuthStorage: class {},
+  ModelRegistry: class {
+    getAll() {
+      return modelRegistryState.models;
+    }
+    getAvailable() {
+      return modelRegistryState.available;
+    }
+  },
 }));
 
 function makeRuntime() {

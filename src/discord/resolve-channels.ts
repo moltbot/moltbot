@@ -1,5 +1,3 @@
-import type { RESTGetAPIChannelResult, RESTGetAPIGuildChannelsResult } from "discord-api-types/v10";
-
 import { fetchDiscord } from "./api.js";
 import { normalizeDiscordSlug } from "./monitor/allow-list.js";
 import { normalizeDiscordToken } from "./token.js";
@@ -37,11 +35,17 @@ function parseDiscordChannelInput(raw: string): {
   guildOnly?: boolean;
 } {
   const trimmed = raw.trim();
-  if (!trimmed) return {};
+  if (!trimmed) {
+    return {};
+  }
   const mention = trimmed.match(/^<#(\d+)>$/);
-  if (mention) return { channelId: mention[1] };
+  if (mention) {
+    return { channelId: mention[1] };
+  }
   const channelPrefix = trimmed.match(/^(?:channel:|discord:)?(\d+)$/i);
-  if (channelPrefix) return { channelId: channelPrefix[1] };
+  if (channelPrefix) {
+    return { channelId: channelPrefix[1] };
+  }
   const guildPrefix = trimmed.match(/^(?:guild:|server:)?(\d+)$/i);
   if (guildPrefix && !trimmed.includes("/") && !trimmed.includes("#")) {
     return { guildId: guildPrefix[1], guildOnly: true };
@@ -53,7 +57,9 @@ function parseDiscordChannelInput(raw: string): {
     if (!channel) {
       return guild ? { guild: guild.trim(), guildOnly: true } : {};
     }
-    if (guild && /^\d+$/.test(guild)) return { guildId: guild, channel };
+    if (guild && /^\d+$/.test(guild)) {
+      return { guildId: guild, channel };
+    }
     return { guild, channel };
   }
   return { guild: trimmed, guildOnly: true };
@@ -77,11 +83,7 @@ async function listGuildChannels(
   fetcher: typeof fetch,
   guildId: string,
 ): Promise<DiscordChannelSummary[]> {
-  const raw = (await fetchDiscord(
-    `/guilds/${guildId}/channels`,
-    token,
-    fetcher,
-  )) as RESTGetAPIGuildChannelsResult;
+  const raw = await fetchDiscord(`/guilds/${guildId}/channels`, token, fetcher);
   return raw
     .filter((channel) => Boolean(channel.id) && "name" in channel)
     .map((channel) => {
@@ -105,12 +107,10 @@ async function fetchChannel(
   fetcher: typeof fetch,
   channelId: string,
 ): Promise<DiscordChannelSummary | null> {
-  const raw = (await fetchDiscord(
-    `/channels/${channelId}`,
-    token,
-    fetcher,
-  )) as RESTGetAPIChannelResult;
-  if (!raw || !("guild_id" in raw)) return null;
+  const raw = await fetchDiscord(`/channels/${channelId}`, token, fetcher);
+  if (!raw || !("guild_id" in raw)) {
+    return null;
+  }
   return {
     id: raw.id,
     name: "name" in raw ? (raw.name ?? "") : "",
@@ -120,7 +120,9 @@ async function fetchChannel(
 }
 
 function preferActiveMatch(candidates: DiscordChannelSummary[]): DiscordChannelSummary | undefined {
-  if (candidates.length === 0) return undefined;
+  if (candidates.length === 0) {
+    return undefined;
+  }
   const scored = candidates.map((channel) => {
     const isThread = channel.type === 11 || channel.type === 12;
     const archived = Boolean(channel.archived);
@@ -136,7 +138,9 @@ function resolveGuildByName(
   input: string,
 ): DiscordGuildSummary | undefined {
   const slug = normalizeDiscordSlug(input);
-  if (!slug) return undefined;
+  if (!slug) {
+    return undefined;
+  }
   return guilds.find((guild) => guild.slug === slug);
 }
 
@@ -146,17 +150,20 @@ export async function resolveDiscordChannelAllowlist(params: {
   fetcher?: typeof fetch;
 }): Promise<DiscordChannelResolution[]> {
   const token = normalizeDiscordToken(params.token);
-  if (!token)
+  if (!token) {
     return params.entries.map((input) => ({
       input,
       resolved: false,
     }));
+  }
   const fetcher = params.fetcher ?? fetch;
   const guilds = await listGuilds(token, fetcher);
   const channelsByGuild = new Map<string, Promise<DiscordChannelSummary[]>>();
   const getChannels = (guildId: string) => {
     const existing = channelsByGuild.get(guildId);
-    if (existing) return existing;
+    if (existing) {
+      return existing;
+    }
     const promise = listGuildChannels(token, fetcher, guildId);
     channelsByGuild.set(guildId, promise);
     return promise;
