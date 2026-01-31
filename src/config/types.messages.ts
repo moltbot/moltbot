@@ -25,6 +25,12 @@ export type InboundDebounceByProvider = Record<string, number>;
 export type InboundDebounceConfig = {
   debounceMs?: number;
   byChannel?: InboundDebounceByProvider;
+  /** Bot user IDs to watch for typing indicators (multi-bot coordination). */
+  peerBots?: string[];
+  /** Delay (ms) when a peer bot is typing. Default: 3000. */
+  peerTypingDelayMs?: number;
+  /** Max retries when peer keeps typing. Default: 3. */
+  peerTypingMaxRetries?: number;
 };
 
 export type BroadcastStrategy = "parallel" | "sequential";

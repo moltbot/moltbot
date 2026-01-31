@@ -34,6 +34,8 @@ import {
   registerDiscordListener,
 } from "./listeners.js";
 import { createDiscordMessageHandler } from "./message-handler.js";
+import { PeerTypingListener } from "./peer-typing.js";
+import { resolvePeerBots } from "../../auto-reply/inbound-debounce.js";
 import {
   createDiscordCommandArgFallbackButton,
   createDiscordNativeCommand,
@@ -547,6 +549,13 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
       new DiscordPresenceListener({ logger, accountId: account.accountId }),
     );
     runtime.log?.("discord: GuildPresences intent enabled — presence listener registered");
+  }
+
+  // Register peer typing listener for multi-bot coordination
+  const peerBotIds = resolvePeerBots({ cfg });
+  if (peerBotIds.length > 0) {
+    registerDiscordListener(client.listeners, new PeerTypingListener(new Set(peerBotIds)));
+    runtime.log?.(`discord: peer typing listener registered for ${peerBotIds.length} bot(s)`);
   }
 
   runtime.log?.(`logged in to discord${botUserId ? ` as ${botUserId}` : ""}`);

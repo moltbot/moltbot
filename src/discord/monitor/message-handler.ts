@@ -4,7 +4,11 @@ import { hasControlCommand } from "../../auto-reply/command-detection.js";
 import {
   createInboundDebouncer,
   resolveInboundDebounceMs,
+  resolvePeerBots,
+  resolvePeerTypingDelayMs,
+  resolvePeerTypingMaxRetries,
 } from "../../auto-reply/inbound-debounce.js";
+import { isPeerTyping } from "./peer-typing.js";
 import type { HistoryEntry } from "../../auto-reply/reply/history.js";
 import type { ReplyToMode } from "../../config/config.js";
 import { danger } from "../../globals.js";
@@ -41,8 +45,14 @@ export function createDiscordMessageHandler(params: {
   const groupPolicy = params.discordConfig?.groupPolicy ?? "open";
   const ackReactionScope = params.cfg.messages?.ackReactionScope ?? "group-mentions";
   const debounceMs = resolveInboundDebounceMs({ cfg: params.cfg, channel: "discord" });
+  const peerBotIds = resolvePeerBots({ cfg: params.cfg });
+  const peerTypingDelayMs = resolvePeerTypingDelayMs({ cfg: params.cfg });
+  const peerTypingMaxRetries = resolvePeerTypingMaxRetries({ cfg: params.cfg });
 
-  const debouncer = createInboundDebouncer<{ data: DiscordMessageEvent; client: Client }>({
+  // Type for entries with optional retry tracking
+  type EntryWithRetry = { data: DiscordMessageEvent; client: Client; __peerTypingRetries?: number };
+
+  const debouncer = createInboundDebouncer<EntryWithRetry>({
     debounceMs,
     buildKey: (entry) => {
       const message = entry.data.message;
@@ -60,9 +70,21 @@ export function createDiscordMessageHandler(params: {
       if (!baseText.trim()) return false;
       return !hasControlCommand(baseText, params.cfg);
     },
-    onFlush: async (entries) => {
+    onFlush: async (entries, { requeue }) => {
       const last = entries.at(-1);
       if (!last) return;
+
+      // Peer typing check: if a configured peer bot is typing, back off and retry
+      const channelId = last.data.message?.channelId;
+      if (channelId && peerBotIds.length > 0) {
+        const retryCount = last.__peerTypingRetries ?? 0;
+        if (retryCount < peerTypingMaxRetries && isPeerTyping(channelId, peerBotIds)) {
+          // Re-enqueue with backoff delay
+          requeue({ ...last, __peerTypingRetries: retryCount + 1 }, peerTypingDelayMs);
+          return;
+        }
+      }
+
       if (entries.length === 1) {
         const ctx = await preflightDiscordMessage({
           ...params,
