@@ -43,6 +43,8 @@ import { resolveQueueSettings } from "./queue.js";
 import { ensureSkillSnapshot, prependSystemEvents } from "./session-updates.js";
 import type { TypingController } from "./typing.js";
 import { resolveTypingMode } from "./typing-mode.js";
+import { withAgentSpan } from "../../observability/lmnr.js";
+import { initHipocap } from "../../security/hipocap/middleware.js";
 
 type AgentDefaults = NonNullable<OpenClawConfig["agents"]>["defaults"];
 type ExecOverrides = Pick<ExecToolDefaults, "host" | "security" | "ask" | "node">;
@@ -400,30 +402,52 @@ export async function runPreparedReply(
     },
   };
 
-  return runReplyAgent({
-    commandBody: prefixedCommandBody,
-    followupRun,
-    queueKey,
-    resolvedQueue,
-    shouldSteer,
-    shouldFollowup,
-    isActive,
-    isStreaming,
-    opts,
-    typing,
-    sessionEntry,
-    sessionStore,
+  // Ensure Hipocap and Laminar are initialized if enabled
+  if (cfg.hipocap?.enabled) {
+    initHipocap(cfg);
+  }
+
+  const agentSpanMetadata = {
+    agentId,
+    sessionId: sessionIdFinal,
     sessionKey,
-    storePath,
-    defaultModel,
-    agentCfgContextTokens: agentCfg?.contextTokens,
-    resolvedVerboseLevel: resolvedVerboseLevel ?? "off",
+    provider,
+    model,
+    thinkLevel: resolvedThinkLevel,
     isNewSession,
-    blockStreamingEnabled,
-    blockReplyChunking,
-    resolvedBlockStreamingBreak,
-    sessionCtx,
-    shouldInjectGroupIntro,
-    typingMode,
-  });
+  };
+
+  return await withAgentSpan(
+    `agent_run:${agentId}`,
+    prefixedCommandBody,
+    agentSpanMetadata,
+    async () => {
+      return runReplyAgent({
+        commandBody: prefixedCommandBody,
+        followupRun,
+        queueKey,
+        resolvedQueue,
+        shouldSteer,
+        shouldFollowup,
+        isActive,
+        isStreaming,
+        opts,
+        typing,
+        sessionEntry,
+        sessionStore,
+        sessionKey,
+        storePath,
+        defaultModel,
+        agentCfgContextTokens: agentCfg?.contextTokens,
+        resolvedVerboseLevel: resolvedVerboseLevel ?? "off",
+        isNewSession,
+        blockStreamingEnabled,
+        blockReplyChunking,
+        resolvedBlockStreamingBreak,
+        sessionCtx,
+        shouldInjectGroupIntro,
+        typingMode,
+      });
+    },
+  );
 }

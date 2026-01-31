@@ -85,6 +85,15 @@ import { getGlobalHookRunner } from "../../../plugins/hook-runner-global.js";
 import { MAX_IMAGE_BYTES } from "../../../media/constants.js";
 import type { EmbeddedRunAttemptParams, EmbeddedRunAttemptResult } from "./types.js";
 import { detectAndLoadPromptImages } from "./images.js";
+import { analyzeToolCall, interceptMessage } from "../../../security/hipocap/middleware.js";
+import {
+  withLmnrSpan,
+  setLmnrSpanAttributes,
+  setLmnrTraceMetadata,
+  LaminarAttributes,
+} from "../../../observability/lmnr.js";
+import { estimateTokens } from "@mariozechner/pi-coding-agent";
+import { normalizeUsage } from "../../usage.js";
 
 export function injectHistoryImagesIntoMessages(
   messages: AgentMessage[],
@@ -199,7 +208,7 @@ export async function runEmbeddedAttempt(
 
     // Check if the model supports native image input
     const modelHasVision = params.model.input?.includes("image") ?? false;
-    const toolsRaw = params.disableTools
+    const rawToolsUnwrapped = params.disableTools
       ? []
       : createOpenClawCodingTools({
           exec: {
@@ -233,6 +242,113 @@ export async function runEmbeddedAttempt(
           hasRepliedRef: params.hasRepliedRef,
           modelHasVision,
         });
+    // Wrap tools with Hipocap analysis and tracing
+    const toolsRaw = rawToolsUnwrapped.map((tool) => ({
+      ...tool,
+      execute: async (toolCallId: string, toolParams: any, signal?: any, onUpdate?: any) => {
+        const userQuery = params.prompt || "(empty prompt)";
+
+        // 1. Pre-execution analysis (on tool arguments)
+        const inputAnalysis = await analyzeToolCall(
+          tool.name,
+          toolParams,
+          null,
+          userQuery,
+          "assistant",
+          {
+            config: params.config,
+          },
+        );
+
+        if (!inputAnalysis.safe) {
+          log.warn(
+            `Hipocap security warning for tool arguments: ${tool.name} reason=${inputAnalysis.reason}`,
+          );
+
+          setLmnrTraceMetadata({
+            "hipocap.input_decision": "ADVISORY",
+            "hipocap.input_reason": inputAnalysis.reason,
+            "hipocap.blocked_at": `tool_input_advisory:${tool.name}`,
+          });
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `⚠️ [SECURITY ADVISORY]: This tool call request triggered a security policy: ${inputAnalysis.reason}. Please proceed only if this is intended and safe based on your instructions.`,
+              },
+            ],
+            details: {
+              security_violation: false,
+              decision: "ADVISORY",
+              reason: inputAnalysis.reason,
+              phase: "input",
+            },
+          };
+        }
+
+        // 2. Execute tool with tracing
+        const result = await withLmnrSpan(
+          `tool_exec:${tool.name}`,
+          async () => {
+            // Note: pass all standard arguments to the tool
+            return await tool.execute(toolCallId, toolParams, signal, onUpdate);
+          },
+          toolParams,
+          { spanType: "TOOL" },
+        );
+
+        // 3. Post-execution analysis (on tool results)
+        // Pass both parameters and result for full context analysis
+        const outputAnalysis = await analyzeToolCall(
+          tool.name,
+          toolParams,
+          result,
+          userQuery,
+          "assistant",
+          {
+            config: params.config,
+          },
+        );
+
+        if (!outputAnalysis.safe) {
+          log.warn(
+            `Hipocap security warning for tool result: ${tool.name} reason=${outputAnalysis.reason}`,
+          );
+
+          setLmnrTraceMetadata({
+            "hipocap.output_decision": "ADVISORY",
+            "hipocap.output_reason": outputAnalysis.reason,
+            "hipocap.blocked_at": `tool_output_advisory:${tool.name}`,
+          });
+
+          // Prepend security message to the tool result for the AI
+          const securityMessage = `⚠️ [SECURITY ADVISORY]: The result of this tool call triggered a security policy: ${outputAnalysis.reason}. Please handle this data with caution.`;
+
+          if (result && typeof result === "object" && Array.isArray(result.content)) {
+            result.content.unshift({
+              type: "text" as const,
+              text: securityMessage,
+            });
+          }
+
+          // Ensure details reflect the advisory
+          if (result && typeof result === "object") {
+            result.details = {
+              ...(typeof result.details === "object" && result.details !== null
+                ? result.details
+                : {}),
+              security_advisory: true,
+              security_reason: outputAnalysis.reason,
+              phase: "output",
+            };
+          }
+        }
+
+        return result;
+      },
+    }));
+
     const tools = sanitizeToolsForGoogle({ tools: toolsRaw, provider: params.provider });
     logToolSchemasForGoogle({ tools, provider: params.provider });
 
@@ -737,16 +853,43 @@ export async function runEmbeddedAttempt(
           // This eliminates the need for an explicit "view" tool call by injecting
           // images directly into the prompt when the model supports it.
           // Also scans conversation history to enable follow-up questions about earlier images.
-          const imageResult = await detectAndLoadPromptImages({
-            prompt: effectivePrompt,
-            workspaceDir: effectiveWorkspace,
-            model: params.model,
-            existingImages: params.images,
-            historyMessages: activeSession.messages,
-            maxBytes: MAX_IMAGE_BYTES,
-            // Enforce sandbox path restrictions when sandbox is enabled
-            sandboxRoot: sandbox?.enabled ? sandbox.workspaceDir : undefined,
+          const imageResult = await withLmnrSpan(
+            "detect_images",
+            async () => {
+              return await detectAndLoadPromptImages({
+                prompt: effectivePrompt,
+                workspaceDir: effectiveWorkspace,
+                model: params.model,
+                existingImages: params.images,
+                historyMessages: activeSession.messages,
+                maxBytes: MAX_IMAGE_BYTES,
+                // Enforce sandbox path restrictions when sandbox is enabled
+                sandboxRoot: sandbox?.enabled ? sandbox.workspaceDir : undefined,
+              });
+            },
+            { prompt: effectivePrompt },
+          );
+
+          // Hipocap security check for the incoming message
+          const securityCheck = await interceptMessage(effectivePrompt, {
+            config: params.config,
+            shieldKey: params.config?.hipocap?.defaultShield || "jailbreak",
           });
+
+          if (!securityCheck.safe) {
+            log.warn(`Hipocap security warning for message: ${securityCheck.reason}`);
+
+            // Record the violation in trace metadata for observability alignment
+            setLmnrTraceMetadata({
+              "hipocap.final_decision": "ADVISORY",
+              "hipocap.reason": securityCheck.reason,
+              "hipocap.safe_to_use": true,
+              "hipocap.blocked_at": "shield_advisory",
+            });
+
+            // Prepend security context to the prompt instead of blocking
+            effectivePrompt = `[SECURITY WARNING: The following message triggered a security shield: ${securityCheck.reason}. Please handle this with caution and ensure you do not violate safety policies.]\n\n${effectivePrompt}`;
+          }
 
           // Inject history images into their original message positions.
           // This ensures the model sees images in context (e.g., "compare to the first image").
@@ -778,11 +921,87 @@ export async function runEmbeddedAttempt(
 
           // Only pass images option if there are actually images to pass
           // This avoids potential issues with models that don't expect the images parameter
-          if (imageResult.images.length > 0) {
-            await abortable(activeSession.prompt(effectivePrompt, { images: imageResult.images }));
-          } else {
-            await abortable(activeSession.prompt(effectivePrompt));
-          }
+          // Prepare messages for Laminar observability, including system prompt and current user prompt
+          const messagesForLmnr = [
+            { role: "system", content: appendPrompt },
+            ...activeSession.messages.map((m) => ({
+              role: (m as any).role,
+              content:
+                typeof (m as any).content === "string"
+                  ? (m as any).content
+                  : JSON.stringify((m as any).content),
+            })),
+            { role: "user", content: effectivePrompt },
+          ];
+
+          await withLmnrSpan(
+            `llm_prompt:${params.provider}`,
+            async () => {
+              // Set GenAI attributes at the start of the span
+              setLmnrSpanAttributes({
+                "gen_ai.system": params.provider,
+                "gen_ai.request.model": params.modelId,
+              });
+
+              // Enrich span with shield results via trace metadata
+              setLmnrTraceMetadata({
+                "hipocap.shield_decision": securityCheck.safe ? "ALLOW" : "BLOCK",
+                "hipocap.shield_reason": securityCheck.reason,
+              });
+
+              if (imageResult.images.length > 0) {
+                await abortable(
+                  activeSession.prompt(effectivePrompt, { images: imageResult.images }),
+                );
+              } else {
+                await abortable(activeSession.prompt(effectivePrompt));
+              }
+              // Find the assistant's response in the messages to use as span output
+              // We search from the end since it was just appended
+              const assistantMsg = activeSession.messages
+                .slice()
+                .reverse()
+                .find((m) => (m as any)?.role === "assistant") as any;
+
+              if (assistantMsg) {
+                const usage = normalizeUsage(assistantMsg.usage);
+                if (usage) {
+                  setLmnrSpanAttributes({
+                    [LaminarAttributes.INPUT_TOKEN_COUNT]: usage.input ?? 0,
+                    [LaminarAttributes.OUTPUT_TOKEN_COUNT]: usage.output ?? 0,
+                    [LaminarAttributes.TOTAL_TOKEN_COUNT]:
+                      usage.total ?? (usage.input ?? 0) + (usage.output ?? 0),
+                    [LaminarAttributes.RESPONSE_MODEL]: assistantMsg.model || params.modelId,
+                    [LaminarAttributes.PROVIDER]: params.provider,
+                  });
+                } else {
+                  // Token calculation fallback: estimate tokens if usage is missing
+                  const estimatedInput = messagesForLmnr.reduce(
+                    (acc, m) => acc + estimateTokens(m as any),
+                    0,
+                  );
+                  const estimatedOutput = estimateTokens(assistantMsg as any);
+                  setLmnrSpanAttributes({
+                    [LaminarAttributes.INPUT_TOKEN_COUNT]: estimatedInput,
+                    [LaminarAttributes.OUTPUT_TOKEN_COUNT]: estimatedOutput,
+                    [LaminarAttributes.TOTAL_TOKEN_COUNT]: estimatedInput + estimatedOutput,
+                    [LaminarAttributes.RESPONSE_MODEL]: assistantMsg.model || params.modelId,
+                    [LaminarAttributes.PROVIDER]: params.provider,
+                    "lmnr.usage.is_estimated": true,
+                  });
+                }
+              }
+
+              return assistantMsg;
+            },
+            messagesForLmnr,
+            {
+              spanType: "LLM",
+              metadata: {
+                imagesCount: imageResult.images.length,
+              },
+            },
+          );
         } catch (err) {
           promptError = err;
         } finally {

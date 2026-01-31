@@ -17,6 +17,7 @@ export const CONFIGURE_WIZARD_SECTIONS = [
   "channels",
   "skills",
   "health",
+  "hipocap",
 ] as const;
 
 export type WizardSection = (typeof CONFIGURE_WIZARD_SECTIONS)[number];
@@ -52,6 +53,11 @@ export const CONFIGURE_SECTION_OPTIONS: Array<{
     value: "health",
     label: "Health check",
     hint: "Run gateway + channel checks",
+  },
+  {
+    value: "hipocap",
+    label: "Hipocap Security",
+    hint: "AI Security Policy and Observability",
   },
 ];
 

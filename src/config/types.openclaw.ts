@@ -23,6 +23,7 @@ import type { NodeHostConfig } from "./types.node-host.js";
 import type { PluginsConfig } from "./types.plugins.js";
 import type { SkillsConfig } from "./types.skills.js";
 import type { ToolsConfig } from "./types.tools.js";
+import type { HipocapConfig } from "./types.hipocap.js";
 
 export type OpenClawConfig = {
   meta?: {
@@ -95,6 +96,7 @@ export type OpenClawConfig = {
   canvasHost?: CanvasHostConfig;
   talk?: TalkConfig;
   gateway?: GatewayConfig;
+  hipocap?: HipocapConfig;
 };
 
 export type ConfigValidationIssue = {

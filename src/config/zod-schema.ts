@@ -6,6 +6,7 @@ import { HexColorSchema, ModelsConfigSchema } from "./zod-schema.core.js";
 import { HookMappingSchema, HooksGmailSchema, InternalHooksSchema } from "./zod-schema.hooks.js";
 import { ChannelsSchema } from "./zod-schema.providers.js";
 import { CommandsSchema, MessagesSchema, SessionSchema } from "./zod-schema.session.js";
+import { HipocapSchema } from "./zod-schema.hipocap.js";
 
 const BrowserSnapshotDefaultsSchema = z
   .object({
@@ -528,6 +529,7 @@ export const OpenClawSchema = z
       })
       .strict()
       .optional(),
+    hipocap: HipocapSchema,
   })
   .strict()
   .superRefine((cfg, ctx) => {

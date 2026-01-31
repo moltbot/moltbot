@@ -42,6 +42,7 @@ import {
 } from "./onboard-helpers.js";
 import { promptRemoteGatewayConfig } from "./onboard-remote.js";
 import { setupSkills } from "./onboard-skills.js";
+import { setupHipocap } from "../wizard/onboarding.hipocap.js";
 
 type ConfigureSectionChoice = WizardSection | "__continue";
 
@@ -349,6 +350,10 @@ export async function runConfigureWizard(
         nextConfig = await setupSkills(nextConfig, wsDir, runtime, prompter);
       }
 
+      if (selected.includes("hipocap")) {
+        nextConfig = await setupHipocap(nextConfig, prompter);
+      }
+
       await persistConfig();
 
       if (selected.includes("daemon")) {
@@ -470,6 +475,11 @@ export async function runConfigureWizard(
         if (choice === "skills") {
           const wsDir = resolveUserPath(workspaceDir);
           nextConfig = await setupSkills(nextConfig, wsDir, runtime, prompter);
+          await persistConfig();
+        }
+
+        if (choice === "hipocap") {
+          nextConfig = await setupHipocap(nextConfig, prompter);
           await persistConfig();
         }
 
