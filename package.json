@@ -247,7 +247,7 @@
     "minimumReleaseAge": 2880,
     "overrides": {
       "@sinclair/typebox": "0.34.47",
-      "@anthropic-ai/sdk": "0.65.0"
+      "@anthropic-ai/sdk": "0.65.0",
       "tar": "7.5.7"
     }
   },
