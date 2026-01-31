@@ -10,8 +10,10 @@ import { splitTelegramCaption } from "../caption.js";
 import type { ReplyPayload } from "../../auto-reply/types.js";
 import type { ReplyToMode } from "../../config/config.js";
 import type { MarkdownTableMode } from "../../config/types.base.js";
-import { danger, logVerbose } from "../../globals.js";
+import { danger, logVerbose, shouldLogVerbose } from "../../globals.js";
 import { formatErrorMessage } from "../../infra/errors.js";
+import { createTelegramRetryRunner, type RetryRunner } from "../../infra/retry-policy.js";
+import type { RetryConfig } from "../../infra/retry.js";
 import { mediaKindFromMime } from "../../media/constants.js";
 import { fetchRemoteMedia } from "../../media/fetch.js";
 import { isGifMedia } from "../../media/mime.js";
@@ -44,6 +46,12 @@ export async function deliverReplies(params: {
   linkPreview?: boolean;
   /** Optional quote text for Telegram reply_parameters. */
   replyQuoteText?: string;
+  /** Retry configuration override. */
+  retry?: RetryConfig;
+  /** Account-level retry configuration. */
+  configRetry?: RetryConfig;
+  /** Enable verbose retry logging. */
+  verbose?: boolean;
 }): Promise<{ delivered: boolean }> {
   const {
     replies,
@@ -57,6 +65,11 @@ export async function deliverReplies(params: {
     replyQuoteText,
   } = params;
   const chunkMode = params.chunkMode ?? "length";
+  const requestWithRetry = createTelegramRetryRunner({
+    retry: params.retry,
+    configRetry: params.configRetry,
+    verbose: typeof params.verbose === "boolean" ? params.verbose : shouldLogVerbose(),
+  });
   let hasReplied = false;
   let hasDelivered = false;
   const markDelivered = () => {
@@ -119,6 +132,7 @@ export async function deliverReplies(params: {
           plainText: chunk.text,
           linkPreview,
           replyMarkup: shouldAttachButtons ? replyMarkup : undefined,
+          request: requestWithRetry,
         });
         markDelivered();
         if (replyToId && !hasReplied) {
@@ -167,25 +181,37 @@ export async function deliverReplies(params: {
         }),
       };
       if (isGif) {
-        await withTelegramApiErrorLogging({
-          operation: "sendAnimation",
-          runtime,
-          fn: () => bot.api.sendAnimation(chatId, file, { ...mediaParams }),
-        });
+        await requestWithRetry(
+          () =>
+            withTelegramApiErrorLogging({
+              operation: "sendAnimation",
+              runtime,
+              fn: () => bot.api.sendAnimation(chatId, file, { ...mediaParams }),
+            }),
+          "animation",
+        );
         markDelivered();
       } else if (kind === "image") {
-        await withTelegramApiErrorLogging({
-          operation: "sendPhoto",
-          runtime,
-          fn: () => bot.api.sendPhoto(chatId, file, { ...mediaParams }),
-        });
+        await requestWithRetry(
+          () =>
+            withTelegramApiErrorLogging({
+              operation: "sendPhoto",
+              runtime,
+              fn: () => bot.api.sendPhoto(chatId, file, { ...mediaParams }),
+            }),
+          "photo",
+        );
         markDelivered();
       } else if (kind === "video") {
-        await withTelegramApiErrorLogging({
-          operation: "sendVideo",
-          runtime,
-          fn: () => bot.api.sendVideo(chatId, file, { ...mediaParams }),
-        });
+        await requestWithRetry(
+          () =>
+            withTelegramApiErrorLogging({
+              operation: "sendVideo",
+              runtime,
+              fn: () => bot.api.sendVideo(chatId, file, { ...mediaParams }),
+            }),
+          "video",
+        );
         markDelivered();
       } else if (kind === "audio") {
         const { useVoice } = resolveTelegramVoiceSend({
@@ -199,12 +225,16 @@ export async function deliverReplies(params: {
           // Switch typing indicator to record_voice before sending.
           await params.onVoiceRecording?.();
           try {
-            await withTelegramApiErrorLogging({
-              operation: "sendVoice",
-              runtime,
-              shouldLog: (err) => !isVoiceMessagesForbidden(err),
-              fn: () => bot.api.sendVoice(chatId, file, { ...mediaParams }),
-            });
+            await requestWithRetry(
+              () =>
+                withTelegramApiErrorLogging({
+                  operation: "sendVoice",
+                  runtime,
+                  shouldLog: (err) => !isVoiceMessagesForbidden(err),
+                  fn: () => bot.api.sendVoice(chatId, file, { ...mediaParams }),
+                }),
+              "voice",
+            );
             markDelivered();
           } catch (voiceErr) {
             // Fall back to text if voice messages are forbidden in this chat.
@@ -231,6 +261,7 @@ export async function deliverReplies(params: {
                 linkPreview,
                 replyMarkup,
                 replyQuoteText,
+                request: requestWithRetry,
               });
               markDelivered();
               // Skip this media item; continue with next.
@@ -240,19 +271,27 @@ export async function deliverReplies(params: {
           }
         } else {
           // Audio file - displays with metadata (title, duration) - DEFAULT
-          await withTelegramApiErrorLogging({
-            operation: "sendAudio",
-            runtime,
-            fn: () => bot.api.sendAudio(chatId, file, { ...mediaParams }),
-          });
+          await requestWithRetry(
+            () =>
+              withTelegramApiErrorLogging({
+                operation: "sendAudio",
+                runtime,
+                fn: () => bot.api.sendAudio(chatId, file, { ...mediaParams }),
+              }),
+            "audio",
+          );
           markDelivered();
         }
       } else {
-        await withTelegramApiErrorLogging({
-          operation: "sendDocument",
-          runtime,
-          fn: () => bot.api.sendDocument(chatId, file, { ...mediaParams }),
-        });
+        await requestWithRetry(
+          () =>
+            withTelegramApiErrorLogging({
+              operation: "sendDocument",
+              runtime,
+              fn: () => bot.api.sendDocument(chatId, file, { ...mediaParams }),
+            }),
+          "document",
+        );
         markDelivered();
       }
       if (replyToId && !hasReplied) {
@@ -273,6 +312,7 @@ export async function deliverReplies(params: {
             plainText: chunk.text,
             linkPreview,
             replyMarkup: i === 0 ? replyMarkup : undefined,
+            request: requestWithRetry,
           });
           markDelivered();
           if (replyToId && !hasReplied) {
@@ -451,6 +491,7 @@ async function sendTelegramVoiceFallbackText(opts: {
   linkPreview?: boolean;
   replyMarkup?: ReturnType<typeof buildInlineKeyboard>;
   replyQuoteText?: string;
+  request?: RetryRunner;
 }): Promise<boolean> {
   const chunks = opts.chunkText(opts.text);
   let hasReplied = opts.hasReplied;
@@ -465,6 +506,7 @@ async function sendTelegramVoiceFallbackText(opts: {
       plainText: chunk.text,
       linkPreview: opts.linkPreview,
       replyMarkup: i === 0 ? opts.replyMarkup : undefined,
+      request: opts.request,
     });
     if (opts.replyToId && !hasReplied) {
       hasReplied = true;
@@ -510,6 +552,7 @@ async function sendTelegramText(
     plainText?: string;
     linkPreview?: boolean;
     replyMarkup?: ReturnType<typeof buildInlineKeyboard>;
+    request?: RetryRunner;
   },
 ): Promise<number | undefined> {
   const baseParams = buildTelegramSendParams({
@@ -517,40 +560,51 @@ async function sendTelegramText(
     replyQuoteText: opts?.replyQuoteText,
     messageThreadId: opts?.messageThreadId,
   });
+  const request = opts?.request;
+  const sendWithRetry = <T>(fn: () => Promise<T>, label: string): Promise<T> =>
+    request ? request(fn, label) : fn();
   // Add link_preview_options when link preview is disabled.
   const linkPreviewEnabled = opts?.linkPreview ?? true;
   const linkPreviewOptions = linkPreviewEnabled ? undefined : { is_disabled: true };
   const textMode = opts?.textMode ?? "markdown";
   const htmlText = textMode === "html" ? text : markdownToTelegramHtml(text);
   try {
-    const res = await withTelegramApiErrorLogging({
-      operation: "sendMessage",
-      runtime,
-      shouldLog: (err) => !PARSE_ERR_RE.test(formatErrorMessage(err)),
-      fn: () =>
-        bot.api.sendMessage(chatId, htmlText, {
-          parse_mode: "HTML",
-          ...(linkPreviewOptions ? { link_preview_options: linkPreviewOptions } : {}),
-          ...(opts?.replyMarkup ? { reply_markup: opts.replyMarkup } : {}),
-          ...baseParams,
+    const res = await sendWithRetry(
+      () =>
+        withTelegramApiErrorLogging({
+          operation: "sendMessage",
+          runtime,
+          shouldLog: (err) => !PARSE_ERR_RE.test(formatErrorMessage(err)),
+          fn: () =>
+            bot.api.sendMessage(chatId, htmlText, {
+              parse_mode: "HTML",
+              ...(linkPreviewOptions ? { link_preview_options: linkPreviewOptions } : {}),
+              ...(opts?.replyMarkup ? { reply_markup: opts.replyMarkup } : {}),
+              ...baseParams,
+            }),
         }),
-    });
+      "message",
+    );
     return res.message_id;
   } catch (err) {
     const errText = formatErrorMessage(err);
     if (PARSE_ERR_RE.test(errText)) {
       runtime.log?.(`telegram HTML parse failed; retrying without formatting: ${errText}`);
       const fallbackText = opts?.plainText ?? text;
-      const res = await withTelegramApiErrorLogging({
-        operation: "sendMessage",
-        runtime,
-        fn: () =>
-          bot.api.sendMessage(chatId, fallbackText, {
-            ...(linkPreviewOptions ? { link_preview_options: linkPreviewOptions } : {}),
-            ...(opts?.replyMarkup ? { reply_markup: opts.replyMarkup } : {}),
-            ...baseParams,
+      const res = await sendWithRetry(
+        () =>
+          withTelegramApiErrorLogging({
+            operation: "sendMessage",
+            runtime,
+            fn: () =>
+              bot.api.sendMessage(chatId, fallbackText, {
+                ...(linkPreviewOptions ? { link_preview_options: linkPreviewOptions } : {}),
+                ...(opts?.replyMarkup ? { reply_markup: opts.replyMarkup } : {}),
+                ...baseParams,
+              }),
           }),
-      });
+        "message-plain",
+      );
       return res.message_id;
     }
     throw err;

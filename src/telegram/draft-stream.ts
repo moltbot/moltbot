@@ -2,6 +2,8 @@ import type { Bot } from "grammy";
 
 const TELEGRAM_DRAFT_MAX_CHARS = 4096;
 const DEFAULT_THROTTLE_MS = 300;
+const TRANSIENT_ERROR_RE = /429|timeout|connect|reset|closed|unavailable|temporarily/i;
+const MAX_TRANSIENT_RETRIES = 2;
 
 export type TelegramDraftStream = {
   update: (text: string) => void;
@@ -36,6 +38,8 @@ export function createTelegramDraftStream(params: {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let stopped = false;
 
+  const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
   const sendDraft = async (text: string) => {
     if (stopped) {
       return;
@@ -56,13 +60,28 @@ export function createTelegramDraftStream(params: {
     }
     lastSentText = trimmed;
     lastSentAt = Date.now();
-    try {
-      await params.api.sendMessageDraft(chatId, draftId, trimmed, threadParams);
-    } catch (err) {
-      stopped = true;
-      params.warn?.(
-        `telegram draft stream failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
+
+    let retries = 0;
+    while (retries <= MAX_TRANSIENT_RETRIES) {
+      try {
+        await params.api.sendMessageDraft(chatId, draftId, trimmed, threadParams);
+        return; // Success
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const isTransient = TRANSIENT_ERROR_RE.test(errMsg);
+        if (isTransient && retries < MAX_TRANSIENT_RETRIES) {
+          retries++;
+          const delay = Math.min(300 * Math.pow(2, retries - 1), 2000);
+          params.warn?.(
+            `telegram draft transient error, retry ${retries}/${MAX_TRANSIENT_RETRIES} in ${delay}ms: ${errMsg}`,
+          );
+          await sleep(delay);
+          continue;
+        }
+        stopped = true;
+        params.warn?.(`telegram draft stream failed: ${errMsg}`);
+        return;
+      }
     }
   };
 
