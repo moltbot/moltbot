@@ -197,6 +197,7 @@
   overflow-x: hidden;
   padding: 16px 12px;
   background: var(--bg);
+  border-right: 1px solid var(--border);
   scrollbar-width: none; /* Firefox */
   transition:
     width var(--shell-focus-duration) var(--shell-focus-ease),
@@ -433,12 +434,10 @@
 /* Light theme nav - subtle background difference */
 :root[data-theme="light"] .nav {
   background: var(--bg);
-  border-right: 1px solid var(--border);
 }
 
 :root[data-theme="light"] .topbar {
   background: var(--bg);
-  box-shadow: 0 1px 0 var(--border);
 }
 
 .content--chat {
