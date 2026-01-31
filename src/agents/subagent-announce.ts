@@ -20,6 +20,13 @@ import {
 } from "../utils/delivery-context.js";
 import { isEmbeddedPiRunActive, queueEmbeddedPiMessage } from "./pi-embedded.js";
 import { type AnnounceQueueItem, enqueueAnnounce } from "./subagent-announce-queue.js";
+import {
+  isAuthErrorMessage,
+  isBillingErrorMessage,
+  isContextOverflowError,
+  isRateLimitErrorMessage,
+  isTimeoutErrorMessage,
+} from "./pi-embedded-helpers/errors.js";
 import { readLatestAssistantReply } from "./tools/agent-step.js";
 
 function formatDurationShort(valueMs?: number) {
@@ -289,6 +296,73 @@ async function buildSubagentStatsLine(params: {
   return `Stats: ${parts.join(" \u2022 ")}`;
 }
 
+function formatSubagentErrorMessage(outcome: SubagentRunOutcome): string {
+  const rawError = outcome.error ?? "";
+
+  // Classify error types and provide actionable guidance
+  if (isRateLimitErrorMessage(rawError)) {
+    return "temporarily overloaded (rate limit). Try again in a moment.";
+  }
+
+  if (isAuthErrorMessage(rawError)) {
+    return "authentication failed. Check API credentials or re-authenticate.";
+  }
+
+  if (isBillingErrorMessage(rawError)) {
+    return "billing issue (insufficient credits or quota exceeded). Check account status.";
+  }
+
+  if (isContextOverflowError(rawError)) {
+    return "input too large for model. Try reducing input size or using a model with larger context window.";
+  }
+
+  if (isTimeoutErrorMessage(rawError)) {
+    return "request timed out. Try again or increase runTimeoutSeconds.";
+  }
+
+  // Return sanitized error for unclassified errors
+  if (rawError.length > 200) {
+    // Truncate very long errors to keep announcement readable
+    return `${rawError.slice(0, 200)}…`;
+  }
+
+  return rawError || "unknown error";
+}
+
+function buildSubagentStatusLabel(
+  outcome: SubagentRunOutcome,
+  runtimeMs?: number,
+  timeoutMs?: number,
+): string {
+  if (outcome.status === "ok") {
+    return "completed successfully";
+  }
+
+  if (outcome.status === "timeout") {
+    const runtime = formatDurationShort(runtimeMs);
+    const limit = formatDurationShort(timeoutMs);
+    if (runtime && limit) {
+      return `timed out after ${runtime} (limit: ${limit})`;
+    }
+    if (runtime) {
+      return `timed out after ${runtime}`;
+    }
+    return "timed out (consider increasing runTimeoutSeconds)";
+  }
+
+  if (outcome.status === "error") {
+    const errorMsg = formatSubagentErrorMessage(outcome);
+    return `failed: ${errorMsg}`;
+  }
+
+  // Unknown status
+  const runtime = formatDurationShort(runtimeMs);
+  if (runtime) {
+    return `finished with unknown status (runtime: ${runtime})`;
+  }
+  return "finished with unknown status";
+}
+
 export function buildSubagentSystemPrompt(params: {
   requesterSessionKey?: string;
   requesterOrigin?: DeliveryContext;
@@ -416,6 +490,12 @@ export async function runSubagentAnnounceFlow(params: {
       outcome = { status: "unknown" };
     }
 
+    // Calculate runtime for context
+    const runtimeMs =
+      typeof params.startedAt === "number" && typeof params.endedAt === "number"
+        ? Math.max(0, params.endedAt - params.startedAt)
+        : undefined;
+
     // Build stats
     const statsLine = await buildSubagentStatsLine({
       sessionKey: params.childSessionKey,
@@ -423,15 +503,8 @@ export async function runSubagentAnnounceFlow(params: {
       endedAt: params.endedAt,
     });
 
-    // Build status label
-    const statusLabel =
-      outcome.status === "ok"
-        ? "completed successfully"
-        : outcome.status === "timeout"
-          ? "timed out"
-          : outcome.status === "error"
-            ? `failed: ${outcome.error || "unknown error"}`
-            : "finished with unknown status";
+    // Build status label with improved error messages
+    const statusLabel = buildSubagentStatusLabel(outcome, runtimeMs, params.timeoutMs);
 
     // Build instructional message for main agent
     const taskLabel = params.label || params.task || "background task";
