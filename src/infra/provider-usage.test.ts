@@ -137,6 +137,206 @@ describe("provider usage loading", () => {
     expect(mockFetch).toHaveBeenCalled();
   });
 
+  it("loads zhipu usage from bigmodel.cn endpoint", async () => {
+    const makeResponse = (status: number, body: unknown): Response => {
+      const payload = typeof body === "string" ? body : JSON.stringify(body);
+      const headers = typeof body === "string" ? undefined : { "Content-Type": "application/json" };
+      return new Response(payload, { status, headers });
+    };
+
+    const mockFetch = vi.fn<Parameters<typeof fetch>, ReturnType<typeof fetch>>(async (input) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("open.bigmodel.cn")) {
+        return makeResponse(200, {
+          success: true,
+          code: 200,
+          data: {
+            planName: "Basic",
+            limits: [
+              {
+                type: "TOKENS_LIMIT",
+                percentage: 30,
+                unit: 3,
+                number: 6,
+                nextResetTime: "2026-01-07T06:00:00Z",
+              },
+            ],
+          },
+        });
+      }
+      return makeResponse(404, "not found");
+    });
+
+    const summary = await loadProviderUsageSummary({
+      now: Date.UTC(2026, 0, 7, 0, 0, 0),
+      auth: [{ provider: "zhipu", token: "token-1" }],
+      fetch: mockFetch,
+    });
+
+    const zhipu = summary.providers.find((p) => p.provider === "zhipu");
+    expect(zhipu?.plan).toBe("Basic");
+    expect(zhipu?.windows[0]?.usedPercent).toBe(30);
+  });
+
+  it("returns error snapshot when GLM API returns HTTP error", async () => {
+    const makeResponse = (status: number, body: unknown): Response => {
+      const payload = typeof body === "string" ? body : JSON.stringify(body);
+      const headers = typeof body === "string" ? undefined : { "Content-Type": "application/json" };
+      return new Response(payload, { status, headers });
+    };
+
+    const mockFetch = vi.fn<Parameters<typeof fetch>, ReturnType<typeof fetch>>(async (input) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("api.z.ai")) {
+        return makeResponse(500, "Internal Server Error");
+      }
+      return makeResponse(404, "not found");
+    });
+
+    const summary = await loadProviderUsageSummary({
+      now: Date.UTC(2026, 0, 7, 0, 0, 0),
+      auth: [{ provider: "zai", token: "token-1" }],
+      fetch: mockFetch,
+    });
+
+    const zai = summary.providers.find((p) => p.provider === "zai");
+    expect(zai?.error).toBe("HTTP 500");
+    expect(zai?.windows).toHaveLength(0);
+  });
+
+  it("returns error snapshot when GLM API returns non-200 code", async () => {
+    const makeResponse = (status: number, body: unknown): Response => {
+      const payload = typeof body === "string" ? body : JSON.stringify(body);
+      const headers = typeof body === "string" ? undefined : { "Content-Type": "application/json" };
+      return new Response(payload, { status, headers });
+    };
+
+    const mockFetch = vi.fn<Parameters<typeof fetch>, ReturnType<typeof fetch>>(async (input) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("api.z.ai")) {
+        return makeResponse(200, {
+          success: false,
+          code: 401,
+          msg: "Invalid API key",
+        });
+      }
+      return makeResponse(404, "not found");
+    });
+
+    const summary = await loadProviderUsageSummary({
+      now: Date.UTC(2026, 0, 7, 0, 0, 0),
+      auth: [{ provider: "zai", token: "invalid-token" }],
+      fetch: mockFetch,
+    });
+
+    const zai = summary.providers.find((p) => p.provider === "zai");
+    expect(zai?.error).toBe("Invalid API key");
+    expect(zai?.windows).toHaveLength(0);
+  });
+
+  it("handles GLM TIME_LIMIT as Monthly window", async () => {
+    const makeResponse = (status: number, body: unknown): Response => {
+      const payload = typeof body === "string" ? body : JSON.stringify(body);
+      const headers = typeof body === "string" ? undefined : { "Content-Type": "application/json" };
+      return new Response(payload, { status, headers });
+    };
+
+    const mockFetch = vi.fn<Parameters<typeof fetch>, ReturnType<typeof fetch>>(async (input) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("api.z.ai")) {
+        return makeResponse(200, {
+          success: true,
+          code: 200,
+          data: {
+            planName: "Enterprise",
+            limits: [
+              {
+                type: "TIME_LIMIT",
+                percentage: 45,
+                unit: 1,
+                number: 30,
+                nextResetTime: "2026-02-01T00:00:00Z",
+              },
+            ],
+          },
+        });
+      }
+      return makeResponse(404, "not found");
+    });
+
+    const summary = await loadProviderUsageSummary({
+      now: Date.UTC(2026, 0, 7, 0, 0, 0),
+      auth: [{ provider: "zai", token: "token-1" }],
+      fetch: mockFetch,
+    });
+
+    const zai = summary.providers.find((p) => p.provider === "zai");
+    expect(zai?.plan).toBe("Enterprise");
+    expect(zai?.windows).toHaveLength(1);
+    expect(zai?.windows[0]?.label).toBe("Monthly");
+    expect(zai?.windows[0]?.usedPercent).toBe(45);
+  });
+
+  it("handles GLM response with both TOKENS_LIMIT and TIME_LIMIT", async () => {
+    const makeResponse = (status: number, body: unknown): Response => {
+      const payload = typeof body === "string" ? body : JSON.stringify(body);
+      const headers = typeof body === "string" ? undefined : { "Content-Type": "application/json" };
+      return new Response(payload, { status, headers });
+    };
+
+    const mockFetch = vi.fn<Parameters<typeof fetch>, ReturnType<typeof fetch>>(async (input) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("api.z.ai")) {
+        return makeResponse(200, {
+          success: true,
+          code: 200,
+          data: {
+            planName: "Pro",
+            limits: [
+              {
+                type: "TOKENS_LIMIT",
+                percentage: 25,
+                unit: 3,
+                number: 24,
+                nextResetTime: "2026-01-08T00:00:00Z",
+              },
+              {
+                type: "TIME_LIMIT",
+                percentage: 10,
+                unit: 1,
+                number: 30,
+                nextResetTime: "2026-02-01T00:00:00Z",
+              },
+            ],
+          },
+        });
+      }
+      return makeResponse(404, "not found");
+    });
+
+    const summary = await loadProviderUsageSummary({
+      now: Date.UTC(2026, 0, 7, 0, 0, 0),
+      auth: [{ provider: "zai", token: "token-1" }],
+      fetch: mockFetch,
+    });
+
+    const zai = summary.providers.find((p) => p.provider === "zai");
+    expect(zai?.plan).toBe("Pro");
+    expect(zai?.windows).toHaveLength(2);
+
+    const tokensWindow = zai?.windows.find((w) => w.label.startsWith("Tokens"));
+    expect(tokensWindow?.label).toBe("Tokens (24h)");
+    expect(tokensWindow?.usedPercent).toBe(25);
+
+    const monthlyWindow = zai?.windows.find((w) => w.label === "Monthly");
+    expect(monthlyWindow?.usedPercent).toBe(10);
+  });
+
   it("handles nested MiniMax usage payloads", async () => {
     const makeResponse = (status: number, body: unknown): Response => {
       const payload = typeof body === "string" ? body : JSON.stringify(body);

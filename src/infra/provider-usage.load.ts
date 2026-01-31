@@ -5,8 +5,8 @@ import {
   fetchCodexUsage,
   fetchCopilotUsage,
   fetchGeminiUsage,
+  fetchGlmUsage,
   fetchMinimaxUsage,
-  fetchZaiUsage,
 } from "./provider-usage.fetch.js";
 import {
   DEFAULT_TIMEOUT_MS,
@@ -73,7 +73,10 @@ export async function loadProviderUsageSummary(
               windows: [],
             };
           case "zai":
-            return await fetchZaiUsage(auth.token, timeoutMs, fetchFn);
+          case "zai-coding":
+          case "zhipu":
+          case "zhipu-coding":
+            return await fetchGlmUsage(auth.provider, auth.token, timeoutMs, fetchFn);
           default:
             return {
               provider: auth.provider,

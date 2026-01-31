@@ -7,16 +7,31 @@ read_when:
 
 # GLM models
 
-GLM is a **model family** (not a company) available through the Z.AI platform. In OpenClaw, GLM
-models are accessed via the `zai` provider and model IDs like `zai/glm-4.7`.
+GLM is a **model family** developed by Zhipu AI. GLM models are available through two platforms:
 
-## CLI setup
+- **Z.AI** (api.z.ai) - International platform
+- **Zhipu AI** (bigmodel.cn) - China mainland platform
+
+## Provider Options
+
+| Provider       | Platform             | Use Case                 |
+| -------------- | -------------------- | ------------------------ |
+| `zai`          | Z.AI (International) | Pay-as-you-go            |
+| `zai-coding`   | Z.AI (International) | Coding Plan subscription |
+| `zhipu`        | Zhipu AI (China)     | Pay-as-you-go            |
+| `zhipu-coding` | Zhipu AI (China)     | Coding Plan subscription |
+
+## CLI Setup
 
 ```bash
+# International users
 openclaw onboard --auth-choice zai-api-key
+
+# China users
+openclaw onboard --auth-choice zhipu-api-key
 ```
 
-## Config snippet
+## Config Snippet
 
 ```json5
 {
@@ -25,8 +40,18 @@ openclaw onboard --auth-choice zai-api-key
 }
 ```
 
+## Available Models
+
+- `glm-4.7` - Latest flagship model (205K context)
+- `glm-4.6` - Previous generation (205K context)
+- `glm-4.6v` - Vision model (128K context)
+- `glm-4.5` - Balanced performance (131K context)
+- `glm-4.5-air` - Lighter variant (131K context)
+- `glm-4.5-flash` - Faster variant (131K context)
+
+Model availability may vary by region; check the platform docs for the latest.
+
 ## Notes
 
-- GLM versions and availability can change; check Z.AI's docs for the latest.
-- Example model IDs include `glm-4.7` and `glm-4.6`.
-- For provider details, see [/providers/zai](/providers/zai).
+- Model IDs follow the pattern `{provider}/glm-{version}` (e.g., `zai/glm-4.7`, `zhipu/glm-4.7`)
+- For detailed provider setup, see [/providers/zai](/providers/zai)

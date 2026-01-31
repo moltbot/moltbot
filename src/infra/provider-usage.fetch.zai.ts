@@ -1,6 +1,10 @@
 import { fetchJson } from "./provider-usage.fetch.shared.js";
 import { clampPercent, PROVIDER_LABELS } from "./provider-usage.shared.js";
-import type { ProviderUsageSnapshot, UsageWindow } from "./provider-usage.types.js";
+import type {
+  ProviderUsageSnapshot,
+  UsageProviderId,
+  UsageWindow,
+} from "./provider-usage.types.js";
 
 type ZaiUsageResponse = {
   success?: boolean;
@@ -19,13 +23,24 @@ type ZaiUsageResponse = {
   };
 };
 
-export async function fetchZaiUsage(
+type GlmUsageProviderId = "zai" | "zai-coding" | "zhipu" | "zhipu-coding";
+
+const GLM_USAGE_URLS: Record<GlmUsageProviderId, string> = {
+  zai: "https://api.z.ai/api/monitor/usage/quota/limit",
+  "zai-coding": "https://api.z.ai/api/monitor/usage/quota/limit",
+  zhipu: "https://open.bigmodel.cn/api/monitor/usage/quota/limit",
+  "zhipu-coding": "https://open.bigmodel.cn/api/monitor/usage/quota/limit",
+};
+
+export async function fetchGlmUsage(
+  provider: GlmUsageProviderId,
   apiKey: string,
   timeoutMs: number,
   fetchFn: typeof fetch,
 ): Promise<ProviderUsageSnapshot> {
+  const url = GLM_USAGE_URLS[provider];
   const res = await fetchJson(
-    "https://api.z.ai/api/monitor/usage/quota/limit",
+    url,
     {
       method: "GET",
       headers: {
@@ -39,8 +54,8 @@ export async function fetchZaiUsage(
 
   if (!res.ok) {
     return {
-      provider: "zai",
-      displayName: PROVIDER_LABELS.zai,
+      provider: provider as UsageProviderId,
+      displayName: PROVIDER_LABELS[provider],
       windows: [],
       error: `HTTP ${res.status}`,
     };
@@ -49,8 +64,8 @@ export async function fetchZaiUsage(
   const data = (await res.json()) as ZaiUsageResponse;
   if (!data.success || data.code !== 200) {
     return {
-      provider: "zai",
-      displayName: PROVIDER_LABELS.zai,
+      provider: provider as UsageProviderId,
+      displayName: PROVIDER_LABELS[provider],
       windows: [],
       error: data.msg || "API error",
     };
@@ -88,9 +103,18 @@ export async function fetchZaiUsage(
 
   const planName = data.data?.planName || data.data?.plan || undefined;
   return {
-    provider: "zai",
-    displayName: PROVIDER_LABELS.zai,
+    provider: provider as UsageProviderId,
+    displayName: PROVIDER_LABELS[provider],
     windows,
     plan: planName,
   };
+}
+
+/** @deprecated Use fetchGlmUsage instead */
+export async function fetchZaiUsage(
+  apiKey: string,
+  timeoutMs: number,
+  fetchFn: typeof fetch,
+): Promise<ProviderUsageSnapshot> {
+  return fetchGlmUsage("zai", apiKey, timeoutMs, fetchFn);
 }

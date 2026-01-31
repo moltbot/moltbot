@@ -23,6 +23,9 @@ export type AuthChoice =
   | "google-antigravity"
   | "google-gemini-cli"
   | "zai-api-key"
+  | "zai-coding-api-key"
+  | "zhipu-api-key"
+  | "zhipu-coding-api-key"
   | "xiaomi-api-key"
   | "minimax-cloud"
   | "minimax"
@@ -69,6 +72,9 @@ export type OnboardOptions = {
   kimiCodeApiKey?: string;
   geminiApiKey?: string;
   zaiApiKey?: string;
+  zaiCodingApiKey?: string;
+  zhipuApiKey?: string;
+  zhipuCodingApiKey?: string;
   xiaomiApiKey?: string;
   minimaxApiKey?: string;
   syntheticApiKey?: string;

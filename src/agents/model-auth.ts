@@ -261,6 +261,20 @@ export function resolveEnvApiKey(provider: string): EnvApiKeyResult | null {
     return pick("ZAI_API_KEY") ?? pick("Z_AI_API_KEY");
   }
 
+  if (normalized === "zai-coding") {
+    // Coding plan can use same key as general, just different endpoint
+    return pick("ZAI_CODING_API_KEY") ?? pick("ZAI_API_KEY") ?? pick("Z_AI_API_KEY");
+  }
+
+  if (normalized === "zhipu") {
+    return pick("ZHIPU_API_KEY");
+  }
+
+  if (normalized === "zhipu-coding") {
+    // Coding plan can use same key as general, just different endpoint
+    return pick("ZHIPU_CODING_API_KEY") ?? pick("ZHIPU_API_KEY");
+  }
+
   if (normalized === "google-vertex") {
     const envKey = getEnvApiKey(normalized);
     if (!envKey) {

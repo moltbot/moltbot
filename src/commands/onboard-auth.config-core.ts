@@ -16,24 +16,54 @@ import {
   OPENROUTER_DEFAULT_MODEL_REF,
   VERCEL_AI_GATEWAY_DEFAULT_MODEL_REF,
   XIAOMI_DEFAULT_MODEL_REF,
+  ZAI_CODING_DEFAULT_MODEL_REF,
   ZAI_DEFAULT_MODEL_REF,
+  ZHIPU_CODING_DEFAULT_MODEL_REF,
+  ZHIPU_DEFAULT_MODEL_REF,
 } from "./onboard-auth.credentials.js";
+
+// Z.AI / Zhipu AI base URLs
+export const ZAI_BASE_URL = "https://api.z.ai/api/paas/v4";
+export const ZAI_CODING_BASE_URL = "https://api.z.ai/api/coding/paas/v4";
+export const ZHIPU_BASE_URL = "https://open.bigmodel.cn/api/paas/v4";
+export const ZHIPU_CODING_BASE_URL = "https://open.bigmodel.cn/api/coding/paas/v4";
 import {
+  buildGlmModelDefinition,
   buildMoonshotModelDefinition,
+  GLM_DEFAULT_MODEL_ID,
   KIMI_CODING_MODEL_REF,
   MOONSHOT_BASE_URL,
   MOONSHOT_DEFAULT_MODEL_ID,
   MOONSHOT_DEFAULT_MODEL_REF,
 } from "./onboard-auth.models.js";
 
-export function applyZaiConfig(cfg: OpenClawConfig): OpenClawConfig {
+export function applyZaiProviderConfig(cfg: OpenClawConfig): OpenClawConfig {
   const models = { ...cfg.agents?.defaults?.models };
   models[ZAI_DEFAULT_MODEL_REF] = {
     ...models[ZAI_DEFAULT_MODEL_REF],
     alias: models[ZAI_DEFAULT_MODEL_REF]?.alias ?? "GLM",
   };
 
-  const existingModel = cfg.agents?.defaults?.model;
+  const providers = { ...cfg.models?.providers };
+  const existingProvider = providers.zai;
+  const existingModels = Array.isArray(existingProvider?.models) ? existingProvider.models : [];
+  const defaultModel = buildGlmModelDefinition();
+  const hasDefaultModel = existingModels.some((model) => model.id === GLM_DEFAULT_MODEL_ID);
+  const mergedModels = hasDefaultModel ? existingModels : [...existingModels, defaultModel];
+  const { apiKey: existingApiKey, ...existingProviderRest } = (existingProvider ?? {}) as Record<
+    string,
+    unknown
+  > as { apiKey?: string };
+  const resolvedApiKey = typeof existingApiKey === "string" ? existingApiKey : undefined;
+  const normalizedApiKey = resolvedApiKey?.trim();
+  providers.zai = {
+    ...existingProviderRest,
+    baseUrl: ZAI_BASE_URL,
+    api: "openai-completions",
+    ...(normalizedApiKey ? { apiKey: normalizedApiKey } : {}),
+    models: mergedModels.length > 0 ? mergedModels : [defaultModel],
+  };
+
   return {
     ...cfg,
     agents: {
@@ -41,6 +71,24 @@ export function applyZaiConfig(cfg: OpenClawConfig): OpenClawConfig {
       defaults: {
         ...cfg.agents?.defaults,
         models,
+      },
+    },
+    models: {
+      mode: cfg.models?.mode ?? "merge",
+      providers,
+    },
+  };
+}
+
+export function applyZaiConfig(cfg: OpenClawConfig): OpenClawConfig {
+  const next = applyZaiProviderConfig(cfg);
+  const existingModel = next.agents?.defaults?.model;
+  return {
+    ...next,
+    agents: {
+      ...next.agents,
+      defaults: {
+        ...next.agents?.defaults,
         model: {
           ...(existingModel && "fallbacks" in (existingModel as Record<string, unknown>)
             ? {
@@ -48,6 +96,201 @@ export function applyZaiConfig(cfg: OpenClawConfig): OpenClawConfig {
               }
             : undefined),
           primary: ZAI_DEFAULT_MODEL_REF,
+        },
+      },
+    },
+  };
+}
+
+export function applyZaiCodingProviderConfig(cfg: OpenClawConfig): OpenClawConfig {
+  const models = { ...cfg.agents?.defaults?.models };
+  models[ZAI_CODING_DEFAULT_MODEL_REF] = {
+    ...models[ZAI_CODING_DEFAULT_MODEL_REF],
+    alias: models[ZAI_CODING_DEFAULT_MODEL_REF]?.alias ?? "GLM Coding",
+  };
+
+  const providers = { ...cfg.models?.providers };
+  const existingProvider = providers["zai-coding"];
+  const existingModels = Array.isArray(existingProvider?.models) ? existingProvider.models : [];
+  const defaultModel = buildGlmModelDefinition();
+  const hasDefaultModel = existingModels.some((model) => model.id === GLM_DEFAULT_MODEL_ID);
+  const mergedModels = hasDefaultModel ? existingModels : [...existingModels, defaultModel];
+  const { apiKey: existingApiKey, ...existingProviderRest } = (existingProvider ?? {}) as Record<
+    string,
+    unknown
+  > as { apiKey?: string };
+  const resolvedApiKey = typeof existingApiKey === "string" ? existingApiKey : undefined;
+  const normalizedApiKey = resolvedApiKey?.trim();
+  providers["zai-coding"] = {
+    ...existingProviderRest,
+    baseUrl: ZAI_CODING_BASE_URL,
+    api: "openai-completions",
+    ...(normalizedApiKey ? { apiKey: normalizedApiKey } : {}),
+    models: mergedModels.length > 0 ? mergedModels : [defaultModel],
+  };
+
+  return {
+    ...cfg,
+    agents: {
+      ...cfg.agents,
+      defaults: {
+        ...cfg.agents?.defaults,
+        models,
+      },
+    },
+    models: {
+      mode: cfg.models?.mode ?? "merge",
+      providers,
+    },
+  };
+}
+
+export function applyZaiCodingConfig(cfg: OpenClawConfig): OpenClawConfig {
+  const next = applyZaiCodingProviderConfig(cfg);
+  const existingModel = next.agents?.defaults?.model;
+  return {
+    ...next,
+    agents: {
+      ...next.agents,
+      defaults: {
+        ...next.agents?.defaults,
+        model: {
+          ...(existingModel && "fallbacks" in (existingModel as Record<string, unknown>)
+            ? {
+                fallbacks: (existingModel as { fallbacks?: string[] }).fallbacks,
+              }
+            : undefined),
+          primary: ZAI_CODING_DEFAULT_MODEL_REF,
+        },
+      },
+    },
+  };
+}
+
+export function applyZhipuProviderConfig(cfg: OpenClawConfig): OpenClawConfig {
+  const models = { ...cfg.agents?.defaults?.models };
+  models[ZHIPU_DEFAULT_MODEL_REF] = {
+    ...models[ZHIPU_DEFAULT_MODEL_REF],
+    alias: models[ZHIPU_DEFAULT_MODEL_REF]?.alias ?? "GLM",
+  };
+
+  const providers = { ...cfg.models?.providers };
+  const existingProvider = providers.zhipu;
+  const existingModels = Array.isArray(existingProvider?.models) ? existingProvider.models : [];
+  const defaultModel = buildGlmModelDefinition();
+  const hasDefaultModel = existingModels.some((model) => model.id === GLM_DEFAULT_MODEL_ID);
+  const mergedModels = hasDefaultModel ? existingModels : [...existingModels, defaultModel];
+  const { apiKey: existingApiKey, ...existingProviderRest } = (existingProvider ?? {}) as Record<
+    string,
+    unknown
+  > as { apiKey?: string };
+  const resolvedApiKey = typeof existingApiKey === "string" ? existingApiKey : undefined;
+  const normalizedApiKey = resolvedApiKey?.trim();
+  providers.zhipu = {
+    ...existingProviderRest,
+    baseUrl: ZHIPU_BASE_URL,
+    api: "openai-completions",
+    ...(normalizedApiKey ? { apiKey: normalizedApiKey } : {}),
+    models: mergedModels.length > 0 ? mergedModels : [defaultModel],
+  };
+
+  return {
+    ...cfg,
+    agents: {
+      ...cfg.agents,
+      defaults: {
+        ...cfg.agents?.defaults,
+        models,
+      },
+    },
+    models: {
+      mode: cfg.models?.mode ?? "merge",
+      providers,
+    },
+  };
+}
+
+export function applyZhipuConfig(cfg: OpenClawConfig): OpenClawConfig {
+  const next = applyZhipuProviderConfig(cfg);
+  const existingModel = next.agents?.defaults?.model;
+  return {
+    ...next,
+    agents: {
+      ...next.agents,
+      defaults: {
+        ...next.agents?.defaults,
+        model: {
+          ...(existingModel && "fallbacks" in (existingModel as Record<string, unknown>)
+            ? {
+                fallbacks: (existingModel as { fallbacks?: string[] }).fallbacks,
+              }
+            : undefined),
+          primary: ZHIPU_DEFAULT_MODEL_REF,
+        },
+      },
+    },
+  };
+}
+
+export function applyZhipuCodingProviderConfig(cfg: OpenClawConfig): OpenClawConfig {
+  const models = { ...cfg.agents?.defaults?.models };
+  models[ZHIPU_CODING_DEFAULT_MODEL_REF] = {
+    ...models[ZHIPU_CODING_DEFAULT_MODEL_REF],
+    alias: models[ZHIPU_CODING_DEFAULT_MODEL_REF]?.alias ?? "GLM Coding",
+  };
+
+  const providers = { ...cfg.models?.providers };
+  const existingProvider = providers["zhipu-coding"];
+  const existingModels = Array.isArray(existingProvider?.models) ? existingProvider.models : [];
+  const defaultModel = buildGlmModelDefinition();
+  const hasDefaultModel = existingModels.some((model) => model.id === GLM_DEFAULT_MODEL_ID);
+  const mergedModels = hasDefaultModel ? existingModels : [...existingModels, defaultModel];
+  const { apiKey: existingApiKey, ...existingProviderRest } = (existingProvider ?? {}) as Record<
+    string,
+    unknown
+  > as { apiKey?: string };
+  const resolvedApiKey = typeof existingApiKey === "string" ? existingApiKey : undefined;
+  const normalizedApiKey = resolvedApiKey?.trim();
+  providers["zhipu-coding"] = {
+    ...existingProviderRest,
+    baseUrl: ZHIPU_CODING_BASE_URL,
+    api: "openai-completions",
+    ...(normalizedApiKey ? { apiKey: normalizedApiKey } : {}),
+    models: mergedModels.length > 0 ? mergedModels : [defaultModel],
+  };
+
+  return {
+    ...cfg,
+    agents: {
+      ...cfg.agents,
+      defaults: {
+        ...cfg.agents?.defaults,
+        models,
+      },
+    },
+    models: {
+      mode: cfg.models?.mode ?? "merge",
+      providers,
+    },
+  };
+}
+
+export function applyZhipuCodingConfig(cfg: OpenClawConfig): OpenClawConfig {
+  const next = applyZhipuCodingProviderConfig(cfg);
+  const existingModel = next.agents?.defaults?.model;
+  return {
+    ...next,
+    agents: {
+      ...next.agents,
+      defaults: {
+        ...next.agents?.defaults,
+        model: {
+          ...(existingModel && "fallbacks" in (existingModel as Record<string, unknown>)
+            ? {
+                fallbacks: (existingModel as { fallbacks?: string[] }).fallbacks,
+              }
+            : undefined),
+          primary: ZHIPU_CODING_DEFAULT_MODEL_REF,
         },
       },
     },

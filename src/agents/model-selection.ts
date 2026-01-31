@@ -26,8 +26,19 @@ export function modelKey(provider: string, model: string) {
 
 export function normalizeProviderId(provider: string): string {
   const normalized = provider.trim().toLowerCase();
+  // Z.AI international variants
   if (normalized === "z.ai" || normalized === "z-ai") {
     return "zai";
+  }
+  if (normalized === "z.ai-coding" || normalized === "z-ai-coding") {
+    return "zai-coding";
+  }
+  // Zhipu AI (China) variants
+  if (normalized === "zhipuai" || normalized === "zhipu-ai") {
+    return "zhipu";
+  }
+  if (normalized === "zhipuai-coding" || normalized === "zhipu-ai-coding") {
+    return "zhipu-coding";
   }
   if (normalized === "opencode-zen") {
     return "opencode";

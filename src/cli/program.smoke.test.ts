@@ -182,6 +182,24 @@ describe("cli program (smoke)", () => {
         key: "sk-zai-test",
         field: "zaiApiKey",
       },
+      {
+        authChoice: "zai-coding-api-key",
+        flag: "--zai-coding-api-key",
+        key: "sk-zai-coding-test",
+        field: "zaiCodingApiKey",
+      },
+      {
+        authChoice: "zhipu-api-key",
+        flag: "--zhipu-api-key",
+        key: "sk-zhipu-test",
+        field: "zhipuApiKey",
+      },
+      {
+        authChoice: "zhipu-coding-api-key",
+        flag: "--zhipu-coding-api-key",
+        key: "sk-zhipu-coding-test",
+        field: "zhipuCodingApiKey",
+      },
     ] as const;
 
     for (const entry of cases) {

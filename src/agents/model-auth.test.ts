@@ -233,6 +233,132 @@ describe("getApiKeyForModel", () => {
     }
   });
 
+  it("resolves zai-coding API key with fallback to ZAI_API_KEY", async () => {
+    const previous = {
+      coding: process.env.ZAI_CODING_API_KEY,
+      zai: process.env.ZAI_API_KEY,
+      legacy: process.env.Z_AI_API_KEY,
+    };
+
+    try {
+      delete process.env.ZAI_CODING_API_KEY;
+      process.env.ZAI_API_KEY = "zai-fallback-key";
+      delete process.env.Z_AI_API_KEY;
+
+      vi.resetModules();
+      const { resolveApiKeyForProvider } = await import("./model-auth.js");
+
+      const resolved = await resolveApiKeyForProvider({
+        provider: "zai-coding",
+        store: { version: 1, profiles: {} },
+      });
+      expect(resolved.apiKey).toBe("zai-fallback-key");
+      expect(resolved.source).toContain("ZAI_API_KEY");
+    } finally {
+      if (previous.coding === undefined) {
+        delete process.env.ZAI_CODING_API_KEY;
+      } else {
+        process.env.ZAI_CODING_API_KEY = previous.coding;
+      }
+      if (previous.zai === undefined) {
+        delete process.env.ZAI_API_KEY;
+      } else {
+        process.env.ZAI_API_KEY = previous.zai;
+      }
+      if (previous.legacy === undefined) {
+        delete process.env.Z_AI_API_KEY;
+      } else {
+        process.env.Z_AI_API_KEY = previous.legacy;
+      }
+    }
+  });
+
+  it("throws when zhipu API key is missing", async () => {
+    const previous = process.env.ZHIPU_API_KEY;
+
+    try {
+      delete process.env.ZHIPU_API_KEY;
+
+      vi.resetModules();
+      const { resolveApiKeyForProvider } = await import("./model-auth.js");
+
+      let error: unknown = null;
+      try {
+        await resolveApiKeyForProvider({
+          provider: "zhipu",
+          store: { version: 1, profiles: {} },
+        });
+      } catch (err) {
+        error = err;
+      }
+
+      expect(String(error)).toContain('No API key found for provider "zhipu".');
+    } finally {
+      if (previous === undefined) {
+        delete process.env.ZHIPU_API_KEY;
+      } else {
+        process.env.ZHIPU_API_KEY = previous;
+      }
+    }
+  });
+
+  it("resolves zhipu API key from ZHIPU_API_KEY", async () => {
+    const previous = process.env.ZHIPU_API_KEY;
+
+    try {
+      process.env.ZHIPU_API_KEY = "zhipu-test-key";
+
+      vi.resetModules();
+      const { resolveApiKeyForProvider } = await import("./model-auth.js");
+
+      const resolved = await resolveApiKeyForProvider({
+        provider: "zhipu",
+        store: { version: 1, profiles: {} },
+      });
+      expect(resolved.apiKey).toBe("zhipu-test-key");
+      expect(resolved.source).toContain("ZHIPU_API_KEY");
+    } finally {
+      if (previous === undefined) {
+        delete process.env.ZHIPU_API_KEY;
+      } else {
+        process.env.ZHIPU_API_KEY = previous;
+      }
+    }
+  });
+
+  it("resolves zhipu-coding API key with fallback to ZHIPU_API_KEY", async () => {
+    const previous = {
+      coding: process.env.ZHIPU_CODING_API_KEY,
+      zhipu: process.env.ZHIPU_API_KEY,
+    };
+
+    try {
+      delete process.env.ZHIPU_CODING_API_KEY;
+      process.env.ZHIPU_API_KEY = "zhipu-fallback-key";
+
+      vi.resetModules();
+      const { resolveApiKeyForProvider } = await import("./model-auth.js");
+
+      const resolved = await resolveApiKeyForProvider({
+        provider: "zhipu-coding",
+        store: { version: 1, profiles: {} },
+      });
+      expect(resolved.apiKey).toBe("zhipu-fallback-key");
+      expect(resolved.source).toContain("ZHIPU_API_KEY");
+    } finally {
+      if (previous.coding === undefined) {
+        delete process.env.ZHIPU_CODING_API_KEY;
+      } else {
+        process.env.ZHIPU_CODING_API_KEY = previous.coding;
+      }
+      if (previous.zhipu === undefined) {
+        delete process.env.ZHIPU_API_KEY;
+      } else {
+        process.env.ZHIPU_API_KEY = previous.zhipu;
+      }
+    }
+  });
+
   it("resolves Synthetic API key from env", async () => {
     const previousSynthetic = process.env.SYNTHETIC_API_KEY;
 

@@ -23,14 +23,19 @@ describe("buildAuthChoiceOptions", () => {
     expect(options.some((opt) => opt.value === "token")).toBe(true);
   });
 
-  it("includes Z.AI (GLM) auth choice", () => {
+  it("includes Z.AI / Zhipu (GLM) auth choices", () => {
     const store: AuthProfileStore = { version: 1, profiles: {} };
     const options = buildAuthChoiceOptions({
       store,
       includeSkip: false,
     });
 
+    // International variants (api.z.ai)
     expect(options.some((opt) => opt.value === "zai-api-key")).toBe(true);
+    expect(options.some((opt) => opt.value === "zai-coding-api-key")).toBe(true);
+    // China variants (bigmodel.cn)
+    expect(options.some((opt) => opt.value === "zhipu-api-key")).toBe(true);
+    expect(options.some((opt) => opt.value === "zhipu-coding-api-key")).toBe(true);
   });
 
   it("includes Xiaomi auth choice", () => {
