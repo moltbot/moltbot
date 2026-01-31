@@ -59,7 +59,8 @@ describe("resolveNostrAccount", () => {
     expect(account.enabled).toBe(true);
     expect(account.configured).toBe(true);
     expect(account.privateKey).toBe(TEST_PRIVATE_KEY);
-    expect(account.publicKey).toMatch(/^[0-9a-f]{64}$/);
+    // Public key is derived lazily at startAccount time (after WASM init)
+    expect(account.publicKey).toBe("");
     expect(account.relays).toEqual(["wss://test.relay"]);
   });
 

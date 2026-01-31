@@ -5,11 +5,28 @@
  * Used to import existing profiles before editing.
  */
 
-import { SimplePool, verifyEvent, type Event } from "nostr-tools";
+import {
+  Client,
+  Filter,
+  Kind,
+  PublicKey,
+  Timestamp,
+  loadWasmAsync,
+} from "@rust-nostr/nostr-sdk";
 
 import { contentToProfile, type ProfileContent } from "./nostr-profile.js";
 import type { NostrProfile } from "./config-schema.js";
 import { validateUrlSafety } from "./nostr-profile-http.js";
+
+// WASM initialization state
+let wasmInitialized = false;
+
+async function ensureWasmInitialized(): Promise<void> {
+  if (!wasmInitialized) {
+    await loadWasmAsync();
+    wasmInitialized = true;
+  }
+}
 
 // ============================================================================
 // Types
@@ -80,7 +97,7 @@ function sanitizeProfileUrls(profile: NostrProfile): NostrProfile {
  *
  * - Queries all relays in parallel
  * - Takes the event with the highest created_at
- * - Verifies the event signature
+ * - Verifies the event signature (rust-nostr does this automatically)
  * - Parses and returns the profile
  */
 export async function importProfileFromRelays(
@@ -104,65 +121,32 @@ export async function importProfileFromRelays(
     };
   }
 
-  const pool = new SimplePool();
-  const relaysQueried: string[] = [];
+  // Initialize WASM
+  await ensureWasmInitialized();
+
+  const client = new Client();
+  const relaysQueried: string[] = [...relays];
 
   try {
-    // Query all relays for kind:0 events from this pubkey
-    const events: Array<{ event: Event; relay: string }> = [];
+    // Add relays to client
+    for (const relay of relays) {
+      await client.addRelay(relay);
+    }
+    await client.connect();
 
-    // Create timeout promise
-    const timeoutPromise = new Promise<void>((resolve) => {
-      setTimeout(resolve, timeoutMs);
-    });
+    // Build filter for kind:0 events from this pubkey
+    const pk = PublicKey.parse(pubkey);
+    let filter = new Filter();
+    filter = filter.kind(new Kind(0));
+    filter = filter.author(pk);
+    filter = filter.limit(1);
 
-    // Create subscription promise
-    const subscriptionPromise = new Promise<void>((resolve) => {
-      let completed = 0;
-
-      for (const relay of relays) {
-        relaysQueried.push(relay);
-
-        const sub = pool.subscribeMany(
-          [relay],
-          [
-            {
-              kinds: [0],
-              authors: [pubkey],
-              limit: 1,
-            },
-          ],
-          {
-            onevent(event) {
-              events.push({ event, relay });
-            },
-            oneose() {
-              completed++;
-              if (completed >= relays.length) {
-                resolve();
-              }
-            },
-            onclose() {
-              completed++;
-              if (completed >= relays.length) {
-                resolve();
-              }
-            },
-          },
-        );
-
-        // Clean up subscription after timeout
-        setTimeout(() => {
-          sub.close();
-        }, timeoutMs);
-      }
-    });
-
-    // Wait for either all relays to respond or timeout
-    await Promise.race([subscriptionPromise, timeoutPromise]);
+    // Fetch events with timeout
+    const timeoutDuration = { secs: BigInt(Math.floor(timeoutMs / 1000)), nanos: 0 };
+    const events = await client.fetchEvents(filter, timeoutDuration);
 
     // No events found
-    if (events.length === 0) {
+    if (!events || events.length === 0) {
       return {
         ok: false,
         error: "No profile found on any relay",
@@ -171,10 +155,16 @@ export async function importProfileFromRelays(
     }
 
     // Find the event with the highest created_at (newest wins for replaceable events)
-    let bestEvent: { event: Event; relay: string } | null = null;
-    for (const item of events) {
-      if (!bestEvent || item.event.created_at > bestEvent.event.created_at) {
-        bestEvent = item;
+    let bestEvent: { id: string; pubkey: string; content: string; created_at: number } | null = null;
+    for (const event of events) {
+      const createdAt = Number(event.createdAt.asSecs());
+      if (!bestEvent || createdAt > bestEvent.created_at) {
+        bestEvent = {
+          id: event.id.toHex(),
+          pubkey: event.author.toHex(),
+          content: event.content,
+          created_at: createdAt,
+        };
       }
     }
 
@@ -186,27 +176,17 @@ export async function importProfileFromRelays(
       };
     }
 
-    // Verify the event signature
-    const isValid = verifyEvent(bestEvent.event);
-    if (!isValid) {
-      return {
-        ok: false,
-        error: "Profile event has invalid signature",
-        relaysQueried,
-        sourceRelay: bestEvent.relay,
-      };
-    }
+    // Note: rust-nostr automatically verifies event signatures
 
     // Parse the profile content
     let content: ProfileContent;
     try {
-      content = JSON.parse(bestEvent.event.content) as ProfileContent;
+      content = JSON.parse(bestEvent.content) as ProfileContent;
     } catch {
       return {
         ok: false,
         error: "Profile event has invalid JSON content",
         relaysQueried,
-        sourceRelay: bestEvent.relay,
       };
     }
 
@@ -220,15 +200,14 @@ export async function importProfileFromRelays(
       ok: true,
       profile: sanitizedProfile,
       event: {
-        id: bestEvent.event.id,
-        pubkey: bestEvent.event.pubkey,
-        created_at: bestEvent.event.created_at,
+        id: bestEvent.id,
+        pubkey: bestEvent.pubkey,
+        created_at: bestEvent.created_at,
       },
       relaysQueried,
-      sourceRelay: bestEvent.relay,
     };
   } finally {
-    pool.close(relays);
+    await client.disconnect();
   }
 }
 

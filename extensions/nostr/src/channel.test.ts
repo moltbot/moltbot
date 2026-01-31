@@ -135,6 +135,25 @@ describe("nostrPlugin", () => {
     it("has startAccount function", () => {
       expect(nostrPlugin.gateway?.startAccount).toBeTypeOf("function");
     });
+
+    it("startAccount derives public key after WASM init", async () => {
+      // This test verifies the lazy public key derivation works correctly
+      const { initRustNostr, getPublicKeyFromPrivateRust } = await import("./nostr-bus-rust.js");
+
+      // Initialize WASM (same as startAccount does)
+      await initRustNostr();
+
+      // Test key
+      const testPrivateKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+      // After WASM init, we should be able to derive the public key
+      const publicKey = getPublicKeyFromPrivateRust(testPrivateKey);
+
+      // Should be a valid 64-char hex pubkey
+      expect(publicKey).toMatch(/^[0-9a-f]{64}$/);
+      // Known expected value for this test key
+      expect(publicKey).toBe("4646ae5047316b4230d0086c8acec687f00b1cd9d1dc634f6cb358ac0a9a8fff");
+    });
   });
 
   describe("status", () => {

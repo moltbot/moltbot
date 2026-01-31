@@ -25,17 +25,28 @@ import {
   type ChannelMessageActionAdapter,
   type ChannelPlugin,
   type ResolvedDiscordAccount,
-} from "openclaw/plugin-sdk";
+} from "clawdbot/plugin-sdk";
 
 import { getDiscordRuntime } from "./runtime.js";
 
 const meta = getChatChannelMeta("discord");
 
+function resolveDiscordMessageActions() {
+  try {
+    return getDiscordRuntime().channel.discord?.messageActions ?? null;
+  } catch {
+    return null;
+  }
+}
+
 const discordMessageActions: ChannelMessageActionAdapter = {
-  listActions: (ctx) => getDiscordRuntime().channel.discord.messageActions.listActions(ctx),
-  extractToolSend: (ctx) => getDiscordRuntime().channel.discord.messageActions.extractToolSend(ctx),
-  handleAction: async (ctx) =>
-    await getDiscordRuntime().channel.discord.messageActions.handleAction(ctx),
+  listActions: (ctx) => resolveDiscordMessageActions()?.listActions?.(ctx) ?? [],
+  extractToolSend: (ctx) => resolveDiscordMessageActions()?.extractToolSend?.(ctx),
+  handleAction: async (ctx) => {
+    const actions = resolveDiscordMessageActions();
+    if (!actions?.handleAction) return null;
+    return await actions.handleAction(ctx);
+  },
 };
 
 export const discordPlugin: ChannelPlugin<ResolvedDiscordAccount> = {
@@ -280,7 +291,8 @@ export const discordPlugin: ChannelPlugin<ResolvedDiscordAccount> = {
     textChunkLimit: 2000,
     pollMaxOptions: 10,
     sendText: async ({ to, text, accountId, deps, replyToId }) => {
-      const send = deps?.sendDiscord ?? getDiscordRuntime().channel.discord.sendMessageDiscord;
+      const send =
+        deps?.sendDiscord ?? getDiscordRuntime().channel.discord.sendMessageDiscord;
       const result = await send(to, text, {
         verbose: false,
         replyTo: replyToId ?? undefined,
@@ -289,7 +301,8 @@ export const discordPlugin: ChannelPlugin<ResolvedDiscordAccount> = {
       return { channel: "discord", ...result };
     },
     sendMedia: async ({ to, text, mediaUrl, accountId, deps, replyToId }) => {
-      const send = deps?.sendDiscord ?? getDiscordRuntime().channel.discord.sendMessageDiscord;
+      const send =
+        deps?.sendDiscord ?? getDiscordRuntime().channel.discord.sendMessageDiscord;
       const result = await send(to, text, {
         verbose: false,
         mediaUrl,
@@ -331,9 +344,7 @@ export const discordPlugin: ChannelPlugin<ResolvedDiscordAccount> = {
         cfg,
         accountId: account.accountId,
       });
-      if (!channelIds.length && unresolvedChannels === 0) {
-        return undefined;
-      }
+      if (!channelIds.length && unresolvedChannels === 0) return undefined;
       const botToken = account.token?.trim();
       if (!botToken) {
         return {
@@ -385,9 +396,7 @@ export const discordPlugin: ChannelPlugin<ResolvedDiscordAccount> = {
           includeApplication: true,
         });
         const username = probe.ok ? probe.bot?.username?.trim() : null;
-        if (username) {
-          discordBotLabel = ` (@${username})`;
-        }
+        if (username) discordBotLabel = ` (@${username})`;
         ctx.setStatus({
           accountId: account.accountId,
           bot: probe.bot,
