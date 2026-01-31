@@ -127,6 +127,13 @@ let cachedNativeRegistry: ReturnType<typeof getActivePluginRegistry> | null = nu
 function buildChatCommands(): ChatCommandDefinition[] {
   const commands: ChatCommandDefinition[] = [
     defineChatCommand({
+      key: "stop",
+      nativeName: "stop",
+      description: "Stop the current run.",
+      textAlias: "/stop",
+      category: "session",
+    }),
+    defineChatCommand({
       key: "help",
       nativeName: "help",
       description: "Show available commands.",
@@ -340,13 +347,6 @@ function buildChatCommands(): ChatCommandDefinition[] {
         },
       ],
       argsMenu: "auto",
-    }),
-    defineChatCommand({
-      key: "stop",
-      nativeName: "stop",
-      description: "Stop the current run.",
-      textAlias: "/stop",
-      category: "session",
     }),
     defineChatCommand({
       key: "restart",
