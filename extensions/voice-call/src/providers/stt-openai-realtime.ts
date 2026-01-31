@@ -88,12 +88,14 @@ class OpenAIRealtimeSTTSession implements RealtimeSTTSession {
 
   private ws: WebSocket | null = null;
   private connected = false;
+  private sessionReady = false;
   private closed = false;
   private reconnectAttempts = 0;
   private pendingTranscript = "";
   private onTranscriptCallback: ((transcript: string) => void) | null = null;
   private onPartialCallback: ((partial: string) => void) | null = null;
   private onSpeechStartCallback: (() => void) | null = null;
+  private pendingSessionConfig = false;
 
   constructor(
     private readonly apiKey: string,
@@ -122,24 +124,9 @@ class OpenAIRealtimeSTTSession implements RealtimeSTTSession {
       this.ws.on("open", () => {
         console.log("[RealtimeSTT] WebSocket connected");
         this.connected = true;
+        this.sessionReady = false;
         this.reconnectAttempts = 0;
-
-        // Configure the transcription session
-        this.sendEvent({
-          type: "transcription_session.update",
-          session: {
-            input_audio_format: "g711_ulaw",
-            input_audio_transcription: {
-              model: this.model,
-            },
-            turn_detection: {
-              type: "server_vad",
-              threshold: this.vadThreshold,
-              prefix_padding_ms: 300,
-              silence_duration_ms: this.silenceDurationMs,
-            },
-          },
-        });
+        this.pendingSessionConfig = true;
 
         resolve();
       });
@@ -212,6 +199,24 @@ class OpenAIRealtimeSTTSession implements RealtimeSTTSession {
     }
   }
 
+  private sendSessionConfig(): void {
+    this.sendEvent({
+      type: "transcription_session.update",
+      session: {
+        input_audio_format: "g711_ulaw",
+        input_audio_transcription: {
+          model: this.model,
+        },
+        turn_detection: {
+          type: "server_vad",
+          threshold: this.vadThreshold,
+          prefix_padding_ms: 300,
+          silence_duration_ms: this.silenceDurationMs,
+        },
+      },
+    });
+  }
+
   private handleEvent(event: {
     type: string;
     delta?: string;
@@ -220,7 +225,18 @@ class OpenAIRealtimeSTTSession implements RealtimeSTTSession {
   }): void {
     switch (event.type) {
       case "transcription_session.created":
+        console.log(`[RealtimeSTT] ${event.type}`);
+        if (this.pendingSessionConfig) {
+          this.pendingSessionConfig = false;
+          this.sendSessionConfig();
+        }
+        break;
+
       case "transcription_session.updated":
+        console.log(`[RealtimeSTT] ${event.type}`);
+        this.sessionReady = true;
+        break;
+
       case "input_audio_buffer.speech_stopped":
       case "input_audio_buffer.committed":
         console.log(`[RealtimeSTT] ${event.type}`);
@@ -260,7 +276,7 @@ class OpenAIRealtimeSTTSession implements RealtimeSTTSession {
   }
 
   sendAudio(muLawData: Buffer): void {
-    if (!this.connected) {
+    if (!this.connected || !this.sessionReady) {
       return;
     }
     this.sendEvent({
