@@ -20,6 +20,7 @@ import { resolveTelegramDraftStreamingChunking } from "./draft-chunking.js";
 import { createTelegramDraftStream } from "./draft-stream.js";
 import { cacheSticker, describeStickerImage } from "./sticker-cache.js";
 import { resolveAgentDir } from "../agents/agent-scope.js";
+import { createInternalHookEvent, triggerInternalHook } from "../hooks/internal-hooks.js";
 
 const EMPTY_RESPONSE_FALLBACK = "No response generated. Please try again.";
 
@@ -67,6 +68,19 @@ export const dispatchTelegramMessage = async ({
     reactionApi,
     removeAckAfterReply,
   } = context;
+
+  // Trigger message:received hook
+  const messageHookEvent = createInternalHookEvent("message", "received", route.sessionKey ?? "", {
+    channel: "telegram",
+    chatId,
+    senderId: msg.from?.id,
+    senderUsername: msg.from?.username,
+    text: msg.text ?? msg.caption ?? "",
+    isGroup,
+    messageId: msg.message_id,
+    timestamp: new Date(msg.date * 1000),
+  });
+  await triggerInternalHook(messageHookEvent);
 
   const isPrivateChat = msg.chat.type === "private";
   const messageThreadId = (msg as { message_thread_id?: number }).message_thread_id;
@@ -251,6 +265,17 @@ export const dispatchTelegramMessage = async ({
         });
         if (result.delivered) {
           deliveryState.delivered = true;
+          // Trigger message:sent hook (Luna's patch)
+          if (info.kind === "final" && payload.text) {
+            const sentHookEvent = createInternalHookEvent("message", "sent", route.sessionKey ?? "", {
+              channel: "telegram",
+              chatId,
+              text: payload.text,
+              isGroup,
+              timestamp: new Date(),
+            });
+            await triggerInternalHook(sentHookEvent);
+          }
         }
       },
       onSkip: (_payload, info) => {
