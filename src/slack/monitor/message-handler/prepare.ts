@@ -44,7 +44,11 @@ import { resolveSlackAllowListMatch, resolveSlackUserAllowed } from "../allow-li
 import { resolveSlackEffectiveAllowFrom } from "../auth.js";
 import { resolveSlackChannelConfig } from "../channel-config.js";
 import { normalizeSlackChannelType, type SlackMonitorContext } from "../context.js";
-import { resolveSlackMedia, resolveSlackThreadStarter } from "../media.js";
+import {
+  resolveSlackMedia,
+  resolveSlackThreadHistory,
+  resolveSlackThreadStarter,
+} from "../media.js";
 
 import type { PreparedSlackMessage } from "./types.js";
 
@@ -456,6 +460,7 @@ export async function prepareSlackMessage(params: {
     systemPromptParts.length > 0 ? systemPromptParts.join("\n\n") : undefined;
 
   let threadStarterBody: string | undefined;
+  let threadHistoryBody: string | undefined;
   let threadLabel: string | undefined;
   let threadStarterMedia: Awaited<ReturnType<typeof resolveSlackMedia>> = null;
   if (isThreadReply && threadTs) {
@@ -493,6 +498,44 @@ export async function prepareSlackMessage(params: {
     } else {
       threadLabel = `Slack thread ${roomLabel}`;
     }
+
+    // Fetch full thread history for new thread sessions
+    // This provides context of previous messages (including bot replies) in the thread
+    if (!previousTimestamp) {
+      const threadHistory = await resolveSlackThreadHistory({
+        channelId: message.channel,
+        threadTs,
+        client: ctx.app.client,
+        currentMessageTs: message.ts,
+        limit: 20,
+      });
+
+      if (threadHistory.length > 0) {
+        const historyParts: string[] = [];
+        for (const historyMsg of threadHistory) {
+          const msgUser = historyMsg.userId ? await ctx.resolveUserName(historyMsg.userId) : null;
+          const msgSenderName =
+            msgUser?.name ?? (historyMsg.botId ? `Bot (${historyMsg.botId})` : "Unknown");
+          const isBot = Boolean(historyMsg.botId);
+          const role = isBot ? "assistant" : "user";
+          const msgWithId = `${historyMsg.text}\n[slack message id: ${historyMsg.ts ?? "unknown"} channel: ${message.channel}]`;
+          historyParts.push(
+            formatInboundEnvelope({
+              channel: "Slack",
+              from: `${msgSenderName} (${role})`,
+              timestamp: historyMsg.ts ? Math.round(Number(historyMsg.ts) * 1000) : undefined,
+              body: msgWithId,
+              chatType: "channel",
+              envelope: envelopeOptions,
+            }),
+          );
+        }
+        threadHistoryBody = historyParts.join("\n\n");
+        logVerbose(
+          `slack: populated thread history with ${threadHistory.length} messages for new session`,
+        );
+      }
+    }
   }
 
   // Use thread starter media if current message has none
@@ -520,6 +563,7 @@ export async function prepareSlackMessage(params: {
     MessageThreadId: threadContext.messageThreadId,
     ParentSessionKey: threadKeys.parentSessionKey,
     ThreadStarterBody: threadStarterBody,
+    ThreadHistoryBody: threadHistoryBody,
     ThreadLabel: threadLabel,
     Timestamp: message.ts ? Math.round(Number(message.ts) * 1000) : undefined,
     WasMentioned: isRoomish ? effectiveWasMentioned : undefined,

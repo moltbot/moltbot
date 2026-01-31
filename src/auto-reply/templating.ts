@@ -58,6 +58,8 @@ export type MsgContext = {
   ForwardedFromSignature?: string;
   ForwardedDate?: number;
   ThreadStarterBody?: string;
+  /** Full thread history when starting a new thread session. */
+  ThreadHistoryBody?: string;
   ThreadLabel?: string;
   MediaPath?: string;
   MediaUrl?: string;

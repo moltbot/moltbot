@@ -130,3 +130,59 @@ export async function resolveSlackThreadStarter(params: {
     return null;
   }
 }
+
+export type SlackThreadMessage = {
+  text: string;
+  userId?: string;
+  ts?: string;
+  botId?: string;
+  files?: SlackFile[];
+};
+
+/**
+ * Fetches all messages in a Slack thread (excluding the current message).
+ * Used to populate thread context when a new thread session starts.
+ */
+export async function resolveSlackThreadHistory(params: {
+  channelId: string;
+  threadTs: string;
+  client: SlackWebClient;
+  currentMessageTs?: string;
+  limit?: number;
+}): Promise<SlackThreadMessage[]> {
+  const maxMessages = params.limit ?? 20;
+  try {
+    const response = (await params.client.conversations.replies({
+      channel: params.channelId,
+      ts: params.threadTs,
+      limit: maxMessages + 1, // +1 to account for filtering current message
+      inclusive: true,
+    })) as {
+      messages?: Array<{
+        text?: string;
+        user?: string;
+        bot_id?: string;
+        ts?: string;
+        files?: SlackFile[];
+      }>;
+    };
+
+    const messages = response?.messages ?? [];
+    return messages
+      .filter((msg) => {
+        if (!msg.text?.trim()) return false;
+        if (params.currentMessageTs && msg.ts === params.currentMessageTs) return false;
+        return true;
+      })
+      .slice(0, maxMessages)
+      .map((msg) => ({
+        text: msg.text ?? "",
+        userId: msg.user,
+        botId: msg.bot_id,
+        ts: msg.ts,
+        files: msg.files,
+      }));
+  } catch {
+    return [];
+  }
+}
