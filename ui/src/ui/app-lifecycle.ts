@@ -35,6 +35,8 @@ type LifecycleHost = {
 
 export function handleConnected(host: LifecycleHost) {
   host.basePath = inferBasePath();
+  // Apply URL settings FIRST so sessionKey is read before syncTabWithLocation
+  // overwrites it with the localStorage value
   applySettingsFromUrl(
     host as unknown as Parameters<typeof applySettingsFromUrl>[0],
   );
