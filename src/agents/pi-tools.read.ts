@@ -1,9 +1,16 @@
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import { createEditTool, createReadTool, createWriteTool } from "@mariozechner/pi-coding-agent";
+import fs from "node:fs/promises";
+import path from "node:path";
 
+import type { FileToolSecurity } from "../config/types.tools.js";
 import { detectMime } from "../media/mime.js";
 import type { AnyAgentTool } from "./pi-tools.types.js";
-import { assertSandboxPath } from "./sandbox-paths.js";
+import {
+  assertSandboxPath,
+  assertSandboxPathInRoots,
+  resolvePathFromCwd,
+} from "./sandbox-paths.js";
 import { sanitizeToolResultImages } from "./tool-images.js";
 
 // NOTE(steipete): Upstream read now does file-magic MIME detection; we keep the wrapper
@@ -269,19 +276,184 @@ function wrapSandboxPathGuard(tool: AnyAgentTool, root: string): AnyAgentTool {
   };
 }
 
-export function createSandboxedReadTool(root: string) {
+export function wrapAllowPathsGuard(
+  tool: AnyAgentTool,
+  params: { allowPaths?: string[]; cwd: string; security?: FileToolSecurity },
+): AnyAgentTool {
+  const security = params.security ?? "full";
+  if (security !== "allowlist") {
+    return tool;
+  }
+  const allowPaths = Array.isArray(params.allowPaths)
+    ? params.allowPaths.map((entry) => entry.trim()).filter(Boolean)
+    : [];
+  return {
+    ...tool,
+    execute: async (toolCallId, args, signal, onUpdate) => {
+      const normalized = normalizeToolParams(args);
+      const record =
+        normalized ??
+        (args && typeof args === "object" ? (args as Record<string, unknown>) : undefined);
+      const filePath = record?.path;
+      if (typeof filePath !== "string" || !filePath.trim()) {
+        throw new Error("Path is required when allowPaths security is enabled.");
+      }
+      await assertSandboxPathInRoots({
+        filePath,
+        cwd: params.cwd,
+        roots: allowPaths,
+      });
+      return tool.execute(toolCallId, normalized ?? args, signal, onUpdate);
+    },
+  };
+}
+
+async function resolveRealPathFallback(filePath: string): Promise<string> {
+  try {
+    return await fs.realpath(filePath);
+  } catch (err) {
+    const anyErr = err as { code?: string };
+    if (anyErr.code !== "ENOENT") {
+      throw err;
+    }
+  }
+  const parent = path.dirname(filePath);
+  try {
+    const realParent = await fs.realpath(parent);
+    return path.join(realParent, path.basename(filePath));
+  } catch (err) {
+    const anyErr = err as { code?: string };
+    if (anyErr.code !== "ENOENT") {
+      throw err;
+    }
+  }
+  return filePath;
+}
+
+async function resolveDenyEntry(entry: string, cwd: string) {
+  const resolved = resolvePathFromCwd(entry, cwd);
+  let isDirectory = false;
+  let exists = false;
+  try {
+    const stat = await fs.stat(resolved);
+    isDirectory = stat.isDirectory();
+    exists = true;
+  } catch (err) {
+    const anyErr = err as { code?: string };
+    if (anyErr.code !== "ENOENT") {
+      throw err;
+    }
+  }
+  const real = exists ? await resolveRealPathFallback(resolved) : resolved;
+  return { resolved, real, isDirectory };
+}
+
+function isWithinPath(candidate: string, root: string) {
+  const relative = path.relative(root, candidate);
+  return !relative || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+export function wrapDenyPathsGuard(
+  tool: AnyAgentTool,
+  params: { denyPaths?: string[]; cwd: string },
+): AnyAgentTool {
+  const denyPaths = Array.isArray(params.denyPaths)
+    ? params.denyPaths.map((entry) => entry.trim()).filter(Boolean)
+    : [];
+  if (denyPaths.length === 0) {
+    return tool;
+  }
+  const resolvedDenyEntriesPromise = Promise.all(
+    denyPaths.map((entry) => resolveDenyEntry(entry, params.cwd)),
+  );
+  return {
+    ...tool,
+    execute: async (toolCallId, args, signal, onUpdate) => {
+      const normalized = normalizeToolParams(args);
+      const record =
+        normalized ??
+        (args && typeof args === "object" ? (args as Record<string, unknown>) : undefined);
+      const filePath = record?.path;
+      if (typeof filePath === "string" && filePath.trim()) {
+        const resolvedPath = resolvePathFromCwd(filePath, params.cwd);
+        const realPath = await resolveRealPathFallback(resolvedPath);
+        const resolvedEntries = await resolvedDenyEntriesPromise;
+        for (const resolvedEntry of resolvedEntries) {
+          if (resolvedEntry.isDirectory) {
+            if (isWithinPath(realPath, resolvedEntry.real)) {
+              throw new Error(`Path is blocked by denyPaths: ${filePath}`);
+            }
+          } else if (realPath === resolvedEntry.real) {
+            throw new Error(`Path is blocked by denyPaths: ${filePath}`);
+          }
+        }
+      }
+      return tool.execute(toolCallId, normalized ?? args, signal, onUpdate);
+    },
+  };
+}
+
+export function createSandboxedReadTool(
+  root: string,
+  allowPaths?: string[],
+  denyPaths?: string[],
+  security?: FileToolSecurity,
+) {
   const base = createReadTool(root) as unknown as AnyAgentTool;
-  return wrapSandboxPathGuard(createOpenClawReadTool(base), root);
+  const guarded = wrapAllowPathsGuard(
+    wrapDenyPathsGuard(createOpenClawReadTool(base), {
+      denyPaths,
+      cwd: root,
+    }),
+    {
+      allowPaths,
+      cwd: root,
+      security,
+    },
+  );
+  return wrapSandboxPathGuard(guarded, root);
 }
 
-export function createSandboxedWriteTool(root: string) {
+export function createSandboxedWriteTool(
+  root: string,
+  allowPaths?: string[],
+  denyPaths?: string[],
+  security?: FileToolSecurity,
+) {
   const base = createWriteTool(root) as unknown as AnyAgentTool;
-  return wrapSandboxPathGuard(wrapToolParamNormalization(base, CLAUDE_PARAM_GROUPS.write), root);
+  const guarded = wrapAllowPathsGuard(
+    wrapDenyPathsGuard(wrapToolParamNormalization(base, CLAUDE_PARAM_GROUPS.write), {
+      denyPaths,
+      cwd: root,
+    }),
+    {
+      allowPaths,
+      cwd: root,
+      security,
+    },
+  );
+  return wrapSandboxPathGuard(guarded, root);
 }
 
-export function createSandboxedEditTool(root: string) {
+export function createSandboxedEditTool(
+  root: string,
+  allowPaths?: string[],
+  denyPaths?: string[],
+  security?: FileToolSecurity,
+) {
   const base = createEditTool(root) as unknown as AnyAgentTool;
-  return wrapSandboxPathGuard(wrapToolParamNormalization(base, CLAUDE_PARAM_GROUPS.edit), root);
+  const guarded = wrapAllowPathsGuard(
+    wrapDenyPathsGuard(wrapToolParamNormalization(base, CLAUDE_PARAM_GROUPS.edit), {
+      denyPaths,
+      cwd: root,
+    }),
+    {
+      allowPaths,
+      cwd: root,
+      security,
+    },
+  );
+  return wrapSandboxPathGuard(guarded, root);
 }
 
 export function createOpenClawReadTool(base: AnyAgentTool): AnyAgentTool {

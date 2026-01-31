@@ -250,6 +250,22 @@ export const AgentSandboxSchema = z
   .strict()
   .optional();
 
+const FileToolAccessSchema = z
+  .object({
+    security: z.enum(["deny", "allowlist", "full"]).optional(),
+    allowPaths: z.array(z.string()).optional(),
+    denyPaths: z.array(z.string()).optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.security === "allowlist" && (!value.allowPaths || value.allowPaths.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "allowPaths must be a non-empty array when security is allowlist",
+      });
+    }
+  });
+
 export const AgentToolsSchema = z
   .object({
     profile: ToolProfileSchema,
@@ -257,6 +273,9 @@ export const AgentToolsSchema = z
     alsoAllow: z.array(z.string()).optional(),
     deny: z.array(z.string()).optional(),
     byProvider: z.record(z.string(), ToolPolicyWithProfileSchema).optional(),
+    read: FileToolAccessSchema.optional(),
+    write: FileToolAccessSchema.optional(),
+    edit: FileToolAccessSchema.optional(),
     elevated: z
       .object({
         enabled: z.boolean().optional(),
@@ -462,6 +481,9 @@ export const ToolsSchema = z
     alsoAllow: z.array(z.string()).optional(),
     deny: z.array(z.string()).optional(),
     byProvider: z.record(z.string(), ToolPolicyWithProfileSchema).optional(),
+    read: FileToolAccessSchema.optional(),
+    write: FileToolAccessSchema.optional(),
+    edit: FileToolAccessSchema.optional(),
     web: ToolsWebSchema,
     media: ToolsMediaSchema,
     links: ToolsLinksSchema,
