@@ -33,6 +33,8 @@ import type { PluginRuntime } from "./runtime/types.js";
 import type { HookEntry } from "../hooks/types.js";
 import path from "node:path";
 import { normalizePluginHttpPath } from "./http-path.js";
+import { registerTtsProvider as registerTtsProviderImpl } from "../tts/tts.js";
+import type { TtsProviderPlugin } from "../tts/tts-provider-types.js";
 
 export type PluginToolRegistration = {
   pluginId: string;
@@ -380,6 +382,24 @@ export function createPluginRegistry(registryParams: PluginRegistryParams) {
     });
   };
 
+  const registerTtsProvider = (record: PluginRecord, provider: TtsProviderPlugin) => {
+    const id = typeof provider?.id === "string" ? provider.id.trim() : "";
+    if (!id) {
+      pushDiagnostic({
+        level: "error",
+        pluginId: record.id,
+        source: record.source,
+        message: "TTS provider registration missing id",
+      });
+      return;
+    }
+    // Register with the TTS subsystem
+    registerTtsProviderImpl(provider);
+    registryParams.logger?.info?.(
+      `Plugin ${record.id}: registered TTS provider "${provider.label || id}"`,
+    );
+  };
+
   const registerCli = (
     record: PluginRecord,
     registrar: OpenClawPluginCliRegistrar,
@@ -485,6 +505,7 @@ export function createPluginRegistry(registryParams: PluginRegistryParams) {
       registerHttpRoute: (params) => registerHttpRoute(record, params),
       registerChannel: (registration) => registerChannel(record, registration),
       registerProvider: (provider) => registerProvider(record, provider),
+      registerTtsProvider: (provider) => registerTtsProvider(record, provider),
       registerGatewayMethod: (method, handler) => registerGatewayMethod(record, method, handler),
       registerCli: (registrar, opts) => registerCli(record, registrar, opts),
       registerService: (service) => registerService(record, service),

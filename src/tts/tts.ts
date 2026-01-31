@@ -36,6 +36,58 @@ import {
   type ModelRef,
 } from "../agents/model-selection.js";
 import { resolveModel } from "../agents/pi-embedded-runner/model.js";
+import type { TtsProviderPlugin } from "./tts-provider-types.js";
+
+// =============================================================================
+// TTS Provider Plugin Registry
+// =============================================================================
+
+const pluginProviders = new Map<string, TtsProviderPlugin>();
+
+/**
+ * Register a TTS provider plugin.
+ * Called by plugins during activation.
+ */
+export function registerTtsProvider(provider: TtsProviderPlugin): void {
+  if (pluginProviders.has(provider.id)) {
+    logVerbose(`TTS: provider "${provider.id}" already registered, overwriting.`);
+  }
+  pluginProviders.set(provider.id, provider);
+  logVerbose(`TTS: registered plugin provider "${provider.id}"`);
+}
+
+/**
+ * Unregister a TTS provider plugin.
+ * Called when plugins are unloaded.
+ */
+export function unregisterTtsProvider(providerId: string): boolean {
+  const removed = pluginProviders.delete(providerId);
+  if (removed) {
+    logVerbose(`TTS: unregistered plugin provider "${providerId}"`);
+  }
+  return removed;
+}
+
+/**
+ * Get a registered TTS provider by ID.
+ */
+export function getTtsPluginProvider(providerId: string): TtsProviderPlugin | undefined {
+  return pluginProviders.get(providerId);
+}
+
+/**
+ * Get all registered TTS provider IDs (built-in + plugin).
+ */
+export function getAllTtsProviderIds(): string[] {
+  return [...BUILTIN_TTS_PROVIDERS, ...pluginProviders.keys()];
+}
+
+/**
+ * Check if a provider ID is a plugin provider (vs built-in).
+ */
+export function isPluginTtsProvider(providerId: string): boolean {
+  return pluginProviders.has(providerId);
+}
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_TTS_MAX_LENGTH = 1500;
@@ -477,13 +529,34 @@ export function resolveTtsApiKey(
   return undefined;
 }
 
-export const TTS_PROVIDERS = ["openai", "elevenlabs", "edge"] as const;
+/** Built-in TTS providers */
+const BUILTIN_TTS_PROVIDERS = ["openai", "elevenlabs", "edge"] as const;
+
+/** @deprecated Use getAllTtsProviderIds() for full list including plugins */
+export const TTS_PROVIDERS = BUILTIN_TTS_PROVIDERS;
 
 export function resolveTtsProviderOrder(primary: TtsProvider): TtsProvider[] {
-  return [primary, ...TTS_PROVIDERS.filter((provider) => provider !== primary)];
+  // Include plugin providers in fallback order
+  const allProviders = getAllTtsProviderIds();
+  return [primary, ...allProviders.filter((provider) => provider !== primary)];
 }
 
-export function isTtsProviderConfigured(config: ResolvedTtsConfig, provider: TtsProvider): boolean {
+export function isTtsProviderConfigured(
+  config: ResolvedTtsConfig,
+  provider: TtsProvider,
+  cfg?: OpenClawConfig,
+): boolean {
+  // Check plugin providers
+  const pluginProvider = pluginProviders.get(provider);
+  if (pluginProvider) {
+    if (pluginProvider.isConfigured) {
+      const pluginConfig = cfg?.plugins?.entries?.[provider]?.config ?? {};
+      return pluginProvider.isConfigured(pluginConfig as Record<string, unknown>);
+    }
+    // If no isConfigured method, assume configured if registered
+    return true;
+  }
+  // Built-in providers
   if (provider === "edge") return config.edge.enabled;
   return Boolean(resolveTtsApiKey(config, provider));
 }
@@ -1105,6 +1178,43 @@ export async function textToSpeech(params: {
   for (const provider of providers) {
     const providerStart = Date.now();
     try {
+      // Check plugin providers first
+      const pluginProvider = pluginProviders.get(provider);
+      if (pluginProvider) {
+        try {
+          const pluginConfig = params.cfg.plugins?.entries?.[provider]?.config ?? {};
+          const result = await pluginProvider.synthesize({
+            text: params.text,
+            config: pluginConfig as Record<string, unknown>,
+            outputFormat: output.openai, // mp3 or opus
+            timeoutMs: config.timeoutMs,
+          });
+
+          const tempDir = mkdtempSync(path.join(tmpdir(), "tts-"));
+          const extension = result.format.startsWith(".") ? result.format : `.${result.format}`;
+          const audioPath = path.join(tempDir, `voice-${Date.now()}${extension}`);
+          writeFileSync(audioPath, result.audio);
+          scheduleCleanup(tempDir);
+
+          const voiceCompatible =
+            result.format === "opus" || isVoiceCompatibleAudio({ fileName: audioPath });
+
+          return {
+            success: true,
+            audioPath,
+            latencyMs: Date.now() - providerStart,
+            provider,
+            outputFormat: result.format,
+            voiceCompatible,
+          };
+        } catch (err) {
+          const error = err as Error;
+          lastError = `${provider}: ${error.message}`;
+          continue;
+        }
+      }
+
+      // Built-in providers
       if (provider === "edge") {
         if (!config.edge.enabled) {
           lastError = "edge: disabled";

@@ -17,8 +17,10 @@ import type { WizardPrompter } from "../wizard/prompts.js";
 import type { createVpsAwareOAuthHandlers } from "../commands/oauth-flow.js";
 import type { GatewayRequestHandler } from "../gateway/server-methods/types.js";
 import type { PluginRuntime } from "./runtime/types.js";
+import type { TtsProviderPlugin } from "../tts/tts-provider-types.js";
 
 export type { PluginRuntime } from "./runtime/types.js";
+export type { TtsProviderPlugin } from "../tts/tts-provider-types.js";
 
 export type PluginLogger = {
   debug?: (message: string) => void;
@@ -258,6 +260,11 @@ export type OpenClawPluginApi = {
   registerCli: (registrar: OpenClawPluginCliRegistrar, opts?: { commands?: string[] }) => void;
   registerService: (service: OpenClawPluginService) => void;
   registerProvider: (provider: ProviderPlugin) => void;
+  /**
+   * Register a TTS (text-to-speech) provider.
+   * The provider will be available via messages.tts.provider config.
+   */
+  registerTtsProvider: (provider: TtsProviderPlugin) => void;
   /**
    * Register a custom command that bypasses the LLM agent.
    * Plugin commands are processed before built-in commands and before agent invocation.
