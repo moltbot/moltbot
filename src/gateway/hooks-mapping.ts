@@ -22,6 +22,7 @@ export type HookMappingResolved = {
   thinking?: string;
   timeoutSeconds?: number;
   transform?: HookMappingTransformResolved;
+  cleanup?: "delete" | "keep";
 };
 
 export type HookMappingTransformResolved = {
@@ -55,6 +56,7 @@ export type HookAction =
       model?: string;
       thinking?: string;
       timeoutSeconds?: number;
+      cleanup?: "delete" | "keep";
     };
 
 export type HookMappingResult =
@@ -73,6 +75,7 @@ const hookPresetMappings: Record<string, HookMappingConfig[]> = {
       sessionKey: "hook:gmail:{{messages[0].id}}",
       messageTemplate:
         "New email from {{messages[0].from}}\nSubject: {{messages[0].subject}}\n{{messages[0].snippet}}\n{{messages[0].body}}",
+      // Sessions are cleaned up via TTL (hooks.sessionTtlMs, default 24h)
     },
   ],
 };
@@ -94,6 +97,7 @@ type HookTransformResult = Partial<{
   model: string;
   thinking: string;
   timeoutSeconds: number;
+  cleanup: "delete" | "keep";
 }> | null;
 
 type HookTransformFn = (
@@ -103,16 +107,21 @@ type HookTransformFn = (
 export function resolveHookMappings(hooks?: HooksConfig): HookMappingResolved[] {
   const presets = hooks?.presets ?? [];
   const gmailAllowUnsafe = hooks?.gmail?.allowUnsafeExternalContent;
+  const gmailCleanup = hooks?.gmail?.cleanup;
   const mappings: HookMappingConfig[] = [];
   if (hooks?.mappings) mappings.push(...hooks.mappings);
   for (const preset of presets) {
     const presetMappings = hookPresetMappings[preset];
     if (!presetMappings) continue;
-    if (preset === "gmail" && typeof gmailAllowUnsafe === "boolean") {
+    if (preset === "gmail") {
       mappings.push(
         ...presetMappings.map((mapping) => ({
           ...mapping,
-          allowUnsafeExternalContent: gmailAllowUnsafe,
+          ...(typeof gmailAllowUnsafe === "boolean" && {
+            allowUnsafeExternalContent: gmailAllowUnsafe,
+          }),
+          // Allow config override; fall back to preset default (delete)
+          cleanup: gmailCleanup ?? mapping.cleanup,
         })),
       );
       continue;
@@ -192,6 +201,7 @@ function normalizeHookMapping(
     thinking: mapping.thinking,
     timeoutSeconds: mapping.timeoutSeconds,
     transform,
+    cleanup: mapping.cleanup,
   };
 }
 
@@ -237,6 +247,7 @@ function buildActionFromMapping(
       model: renderOptional(mapping.model, ctx),
       thinking: renderOptional(mapping.thinking, ctx),
       timeoutSeconds: mapping.timeoutSeconds,
+      cleanup: mapping.cleanup,
     },
   };
 }
@@ -277,6 +288,7 @@ function mergeAction(
     model: override.model ?? baseAgent?.model,
     thinking: override.thinking ?? baseAgent?.thinking,
     timeoutSeconds: override.timeoutSeconds ?? baseAgent?.timeoutSeconds,
+    cleanup: override.cleanup ?? baseAgent?.cleanup,
   });
 }
 

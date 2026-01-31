@@ -36,6 +36,8 @@ export type HookMappingConfig = {
   thinking?: string;
   timeoutSeconds?: number;
   transform?: HookMappingTransform;
+  /** Session cleanup after hook completes: "delete" archives the session, "keep" preserves it (default: "keep"). */
+  cleanup?: "delete" | "keep";
 };
 
 export type HooksGmailTailscaleMode = "off" | "serve" | "funnel";
@@ -67,6 +69,8 @@ export type HooksGmailConfig = {
   model?: string;
   /** Optional thinking level override for Gmail hook processing. */
   thinking?: "off" | "minimal" | "low" | "medium" | "high";
+  /** Session cleanup after Gmail hook completes: "delete" archives the session, "keep" preserves it (default: "delete" for Gmail). */
+  cleanup?: "delete" | "keep";
 };
 
 export type InternalHookHandlerConfig = {
@@ -121,4 +125,6 @@ export type HooksConfig = {
   gmail?: HooksGmailConfig;
   /** Internal agent event hooks */
   internal?: InternalHooksConfig;
+  /** TTL in milliseconds for hook sessions before auto-cleanup (default: 86400000 = 24h). Set to 0 to disable. */
+  sessionTtlMs?: number;
 };

@@ -1,5 +1,7 @@
 import type { HealthSummary } from "../commands/health.js";
+import { loadConfig } from "../config/config.js";
 import { abortChatRunById, type ChatAbortControllerEntry } from "./chat-abort.js";
+import { cleanupStaleHookSessions } from "./hooks-session-cleanup.js";
 import { setBroadcastHealthUpdate } from "./server/health-state.js";
 import type { ChatRunEntry } from "./server-chat.js";
 import {
@@ -71,9 +73,22 @@ export function startGatewayMaintenanceTimers(params: {
     .refreshGatewayHealthSnapshot({ probe: true })
     .catch((err) => params.logHealth.error(`initial refresh failed: ${formatError(err)}`));
 
+  // Hook session cleanup counter (run hourly = every 60 iterations at 60s interval)
+  let hookCleanupCounter = 0;
+  const HOOK_CLEANUP_INTERVAL = 60; // Run every 60 iterations (1 hour)
+
   // dedupe cache cleanup
   const dedupeCleanup = setInterval(() => {
     const now = Date.now();
+
+    // Hook session TTL cleanup (runs hourly)
+    hookCleanupCounter++;
+    if (hookCleanupCounter >= HOOK_CLEANUP_INTERVAL) {
+      hookCleanupCounter = 0;
+      void cleanupStaleHookSessions({ cfg: loadConfig() }).catch(() => {
+        // Best-effort cleanup; errors are logged inside the function
+      });
+    }
     for (const [k, v] of params.dedupe) {
       if (now - v.ts > DEDUPE_TTL_MS) params.dedupe.delete(k);
     }

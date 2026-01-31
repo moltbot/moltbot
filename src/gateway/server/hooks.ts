@@ -42,6 +42,7 @@ export function createGatewayHooksRequestHandler(params: {
     thinking?: string;
     timeoutSeconds?: number;
     allowUnsafeExternalContent?: boolean;
+    cleanup?: "delete" | "keep";
   }) => {
     const sessionKey = value.sessionKey.trim() ? value.sessionKey.trim() : `hook:${randomUUID()}`;
     const mainSessionKey = resolveMainSessionKeyFromConfig();
@@ -73,9 +74,9 @@ export function createGatewayHooksRequestHandler(params: {
     const runId = randomUUID();
     void (async () => {
       try {
-        const cfg = loadConfig();
+        const runCfg = loadConfig();
         const result = await runCronIsolatedAgentTurn({
-          cfg,
+          cfg: runCfg,
           deps,
           job,
           message: value.message,
@@ -99,6 +100,9 @@ export function createGatewayHooksRequestHandler(params: {
         if (value.wakeMode === "now") {
           requestHeartbeatNow({ reason: `hook:${jobId}:error` });
         }
+      } finally {
+        // Note: TTL-based cleanup is handled by cleanupStaleHookSessions()
+        // Sessions are kept for debugging (default 24h TTL via hooks.sessionTtlMs)
       }
     })();
 

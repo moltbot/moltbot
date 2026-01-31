@@ -40,6 +40,7 @@ export const HookMappingSchema = z
       })
       .strict()
       .optional(),
+    cleanup: z.union([z.literal("delete"), z.literal("keep")]).optional(),
   })
   .strict()
   .optional();
@@ -125,6 +126,7 @@ export const HooksGmailSchema = z
         z.literal("high"),
       ])
       .optional(),
+    cleanup: z.union([z.literal("delete"), z.literal("keep")]).optional(),
   })
   .strict()
   .optional();
