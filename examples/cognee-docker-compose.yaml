@@ -1,0 +1,35 @@
+# Minimal Docker Compose for Cognee (local-only)
+#
+# Usage:
+#   1. Export your LLM key: export LLM_API_KEY="your-openai-api-key"
+#   2. Run: docker compose -f examples/cognee-docker-compose.yaml up -d
+#   3. Verify: curl http://localhost:8000/health
+#   4. Configure Clawdbot with baseUrl: http://localhost:8000
+#
+# Defaults (no extra DB setup):
+# - Relational DB: SQLite (file-based)
+# - Vector DB: LanceDB (file-based)
+# - Graph DB: Kuzu (file-based)
+
+services:
+  cognee:
+    image: cognee/cognee:latest
+    container_name: cognee
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      - LLM_API_KEY=${LLM_API_KEY}
+      - ENABLE_BACKEND_ACCESS_CONTROL=false
+    volumes:
+      - cognee_data:/app/cognee/.cognee_system
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  cognee_data:
+    driver: local

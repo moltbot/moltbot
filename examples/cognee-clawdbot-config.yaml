@@ -1,0 +1,35 @@
+# Sample Clawdbot config for testing Cognee integration
+# Copy this to ~/.clawdbot/config.yaml inside the dev container
+#
+# Inside container:
+#   mkdir -p ~/.clawdbot
+#   cp /app/examples/cognee-clawdbot-config.yaml ~/.clawdbot/config.yaml
+
+agents:
+  defaults:
+    # Enable Cognee as the memory provider
+    memorySearch:
+      enabled: true
+      provider: cognee
+      sources: [memory]  # Start with just memory files
+
+      cognee:
+        # Inside Docker network, Cognee is at this address
+        baseUrl: http://cognee:8000
+        # No API key needed for local Docker setup
+        # apiKey: ""
+        
+        # Dataset name for organizing memories
+        datasetName: clawdbot-test
+        
+        # Search mode: "insights" (recommended), "chunks", or "summaries"
+        searchType: insights
+        
+        # Max results per search
+        maxResults: 6
+        
+        # Auto-process documents after adding
+        autoCognify: true
+        
+        # Request timeout
+        timeoutSeconds: 30

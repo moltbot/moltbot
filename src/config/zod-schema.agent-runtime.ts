@@ -311,7 +311,9 @@ export const MemorySearchSchema = z
       })
       .strict()
       .optional(),
-    provider: z.union([z.literal("openai"), z.literal("local"), z.literal("gemini")]).optional(),
+    provider: z
+      .union([z.literal("openai"), z.literal("local"), z.literal("gemini"), z.literal("cognee")])
+      .optional(),
     remote: z
       .object({
         baseUrl: z.string().optional(),
@@ -331,9 +333,30 @@ export const MemorySearchSchema = z
       .strict()
       .optional(),
     fallback: z
-      .union([z.literal("openai"), z.literal("gemini"), z.literal("local"), z.literal("none")])
+      .union([
+        z.literal("openai"),
+        z.literal("gemini"),
+        z.literal("local"),
+        z.literal("cognee"),
+        z.literal("none"),
+      ])
       .optional(),
     model: z.string().optional(),
+    cognee: z
+      .object({
+        baseUrl: z.string().optional(),
+        apiKey: z.string().optional(),
+        datasetName: z.string().optional(),
+        searchType: z
+          .union([z.literal("GRAPH_COMPLETION"), z.literal("CHUNKS"), z.literal("SUMMARIES")])
+          .optional(),
+        maxResults: z.number().int().positive().optional(),
+        autoCognify: z.boolean().optional(),
+        cognifyBatchSize: z.number().int().positive().optional(),
+        timeoutSeconds: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
     local: z
       .object({
         modelPath: z.string().optional(),

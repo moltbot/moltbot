@@ -1,0 +1,48 @@
+# Example Clawdbot configuration with Cognee memory provider
+# Copy to ~/.clawdbot/config.yaml and customize
+
+agents:
+  defaults:
+    # Use Cognee for knowledge graph memory
+    memorySearch:
+      enabled: true
+      provider: cognee
+      sources: [memory, sessions]  # Index both memory files and conversation history
+
+      # Cognee-specific configuration
+      cognee:
+        # Local Docker setup (default)
+        baseUrl: http://localhost:8000
+
+        # For Cognee Cloud, use:
+        # baseUrl: https://cognee--cognee-saas-backend-serve.modal.run
+        # Cognee API key is stored in the .env file
+        apiKey: ${COGNEE_API_KEY}
+
+        # Dataset name for organizing memories
+        datasetName: clawdbot
+
+        # Search mode: "GRAPH_COMPLETION" (recommended), "chunks", or "summaries"
+        searchType: GRAPH_COMPLETION
+
+        # Maximum search results to return
+        maxResults: 6
+
+        # Automatically process documents after adding (recommended)
+        autoCognify: true
+
+        # Batch size for processing multiple documents
+        cognifyBatchSize: 100
+
+        # Request timeout in seconds
+        timeoutSeconds: 180
+
+      # Enable experimental session memory indexing
+      experimental:
+        sessionMemory: true
+
+# To use default SQLite memory instead, set:
+# agents:
+#   defaults:
+#     memorySearch:
+#       provider: auto  # or "openai", "gemini", "local"

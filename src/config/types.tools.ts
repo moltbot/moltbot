@@ -234,7 +234,7 @@ export type MemorySearchConfig = {
     sessionMemory?: boolean;
   };
   /** Embedding provider mode. */
-  provider?: "openai" | "gemini" | "local";
+  provider?: "openai" | "gemini" | "local" | "cognee";
   remote?: {
     baseUrl?: string;
     apiKey?: string;
@@ -253,7 +253,7 @@ export type MemorySearchConfig = {
     };
   };
   /** Fallback behavior when embeddings fail. */
-  fallback?: "openai" | "gemini" | "local" | "none";
+  fallback?: "openai" | "gemini" | "local" | "cognee" | "none";
   /** Embedding model id (remote) or alias (local). */
   model?: string;
   /** Local embedding settings (node-llama-cpp). */
@@ -262,6 +262,25 @@ export type MemorySearchConfig = {
     modelPath?: string;
     /** Optional cache directory for local models. */
     modelCacheDir?: string;
+  };
+  /** Cognee knowledge graph memory settings. */
+  cognee?: {
+    /** Cognee API endpoint (default: http://localhost:8000). */
+    baseUrl?: string;
+    /** Cognee API key (required for cloud, optional for local). */
+    apiKey?: string;
+    /** Dataset name for organizing memories (default: "clawdbot"). */
+    datasetName?: string;
+    /** Search type: "GRAPH_COMPLETION", "CHUNKS", or "SUMMARIES" (default: "GRAPH_COMPLETION"). */
+    searchType?: "GRAPH_COMPLETION" | "CHUNKS" | "SUMMARIES";
+    /** Max results per search query (default: 6). */
+    maxResults?: number;
+    /** Timeout for API requests in seconds (default: 30). */
+    timeoutSeconds?: number;
+    /** Enable automatic cognify after adding documents (default: true). */
+    autoCognify?: boolean;
+    /** Cognify batch size for processing (default: 100). */
+    cognifyBatchSize?: number;
   };
   /** Index storage configuration. */
   store?: {

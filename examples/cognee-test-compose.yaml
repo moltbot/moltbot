@@ -1,0 +1,117 @@
+# Docker Compose for testing Clawdbot + Cognee integration
+#
+# Usage:
+#   1. cd examples
+#   2. docker-compose -f cognee-test-compose.yaml up -d
+#   3. docker-compose -f cognee-test-compose.yaml exec dev bash
+#   4. Inside container:
+#      - pnpm install                    # Install dependencies
+#      - pnpm build                      # Build Clawdbot
+#      - pnpm test src/memory/cognee-*   # Run unit tests
+#      - pnpm clawdbot agent --message "test" # Run Clawdbot CLI
+#
+# To tear down: docker-compose -f cognee-test-compose.yaml down -v
+
+version: '3.8'
+
+services:
+  # Cognee API server
+  cognee:
+    image: topoteretes/cognee:latest
+    container_name: cognee-test
+    ports:
+      - "8000:8000"
+    environment:
+      # No API key for local testing
+      - COGNEE_API_KEY=
+      # Database connection
+      - DATABASE_URL=postgresql://cognee:cognee@postgres:5432/cognee
+    volumes:
+      - cognee_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - cognee-test-network
+
+  # PostgreSQL database for Cognee
+  postgres:
+    image: postgres:15-alpine
+    container_name: cognee-test-postgres
+    environment:
+      - POSTGRES_USER=cognee
+      - POSTGRES_PASSWORD=cognee
+      - POSTGRES_DB=cognee
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cognee"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cognee-test-network
+
+  # Development container for running Clawdbot + tests
+  dev:
+    image: node:22-bookworm
+    container_name: clawdbot-cognee-dev
+    working_dir: /app
+    volumes:
+      # Mount the entire clawdbot repo
+      - ..:/app
+      # Use a separate node_modules volume to avoid conflicts
+      - node_modules:/app/node_modules
+      # Clawdbot config directory (persisted)
+      - clawdbot_config:/root/.clawdbot
+    environment:
+      - HOME=/root
+      - TERM=xterm-256color
+      # Point to Cognee running in Docker network
+      - COGNEE_BASE_URL=http://cognee:8000
+      # Optional: Add your API keys here for full testing
+      # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    depends_on:
+      cognee:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+    # Install pnpm and keep container running
+    command: >
+      bash -c "
+        corepack enable &&
+        echo '=== Clawdbot + Cognee Test Environment ===' &&
+        echo 'Cognee is available at: http://cognee:8000' &&
+        echo '' &&
+        echo 'Quick start:' &&
+        echo '  pnpm install && pnpm build' &&
+        echo '  pnpm test src/memory/cognee-client.test.ts' &&
+        echo '  pnpm clawdbot --help' &&
+        echo '' &&
+        sleep infinity
+      "
+    networks:
+      - cognee-test-network
+
+volumes:
+  cognee_data:
+    driver: local
+  postgres_data:
+    driver: local
+  node_modules:
+    driver: local
+  clawdbot_config:
+    driver: local
+
+networks:
+  cognee-test-network:
+    driver: bridge
