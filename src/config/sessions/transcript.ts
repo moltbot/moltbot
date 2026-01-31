@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { CURRENT_SESSION_VERSION, SessionManager } from "@mariozechner/pi-coding-agent";
 
+import { acquireSessionWriteLock } from "../../agents/session-write-lock.js";
 import type { SessionEntry } from "./types.js";
 import { loadSessionStore, updateSessionStore } from "./store.js";
 import { resolveDefaultSessionStorePath, resolveSessionTranscriptPath } from "./paths.js";
@@ -108,42 +109,48 @@ export async function appendAssistantMessageToSessionTranscript(params: {
   const sessionFile =
     entry.sessionFile?.trim() || resolveSessionTranscriptPath(entry.sessionId, params.agentId);
 
-  await ensureSessionHeader({ sessionFile, sessionId: entry.sessionId });
+  // Acquire session write lock to prevent race with compaction
+  const lock = await acquireSessionWriteLock({ sessionFile });
+  try {
+    await ensureSessionHeader({ sessionFile, sessionId: entry.sessionId });
 
-  const sessionManager = SessionManager.open(sessionFile);
-  sessionManager.appendMessage({
-    role: "assistant",
-    content: [{ type: "text", text: mirrorText }],
-    api: "openai-responses",
-    provider: "openclaw",
-    model: "delivery-mirror",
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: {
+    const sessionManager = SessionManager.open(sessionFile);
+    sessionManager.appendMessage({
+      role: "assistant",
+      content: [{ type: "text", text: mirrorText }],
+      api: "openai-responses",
+      provider: "openclaw",
+      model: "delivery-mirror",
+      usage: {
         input: 0,
         output: 0,
         cacheRead: 0,
         cacheWrite: 0,
-        total: 0,
+        totalTokens: 0,
+        cost: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          total: 0,
+        },
       },
-    },
-    stopReason: "stop",
-    timestamp: Date.now(),
-  });
-
-  if (!entry.sessionFile || entry.sessionFile !== sessionFile) {
-    await updateSessionStore(storePath, (current) => {
-      current[sessionKey] = {
-        ...entry,
-        sessionFile,
-      };
+      stopReason: "stop",
+      timestamp: Date.now(),
     });
-  }
 
-  emitSessionTranscriptUpdate(sessionFile);
-  return { ok: true, sessionFile };
+    if (!entry.sessionFile || entry.sessionFile !== sessionFile) {
+      await updateSessionStore(storePath, (current) => {
+        current[sessionKey] = {
+          ...entry,
+          sessionFile,
+        };
+      });
+    }
+
+    emitSessionTranscriptUpdate(sessionFile);
+    return { ok: true, sessionFile };
+  } finally {
+    await lock.release();
+  }
 }

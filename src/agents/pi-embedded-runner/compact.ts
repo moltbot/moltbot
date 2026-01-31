@@ -61,6 +61,7 @@ import {
 import { getDmHistoryLimitFromSessionKey, limitHistoryTurns } from "./history.js";
 import { resolveGlobalLane, resolveSessionLane } from "./lanes.js";
 import { log } from "./logger.js";
+import { getGlobalHookRunner } from "../../plugins/hook-runner-global.js";
 import { buildModelAliasLines, resolveModel } from "./model.js";
 import { buildEmbeddedSandboxInfo } from "./sandbox-info.js";
 import { prewarmSessionFile, trackSessionManagerAccess } from "./session-manager-cache.js";
@@ -434,6 +435,32 @@ export async function compactEmbeddedPiSessionDirect(
         if (limited.length > 0) {
           session.agent.replaceMessages(limited);
         }
+
+        // Run before_compaction hook
+        const messageCountBefore = session.messages.length;
+        let tokenCountBefore: number | undefined;
+        try {
+          tokenCountBefore = 0;
+          for (const message of session.messages) {
+            tokenCountBefore += estimateTokens(message);
+          }
+        } catch {
+          tokenCountBefore = undefined;
+        }
+        const hookRunner = getGlobalHookRunner();
+        const hookCtx = {
+          agentId: sessionAgentId,
+          sessionKey: params.sessionKey,
+          workspaceDir: effectiveWorkspace,
+          messageProvider: params.messageChannel ?? params.messageProvider,
+        };
+        if (hookRunner?.hasHooks("before_compaction")) {
+          await hookRunner.runBeforeCompaction(
+            { messageCount: messageCountBefore, tokenCount: tokenCountBefore },
+            hookCtx,
+          );
+        }
+
         const result = await session.compact(params.customInstructions);
         // Estimate tokens after compaction by summing token estimates for remaining messages
         let tokensAfter: number | undefined;
@@ -450,6 +477,25 @@ export async function compactEmbeddedPiSessionDirect(
           // If estimation fails, leave tokensAfter undefined
           tokensAfter = undefined;
         }
+
+        // Run after_compaction hook
+        const messageCountAfter = session.messages.length;
+        const compactedCount = messageCountBefore - messageCountAfter;
+        if (hookRunner?.hasHooks("after_compaction")) {
+          hookRunner
+            .runAfterCompaction(
+              {
+                messageCount: messageCountAfter,
+                tokenCount: tokensAfter,
+                compactedCount,
+              },
+              hookCtx,
+            )
+            .catch((err) => {
+              log.warn(`after_compaction hook error: ${String(err)}`);
+            });
+        }
+
         return {
           ok: true,
           compacted: true,

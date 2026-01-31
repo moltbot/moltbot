@@ -69,6 +69,7 @@ import { resolveDiscordChannelAllowlist } from "../../discord/resolve-channels.j
 import { resolveDiscordUserAllowlist } from "../../discord/resolve-users.js";
 import { sendMessageDiscord, sendPollDiscord } from "../../discord/send.js";
 import { getChannelActivity, recordChannelActivity } from "../../infra/channel-activity.js";
+import { sendToSession } from "../../infra/outbound/send-to-session.js";
 import { enqueueSystemEvent } from "../../infra/system-events.js";
 import { monitorIMessageProvider } from "../../imessage/monitor.js";
 import { probeIMessage } from "../../imessage/probe.js";
@@ -337,6 +338,9 @@ export function createPluginRuntime(): PluginRuntime {
         buildTemplateMessageFromPayload,
         monitorLineProvider,
       },
+    },
+    outbound: {
+      sendToSession,
     },
     logging: {
       shouldLogVerbose,
