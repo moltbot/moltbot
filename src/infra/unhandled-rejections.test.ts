@@ -81,6 +81,11 @@ describe("isTransientNetworkError", () => {
     expect(isTransientNetworkError(error)).toBe(true);
   });
 
+  it('returns true for Error with "TypeError: fetch failed" message', () => {
+    const error = new Error("TypeError: fetch failed");
+    expect(isTransientNetworkError(error)).toBe(true);
+  });
+
   it("returns true for fetch failed with network cause", () => {
     const cause = Object.assign(new Error("getaddrinfo ENOTFOUND"), { code: "ENOTFOUND" });
     const error = Object.assign(new TypeError("fetch failed"), { cause });

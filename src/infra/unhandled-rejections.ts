@@ -1,6 +1,6 @@
 import process from "node:process";
 
-import { extractErrorCode, formatUncaughtError } from "./errors.js";
+import { extractErrorCode, formatErrorMessage, formatUncaughtError } from "./errors.js";
 
 type UnhandledRejectionHandler = (reason: unknown) => boolean;
 
@@ -101,6 +101,14 @@ export function isTransientNetworkError(err: unknown): boolean {
     if (cause) {
       return isTransientNetworkError(cause);
     }
+    return true;
+  }
+
+  // Some environments wrap fetch failures as generic Errors (e.g., "TypeError: fetch failed")
+  const message = formatErrorMessage(err).toLowerCase();
+  if (message.includes("fetch failed")) {
+    const cause = getErrorCause(err);
+    if (cause) return isTransientNetworkError(cause);
     return true;
   }
 
