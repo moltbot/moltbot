@@ -1,12 +1,17 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
+import type { AgentMessage } from "@mariozechner/pi-agent-core";
+import { estimateMessagesTokens } from "../../agents/compaction.js";
 import { resolveAgentModelFallbacksOverride } from "../../agents/agent-scope.js";
 import { runWithModelFallback } from "../../agents/model-fallback.js";
 import { isCliProvider } from "../../agents/model-selection.js";
 import { runEmbeddedPiAgent } from "../../agents/pi-embedded.js";
+import { derivePromptTokens, normalizeUsage, type UsageLike } from "../../agents/usage.js";
 import { resolveSandboxConfigForAgent, resolveSandboxRuntimeStatus } from "../../agents/sandbox.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import {
   resolveAgentIdFromSessionKey,
+  resolveSessionFilePath,
   type SessionEntry,
   updateSessionStoreEntry,
 } from "../../config/sessions.js";
@@ -24,9 +29,60 @@ import {
 import type { FollowupRun } from "./queue.js";
 import { incrementCompactionCount } from "./session-updates.js";
 
+function estimatePromptTokens(prompt?: string): number | undefined {
+  const trimmed = prompt?.trim();
+  if (!trimmed) return undefined;
+  const message: AgentMessage = { role: "user", content: trimmed };
+  const tokens = estimateMessagesTokens([message]);
+  if (!Number.isFinite(tokens) || tokens <= 0) return undefined;
+  return Math.ceil(tokens);
+}
+
+async function readPromptTokensFromSessionLog(
+  sessionId?: string,
+  sessionEntry?: SessionEntry,
+  sessionKey?: string,
+): Promise<number | undefined> {
+  if (!sessionId) return undefined;
+  const agentId = sessionEntry ? undefined : resolveAgentIdFromSessionKey(sessionKey);
+  const logPath = resolveSessionFilePath(
+    sessionId,
+    sessionEntry,
+    agentId ? { agentId } : undefined,
+  );
+  if (!fs.existsSync(logPath)) return undefined;
+
+  try {
+    const lines = (await fs.promises.readFile(logPath, "utf-8")).split(/\n+/);
+    let lastUsage: ReturnType<typeof normalizeUsage> | undefined;
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const parsed = JSON.parse(line) as {
+          message?: { usage?: UsageLike };
+          usage?: UsageLike;
+        };
+        const usageRaw = parsed.message?.usage ?? parsed.usage;
+        const usage = normalizeUsage(usageRaw);
+        if (usage) lastUsage = usage;
+      } catch {
+        // ignore bad lines
+      }
+    }
+    if (!lastUsage) return undefined;
+    const inputTokens = lastUsage.input ?? derivePromptTokens(lastUsage) ?? 0;
+    const outputTokens = lastUsage.output ?? 0;
+    const totalTokens = lastUsage.total ?? inputTokens + outputTokens;
+    return totalTokens > 0 ? totalTokens : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function runMemoryFlushIfNeeded(params: {
   cfg: OpenClawConfig;
   followupRun: FollowupRun;
+  promptForEstimate?: string;
   sessionCtx: TemplateContext;
   opts?: GetReplyOptions;
   defaultModel: string;
@@ -58,19 +114,55 @@ export async function runMemoryFlushIfNeeded(params: {
     return sandboxCfg.workspaceAccess === "rw";
   })();
 
+  const isCli = isCliProvider(params.followupRun.run.provider, params.cfg);
+  const entry =
+    params.sessionEntry ??
+    (params.sessionKey ? params.sessionStore?.[params.sessionKey] : undefined);
+  const contextWindowTokens = resolveMemoryFlushContextWindowTokens({
+    modelId: params.followupRun.run.model ?? params.defaultModel,
+    agentCfgContextTokens: params.agentCfgContextTokens,
+  });
+
+  const promptTokenEstimate = estimatePromptTokens(
+    params.promptForEstimate ?? params.followupRun.prompt,
+  );
+  const transcriptTotalTokens = await readPromptTokensFromSessionLog(
+    params.followupRun.run.sessionId,
+    entry,
+    params.sessionKey ?? params.followupRun.run.sessionKey,
+  );
+  const baseTotalTokens = entry?.totalTokens;
+  const lastPromptTokens = Math.max(baseTotalTokens ?? 0, transcriptTotalTokens ?? 0);
+  const effectivePromptTokens = promptTokenEstimate
+    ? lastPromptTokens + promptTokenEstimate
+    : lastPromptTokens;
+  const effectiveEntry =
+    entry && typeof effectivePromptTokens === "number" && effectivePromptTokens > 0
+      ? { ...entry, totalTokens: effectivePromptTokens }
+      : entry;
+
+  // Diagnostic logging to understand why memory flush may not trigger
+  const totalTokens = effectiveEntry?.totalTokens;
+  const threshold =
+    contextWindowTokens -
+    memoryFlushSettings.reserveTokensFloor -
+    memoryFlushSettings.softThresholdTokens;
+  logVerbose(
+    `memoryFlush check: sessionKey=${params.sessionKey} totalTokens=${totalTokens ?? "undefined"} ` +
+      `contextWindow=${contextWindowTokens} threshold=${threshold} ` +
+      `isHeartbeat=${params.isHeartbeat} isCli=${isCli} memoryFlushWritable=${memoryFlushWritable} ` +
+      `compactionCount=${effectiveEntry?.compactionCount ?? 0} memoryFlushCompactionCount=${effectiveEntry?.memoryFlushCompactionCount ?? "undefined"} ` +
+      `promptTokensEst=${promptTokenEstimate ?? "undefined"} transcriptTotalTokens=${transcriptTotalTokens ?? "undefined"}`,
+  );
+
   const shouldFlushMemory =
     memoryFlushSettings &&
     memoryFlushWritable &&
     !params.isHeartbeat &&
-    !isCliProvider(params.followupRun.run.provider, params.cfg) &&
+    !isCli &&
     shouldRunMemoryFlush({
-      entry:
-        params.sessionEntry ??
-        (params.sessionKey ? params.sessionStore?.[params.sessionKey] : undefined),
-      contextWindowTokens: resolveMemoryFlushContextWindowTokens({
-        modelId: params.followupRun.run.model ?? params.defaultModel,
-        agentCfgContextTokens: params.agentCfgContextTokens,
-      }),
+      entry: effectiveEntry,
+      contextWindowTokens,
       reserveTokensFloor: memoryFlushSettings.reserveTokensFloor,
       softThresholdTokens: memoryFlushSettings.softThresholdTokens,
     });
@@ -78,6 +170,10 @@ export async function runMemoryFlushIfNeeded(params: {
   if (!shouldFlushMemory) {
     return params.sessionEntry;
   }
+
+  logVerbose(
+    `memoryFlush triggered: sessionKey=${params.sessionKey} totalTokens=${totalTokens} threshold=${threshold}`,
+  );
 
   let activeSessionEntry = params.sessionEntry;
   const activeSessionStore = params.sessionStore;

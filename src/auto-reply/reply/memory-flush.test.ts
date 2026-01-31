@@ -67,6 +67,40 @@ describe("shouldRunMemoryFlush", () => {
     ).toBe(false);
   });
 
+  it("skips when totalTokens is undefined in entry", () => {
+    // This is the most common failure mode: sessionEntry exists but totalTokens was never set
+    expect(
+      shouldRunMemoryFlush({
+        entry: { totalTokens: undefined },
+        contextWindowTokens: 100_000,
+        reserveTokensFloor: 20_000,
+        softThresholdTokens: 4_000,
+      }),
+    ).toBe(false);
+  });
+
+  it("skips when totalTokens is null in entry", () => {
+    expect(
+      shouldRunMemoryFlush({
+        entry: { totalTokens: null as unknown as number | undefined },
+        contextWindowTokens: 100_000,
+        reserveTokensFloor: 20_000,
+        softThresholdTokens: 4_000,
+      }),
+    ).toBe(false);
+  });
+
+  it("skips when totalTokens is negative", () => {
+    expect(
+      shouldRunMemoryFlush({
+        entry: { totalTokens: -1 },
+        contextWindowTokens: 100_000,
+        reserveTokensFloor: 20_000,
+        softThresholdTokens: 4_000,
+      }),
+    ).toBe(false);
+  });
+
   it("skips when under threshold", () => {
     expect(
       shouldRunMemoryFlush({
