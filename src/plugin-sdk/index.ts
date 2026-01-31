@@ -301,6 +301,7 @@ export {
   type ResolvedTelegramAccount,
 } from "../telegram/accounts.js";
 export { telegramOnboardingAdapter } from "../channels/plugins/onboarding/telegram.js";
+export { lineOnboardingAdapter } from "../channels/plugins/onboarding/line.js";
 export {
   looksLikeTelegramTargetId,
   normalizeTelegramMessagingTarget,

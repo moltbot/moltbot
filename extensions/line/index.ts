@@ -12,7 +12,9 @@ const plugin = {
   configSchema: emptyPluginConfigSchema(),
   register(api: OpenClawPluginApi) {
     setLineRuntime(api.runtime);
-    api.registerChannel({ plugin: linePlugin });
+    api.registerChannel({ 
+      plugin: linePlugin  
+    });
     registerLineCardCommand(api);
   },
 };

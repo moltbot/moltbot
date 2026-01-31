@@ -3,6 +3,7 @@ import {
   DEFAULT_ACCOUNT_ID,
   LineConfigSchema,
   processLineMessage,
+  lineOnboardingAdapter,
   type ChannelPlugin,
   type ChannelStatusIssue,
   type OpenClawConfig,
@@ -12,7 +13,6 @@ import {
 } from "openclaw/plugin-sdk";
 
 import { getLineRuntime } from "./runtime.js";
-
 // LINE channel metadata
 const meta = {
   id: "line",
@@ -42,6 +42,7 @@ export const linePlugin: ChannelPlugin<ResolvedLineAccount> = {
     ...meta,
     quickstartAllowFrom: true,
   },
+  onboarding: lineOnboardingAdapter,
   pairing: {
     idLabel: "lineUserId",
     normalizeAllowEntry: (entry) => {
@@ -778,4 +779,5 @@ export const linePlugin: ChannelPlugin<ResolvedLineAccount> = {
       "- Tables/code in your response auto-convert to visual cards",
     ],
   },
-};
+}; 
+
