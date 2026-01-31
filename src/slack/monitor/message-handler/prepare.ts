@@ -290,8 +290,13 @@ export async function prepareSlackMessage(params: {
     return null;
   }
 
+  // Resolve base requireMention from channel config or default
+  const baseRequireMention = channelConfig?.requireMention ?? ctx.defaultRequireMention;
+  // thread.requireMention: true (default) = inherit channel setting, false = skip gating in threads
   const shouldRequireMention = isRoom
-    ? (channelConfig?.requireMention ?? ctx.defaultRequireMention)
+    ? isThreadReply && !ctx.threadRequireMention
+      ? false
+      : baseRequireMention
     : false;
 
   // Allow "control commands" to bypass mention gating if sender is authorized.

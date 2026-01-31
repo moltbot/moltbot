@@ -40,6 +40,7 @@ describe("prepareSlackMessage sender prefix", () => {
       replyToMode: "off",
       threadHistoryScope: "channel",
       threadInheritParent: false,
+      threadRequireMention: true,
       slashCommand: { command: "/openclaw", enabled: true },
       textLimit: 2000,
       ackReactionScope: "off",

@@ -38,6 +38,7 @@ describe("slack prepareSlackMessage inbound contract", () => {
       replyToMode: "off",
       threadHistoryScope: "thread",
       threadInheritParent: false,
+      threadRequireMention: true,
       slashCommand: {
         enabled: false,
         name: "openclaw",
@@ -106,6 +107,7 @@ describe("slack prepareSlackMessage inbound contract", () => {
       replyToMode: "all",
       threadHistoryScope: "thread",
       threadInheritParent: false,
+      threadRequireMention: true,
       slashCommand: {
         enabled: false,
         name: "openclaw",
