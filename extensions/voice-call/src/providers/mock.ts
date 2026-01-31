@@ -23,6 +23,10 @@ import type { VoiceCallProvider } from "./base.js";
  * Events are driven via webhook POST with JSON body:
  * - { events: NormalizedEvent[] } for bulk events
  * - { event: NormalizedEvent } for single event
+ *
+ * Call status behavior:
+ * - providerCallId containing "stale", "ended", or "completed" => terminal
+ * - everything else => active
  */
 export class MockProvider implements VoiceCallProvider {
   readonly name = "mock" as const;
