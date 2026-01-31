@@ -71,3 +71,5 @@ USER.md
 
 # local tooling
 .serena/
+schemas/*.d.ts
+schemas/*.schema.json

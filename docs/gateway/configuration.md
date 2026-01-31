@@ -41,6 +41,27 @@ stay schema-driven across apps without hard-coded forms.
 Hints (labels, grouping, sensitive fields) ship alongside the schema so clients can render
 better forms without hard-coding config knowledge.
 
+### IDE autocomplete
+
+Get full autocomplete and validation for `openclaw.json` in VS Code, Cursor, and other
+JSON-Schema-aware editors by pointing to the generated schema:
+
+```json5
+{
+  "$schema": "./schemas/moltbot.schema.json",
+  // ... rest of your config
+}
+```
+
+Generate the schema (and a companion `.d.ts`) with:
+
+```bash
+pnpm schema:gen
+```
+
+This writes `schemas/moltbot.schema.json` and `schemas/moltbot.d.ts` from the Zod source schema.
+Both files are git-ignored; regenerate after pulling config schema changes.
+
 ## Apply + restart (RPC)
 
 Use `config.apply` to validate + write the full config and restart the Gateway in one step.

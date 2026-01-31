@@ -143,6 +143,7 @@
     "protocol:gen": "node --import tsx scripts/protocol-gen.ts",
     "protocol:gen:swift": "node --import tsx scripts/protocol-gen-swift.ts",
     "protocol:check": "pnpm protocol:gen && pnpm protocol:gen:swift && git diff --exit-code -- dist/protocol.schema.json apps/macos/Sources/OpenClawProtocol/GatewayModels.swift",
+    "schema:gen": "node --import tsx scripts/gen-config-schema.ts",
     "canvas:a2ui:bundle": "bash scripts/bundle-a2ui.sh",
     "check:loc": "node --import tsx scripts/check-ts-max-loc.ts --max 500"
   },
@@ -227,6 +228,7 @@
     "@typescript/native-preview": "7.0.0-dev.20260130.1",
     "@vitest/coverage-v8": "^4.0.18",
     "docx-preview": "^0.3.7",
+    "json-schema-to-typescript": "^15.0.4",
     "lit": "^3.3.2",
     "lucide": "^0.563.0",
     "ollama": "^0.6.3",

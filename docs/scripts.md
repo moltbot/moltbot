@@ -25,6 +25,12 @@ Use these when a task is clearly tied to a script; otherwise prefer the CLI.
 Auth monitoring scripts are documented here:
 [/automation/auth-monitoring](/automation/auth-monitoring)
 
+## Config schema generation
+
+- `scripts/gen-config-schema.ts`: generates `schemas/moltbot.schema.json` (JSON Schema) and `schemas/moltbot.d.ts` (TypeScript types) from the Zod config schema.
+- Run via `pnpm schema:gen`. Both output files are git-ignored.
+- See [IDE autocomplete](/gateway/configuration#ide-autocomplete) for usage.
+
 ## When adding scripts
 
 - Keep scripts focused and documented.
