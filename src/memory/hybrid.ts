@@ -1,3 +1,6 @@
+import type { DatabaseSync } from "node:sqlite";
+import { trustWeightedRerank } from "./trust/index.js";
+
 export type HybridSource = string;
 
 export type HybridVectorResult = {
@@ -38,19 +41,39 @@ export function bm25RankToScore(rank: number): number {
   return 1 / (1 + normalized);
 }
 
+/** Options for trust-weighted reranking in hybrid search */
+export interface TrustRerankOptions {
+  /** Database handle for provenance lookups */
+  db: DatabaseSync;
+  /** Enable trust-weighted reranking (default: false) */
+  enabled?: boolean;
+  /** Weight for trust score in final ranking (0-1, default: 0.3) */
+  trustWeight?: number;
+}
+
+/** Result type for merged hybrid search results */
+export type HybridMergedResult = {
+  /** Chunk ID for provenance lookups */
+  chunkId: string;
+  path: string;
+  startLine: number;
+  endLine: number;
+  /** Combined relevance score (vector + text weighted) */
+  score: number;
+  snippet: string;
+  source: HybridSource;
+  /** Trust score from provenance (only present if trust reranking enabled) */
+  trustScore?: number;
+};
+
 export function mergeHybridResults(params: {
   vector: HybridVectorResult[];
   keyword: HybridKeywordResult[];
   vectorWeight: number;
   textWeight: number;
-}): Array<{
-  path: string;
-  startLine: number;
-  endLine: number;
-  score: number;
-  snippet: string;
-  source: HybridSource;
-}> {
+  /** Optional trust reranking configuration */
+  trust?: TrustRerankOptions;
+}): HybridMergedResult[] {
   const byId = new Map<
     string,
     {
@@ -102,6 +125,7 @@ export function mergeHybridResults(params: {
   const merged = Array.from(byId.values()).map((entry) => {
     const score = params.vectorWeight * entry.vectorScore + params.textWeight * entry.textScore;
     return {
+      chunkId: entry.id,
       path: entry.path,
       startLine: entry.startLine,
       endLine: entry.endLine,
@@ -111,5 +135,27 @@ export function mergeHybridResults(params: {
     };
   });
 
-  return merged.toSorted((a, b) => b.score - a.score);
+  // Sort by relevance score
+  const sorted = merged.toSorted((a, b) => b.score - a.score);
+
+  // Apply trust-weighted reranking if enabled
+  if (params.trust?.enabled && params.trust.db) {
+    const reranked = trustWeightedRerank(sorted, {
+      db: params.trust.db,
+      trustWeight: params.trust.trustWeight,
+    });
+    // Return with trust scores attached
+    return reranked.map((r) => ({
+      chunkId: r.chunkId,
+      path: r.path,
+      startLine: r.startLine,
+      endLine: r.endLine,
+      score: r.combinedScore,
+      snippet: r.snippet,
+      source: r.source,
+      trustScore: r.trustScore,
+    }));
+  }
+
+  return sorted;
 }

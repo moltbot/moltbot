@@ -6,6 +6,7 @@ import { resolveSessionAgentId } from "../agent-scope.js";
 import { resolveMemorySearchConfig } from "../memory-search.js";
 import type { AnyAgentTool } from "./common.js";
 import { jsonResult, readNumberParam, readStringParam } from "./common.js";
+import { verifyChunk, getProvenance } from "../../memory/trust/index.js";
 
 const MemorySearchSchema = Type.Object({
   query: Type.String(),
@@ -17,6 +18,11 @@ const MemoryGetSchema = Type.Object({
   path: Type.String(),
   from: Type.Optional(Type.Number()),
   lines: Type.Optional(Type.Number()),
+});
+
+const MemoryVerifySchema = Type.Object({
+  chunkId: Type.String(),
+  trustBoost: Type.Optional(Type.Number()),
 });
 
 export function createMemorySearchTool(options: {
@@ -114,6 +120,70 @@ export function createMemoryGetTool(options: {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return jsonResult({ path: relPath, text: "", disabled: true, error: message });
+      }
+    },
+  };
+}
+
+/**
+ * Creates the memory_verify tool for elevating trust on memory chunks.
+ * Users can verify chunks to increase their trust score, marking them as
+ * explicitly confirmed by a human.
+ */
+export function createMemoryVerifyTool(options: {
+  config?: OpenClawConfig;
+  agentSessionKey?: string;
+}): AnyAgentTool | null {
+  const cfg = options.config;
+  if (!cfg) {
+    return null;
+  }
+  const agentId = resolveSessionAgentId({
+    sessionKey: options.agentSessionKey,
+    config: cfg,
+  });
+  if (!resolveMemorySearchConfig(cfg, agentId)) {
+    return null;
+  }
+  return {
+    label: "Memory Verify",
+    name: "memory_verify",
+    description:
+      "Mark a memory chunk as verified by the user, elevating its trust score. Use this after confirming information from memory_search is accurate. Pass the chunkId from search results.",
+    parameters: MemoryVerifySchema,
+    execute: async (_toolCallId, params) => {
+      const chunkId = readStringParam(params, "chunkId", { required: true });
+      const trustBoost = readNumberParam(params, "trustBoost");
+      const { manager, error } = await getMemorySearchManager({
+        cfg,
+        agentId,
+      });
+      if (!manager) {
+        return jsonResult({ verified: false, disabled: true, error });
+      }
+      try {
+        const db = manager.getDatabase();
+        const before = getProvenance(db, chunkId);
+        if (!before) {
+          return jsonResult({
+            verified: false,
+            error: `Chunk ${chunkId} not found or has no provenance`,
+          });
+        }
+
+        const success = verifyChunk(db, chunkId, trustBoost ?? 0.3);
+        const after = getProvenance(db, chunkId);
+
+        return jsonResult({
+          verified: success,
+          chunkId,
+          previousTrust: before.trust_score,
+          newTrust: after?.trust_score,
+          verifiedByUser: after?.verified_by_user,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return jsonResult({ verified: false, error: message });
       }
     },
   };

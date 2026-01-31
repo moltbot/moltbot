@@ -42,6 +42,7 @@ import {
   parseEmbedding,
 } from "./internal.js";
 import { bm25RankToScore, buildFtsQuery, mergeHybridResults } from "./hybrid.js";
+import { extractAndIndexEntities, type IndexedChunk } from "./kg/index.js";
 import { searchKeyword, searchVector } from "./manager-search.js";
 import { ensureMemoryIndexSchema } from "./memory-schema.js";
 import { requireNodeSqlite } from "./sqlite.js";
@@ -617,6 +618,14 @@ export class MemoryIndexManager {
       const message = err instanceof Error ? err.message : String(err);
       return { ok: false, error: message };
     }
+  }
+
+  /**
+   * Returns the underlying database connection.
+   * Used by trust/provenance tools to verify chunks.
+   */
+  getDatabase(): DatabaseSync {
+    return this.db;
   }
 
   async close(): Promise<void> {
@@ -2330,12 +2339,20 @@ export class MemoryIndexManager {
     this.db
       .prepare(`DELETE FROM chunks WHERE path = ? AND source = ?`)
       .run(entry.path, options.source);
+    const indexedChunks: IndexedChunk[] = [];
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
       const embedding = embeddings[i] ?? [];
       const id = hashText(
         `${options.source}:${entry.path}:${chunk.startLine}:${chunk.endLine}:${chunk.hash}:${this.provider.model}`,
       );
+      indexedChunks.push({
+        id,
+        text: chunk.text,
+        path: entry.path,
+        startLine: chunk.startLine,
+        endLine: chunk.endLine,
+      });
       this.db
         .prepare(
           `INSERT INTO chunks (id, path, source, start_line, end_line, hash, model, text, embedding, updated_at)
@@ -2384,6 +2401,10 @@ export class MemoryIndexManager {
           );
       }
     }
+
+    // Extract and index entities/relations for knowledge graph
+    await extractAndIndexEntities(this.db, indexedChunks, options.source);
+
     this.db
       .prepare(
         `INSERT INTO files (path, source, hash, mtime, size) VALUES (?, ?, ?, ?, ?)

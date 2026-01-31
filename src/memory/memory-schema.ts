@@ -1,4 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
+import { ensureKGSchema } from "./kg/schema.js";
+import { ensureProvenanceSchema } from "./trust/provenance.js";
 
 export function ensureMemoryIndexSchema(params: {
   db: DatabaseSync;
@@ -78,6 +80,10 @@ export function ensureMemoryIndexSchema(params: {
   ensureColumn(params.db, "chunks", "source", "TEXT NOT NULL DEFAULT 'memory'");
   params.db.exec(`CREATE INDEX IF NOT EXISTS idx_chunks_path ON chunks(path);`);
   params.db.exec(`CREATE INDEX IF NOT EXISTS idx_chunks_source ON chunks(source);`);
+
+  // Initialize RAG/KG extension schemas
+  ensureKGSchema(params.db);
+  ensureProvenanceSchema(params.db);
 
   return { ftsAvailable, ...(ftsError ? { ftsError } : {}) };
 }
