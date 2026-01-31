@@ -184,7 +184,16 @@ function ensureListener() {
     entry.endedAt = endedAt;
     if (phase === "error") {
       const error = typeof evt.data?.error === "string" ? (evt.data.error as string) : undefined;
-      entry.outcome = { status: "error", error };
+      const errorType =
+        typeof evt.data?.errorType === "string" ? (evt.data.errorType as string) : undefined;
+      const errorHint =
+        typeof evt.data?.errorHint === "string" ? (evt.data.errorHint as string) : undefined;
+      entry.outcome = {
+        status: "error",
+        error,
+        errorType: errorType as SubagentRunOutcome["errorType"],
+        errorHint,
+      };
     } else {
       entry.outcome = { status: "ok" };
     }
