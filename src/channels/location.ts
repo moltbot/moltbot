@@ -36,13 +36,13 @@ export async function enrichLocation(
   location: NormalizedLocation,
   geocodingConfig?: Partial<GeocodingConfig>,
 ): Promise<NormalizedLocation> {
-  // Skip if we already have name/address or if it's a live location (too frequent)
-  if (location.name || location.address) {
+  // Skip if we already have name/address/caption (user-provided place semantics)
+  if (location.name || location.address || location.caption) {
     return location;
   }
 
-  // Don't geocode live locations by default (they update frequently)
-  if (location.isLive || location.source === "live") {
+  // Don't geocode live locations (update too frequently) or places (already labelled)
+  if (location.isLive || location.source === "live" || location.source === "place") {
     return location;
   }
 

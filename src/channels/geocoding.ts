@@ -36,7 +36,7 @@ const DEFAULT_CONFIG: GeocodingConfig = {
   provider: "nominatim",
   cacheTtlSeconds: 3600,
   timeoutMs: 5000,
-  userAgent: "Clawdbot/1.0 (https://github.com/clawdbot/clawdbot)",
+  userAgent: "OpenClaw/1.0 (https://github.com/openclaw/openclaw)",
 };
 
 // Simple in-memory cache with TTL
@@ -114,10 +114,10 @@ async function reverseGeocodeNominatim(
   url.searchParams.set("addressdetails", "1");
   url.searchParams.set("zoom", "18"); // Building-level detail
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
 
+  try {
     const response = await fetch(url.toString(), {
       headers: {
         "User-Agent": config.userAgent,
@@ -125,8 +125,6 @@ async function reverseGeocodeNominatim(
       },
       signal: controller.signal,
     });
-
-    clearTimeout(timeout);
 
     if (!response.ok) {
       logWarn(`Nominatim reverse geocoding failed: ${response.status} ${response.statusText}`);
@@ -170,6 +168,8 @@ async function reverseGeocodeNominatim(
       logWarn(`Nominatim reverse geocoding error: ${(error as Error).message}`);
     }
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
