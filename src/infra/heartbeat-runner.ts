@@ -175,6 +175,7 @@ type HeartbeatAgentState = {
   agentId: string;
   heartbeat?: HeartbeatConfig;
   intervalMs: number;
+  jitterMs: number;
   lastRunMs?: number;
   nextDueMs: number;
 };
@@ -296,6 +297,40 @@ export function resolveHeartbeatIntervalMs(
   }
   if (ms <= 0) return null;
   return ms;
+}
+
+/**
+ * Resolve the jitter duration in milliseconds from config.
+ * Returns 0 if jitter is not configured or invalid.
+ */
+export function resolveHeartbeatJitterMs(
+  cfg: OpenClawConfig,
+  heartbeat?: HeartbeatConfig,
+): number {
+  const raw = heartbeat?.jitter ?? cfg.agents?.defaults?.heartbeat?.jitter;
+  if (!raw) return 0;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return 0;
+  let ms: number;
+  try {
+    ms = parseDurationMs(trimmed, { defaultUnit: "m" });
+  } catch {
+    return 0;
+  }
+  if (ms <= 0) return 0;
+  return ms;
+}
+
+/**
+ * Apply random jitter to an interval.
+ * Returns interval + random value in range [-jitterMs, +jitterMs].
+ */
+function applyJitter(intervalMs: number, jitterMs: number): number {
+  if (jitterMs <= 0) return intervalMs;
+  // Random value between -jitterMs and +jitterMs
+  const jitter = (Math.random() * 2 - 1) * jitterMs;
+  // Ensure result is at least 1 second
+  return Math.max(1000, Math.round(intervalMs + jitter));
 }
 
 export function resolveHeartbeatPrompt(cfg: OpenClawConfig, heartbeat?: HeartbeatConfig) {
@@ -774,14 +809,26 @@ export function startHeartbeatRunner(opts: {
   };
   let initialized = false;
 
-  const resolveNextDue = (now: number, intervalMs: number, prevState?: HeartbeatAgentState) => {
+  const resolveNextDue = (
+    now: number,
+    intervalMs: number,
+    jitterMs: number,
+    prevState?: HeartbeatAgentState,
+  ) => {
+    // Apply jitter to get the actual interval for this scheduling
+    const actualInterval = applyJitter(intervalMs, jitterMs);
     if (typeof prevState?.lastRunMs === "number") {
-      return prevState.lastRunMs + intervalMs;
+      return prevState.lastRunMs + actualInterval;
     }
-    if (prevState && prevState.intervalMs === intervalMs && prevState.nextDueMs > now) {
+    if (
+      prevState &&
+      prevState.intervalMs === intervalMs &&
+      prevState.jitterMs === jitterMs &&
+      prevState.nextDueMs > now
+    ) {
       return prevState.nextDueMs;
     }
-    return now + intervalMs;
+    return now + actualInterval;
   };
 
   const scheduleNext = () => {
@@ -815,12 +862,14 @@ export function startHeartbeatRunner(opts: {
       const intervalMs = resolveHeartbeatIntervalMs(cfg, undefined, agent.heartbeat);
       if (!intervalMs) continue;
       intervals.push(intervalMs);
+      const jitterMs = resolveHeartbeatJitterMs(cfg, agent.heartbeat);
       const prevState = prevAgents.get(agent.agentId);
-      const nextDueMs = resolveNextDue(now, intervalMs, prevState);
+      const nextDueMs = resolveNextDue(now, intervalMs, jitterMs, prevState);
       nextAgents.set(agent.agentId, {
         agentId: agent.agentId,
         heartbeat: agent.heartbeat,
         intervalMs,
+        jitterMs,
         lastRunMs: prevState?.lastRunMs,
         nextDueMs,
       });
@@ -878,7 +927,7 @@ export function startHeartbeatRunner(opts: {
       }
       if (res.status !== "skipped" || res.reason !== "disabled") {
         agent.lastRunMs = now;
-        agent.nextDueMs = now + agent.intervalMs;
+        agent.nextDueMs = now + applyJitter(agent.intervalMs, agent.jitterMs);
       }
       if (res.status === "ran") ran = true;
     }

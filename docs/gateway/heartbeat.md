@@ -18,6 +18,7 @@ surface anything that needs attention without spamming you.
 3. Decide where heartbeat messages should go (`target: "last"` is the default).
 4. Optional: enable heartbeat reasoning delivery for transparency.
 5. Optional: restrict heartbeats to active hours (local time).
+6. Optional: add jitter for more natural, less predictable timing.
 
 Example config:
 
@@ -27,6 +28,7 @@ Example config:
     defaults: {
       heartbeat: {
         every: "30m",
+        jitter: "5m",           // optional: randomize ±5m for more natural timing
         target: "last",
         // activeHours: { start: "08:00", end: "24:00" },
         // includeReasoning: true, // optional: send separate `Reasoning:` message too
@@ -80,6 +82,7 @@ and logged; a message that is only `HEARTBEAT_OK` is dropped.
     defaults: {
       heartbeat: {
         every: "30m",           // default: 30m (0m disables)
+        jitter: "5m",           // optional: randomize interval ±5m (25-35m actual)
         model: "anthropic/claude-opus-4-5",
         includeReasoning: false, // default: false (deliver separate Reasoning: message when available)
         target: "last",         // last | none | <channel id> (core or plugin, e.g. "bluebubbles")
@@ -136,6 +139,7 @@ Example: two agents, only the second agent runs heartbeats.
 ### Field notes
 
 - `every`: heartbeat interval (duration string; default unit = minutes).
+- `jitter`: optional randomization range (duration string; default unit = minutes). When set, actual interval = `every ± random(jitter)`. Example: `every: "30m"`, `jitter: "5m"` → heartbeats run between 25-35 minutes apart. This makes heartbeat timing less predictable and more natural.
 - `model`: optional model override for heartbeat runs (`provider/model`).
 - `includeReasoning`: when enabled, also deliver the separate `Reasoning:` message when available (same shape as `/reasoning on`).
 - `session`: optional session key for heartbeat runs.
