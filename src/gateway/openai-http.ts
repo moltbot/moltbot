@@ -5,6 +5,7 @@ import { buildHistoryContextFromEntries, type HistoryEntry } from "../auto-reply
 import { createDefaultDeps } from "../cli/deps.js";
 import { agentCommand } from "../commands/agent.js";
 import { emitAgentEvent, onAgentEvent } from "../infra/agent-events.js";
+import { getGlobalHookRunner } from "../plugins/hook-runner-global.js";
 import { defaultRuntime } from "../runtime.js";
 import { authorizeGatewayConnect, type ResolvedGatewayAuth } from "./auth.js";
 import {
@@ -222,6 +223,35 @@ export async function handleOpenAiHttpRequest(
   const runId = `chatcmpl_${randomUUID()}`;
   const deps = createDefaultDeps();
 
+  // Trigger message_received hook for API requests (enables voice logging, etc.)
+  const hookRunner = getGlobalHookRunner();
+  if (hookRunner?.hasHooks("message_received")) {
+    void hookRunner
+      .runMessageReceived(
+        {
+          from: user ?? "api",
+          content: prompt.message,
+          timestamp: Date.now(),
+          metadata: {
+            apiUser: user,
+            model,
+            sessionKey,
+            source: "chat_completions",
+            runId,
+          },
+        },
+        {
+          channelId: "api",
+          accountId: undefined,
+          conversationId: sessionKey,
+        },
+      )
+      .catch((err) => {
+        // Fire-and-forget, just log errors
+        console.error(`[openai-http] message_received hook failed: ${String(err)}`);
+      });
+  }
+
   if (!stream) {
     try {
       const result = await agentCommand(
@@ -246,6 +276,24 @@ export async function handleOpenAiHttpRequest(
               .filter(Boolean)
               .join("\n\n")
           : "No response from OpenClaw.";
+
+      // Trigger message_sent hook for API responses (non-streaming only for now)
+      if (hookRunner?.hasHooks("message_sent")) {
+        void hookRunner
+          .runMessageSent(
+            {
+              to: user ?? "api",
+              content,
+              success: true,
+            },
+            {
+              channelId: "api",
+              accountId: undefined,
+              conversationId: sessionKey,
+            },
+          )
+          .catch(() => {});
+      }
 
       sendJson(res, 200, {
         id: runId,
