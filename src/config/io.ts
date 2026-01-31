@@ -23,7 +23,11 @@ import {
   applyTalkApiKey,
 } from "./defaults.js";
 import { VERSION } from "../version.js";
-import { MissingEnvVarError, resolveConfigEnvVars } from "./env-substitution.js";
+import {
+  MissingEnvVarError,
+  resolveConfigEnvVars,
+  restoreConfigEnvVars,
+} from "./env-substitution.js";
 import { collectConfigEnvVars } from "./env-vars.js";
 import { ConfigIncludeError, resolveConfigIncludes } from "./includes.js";
 import { findLegacyConfigIssues } from "./legacy.js";
@@ -343,6 +347,7 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
         parsed: {},
         valid: true,
         config,
+        template: config,
         hash,
         issues: [],
         warnings: [],
@@ -362,6 +367,7 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
           parsed: {},
           valid: false,
           config: {},
+          template: {},
           hash,
           issues: [{ path: "", message: `JSON5 parse failed: ${parsedRes.error}` }],
           warnings: [],
@@ -387,7 +393,8 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
           raw,
           parsed: parsedRes.parsed,
           valid: false,
-          config: coerceConfig(parsedRes.parsed),
+          config: {},
+          template: coerceConfig(parsedRes.parsed),
           hash,
           issues: [{ path: "", message }],
           warnings: [],
@@ -415,7 +422,8 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
           raw,
           parsed: parsedRes.parsed,
           valid: false,
-          config: coerceConfig(resolved),
+          config: {},
+          template: coerceConfig(resolved),
           hash,
           issues: [{ path: "", message }],
           warnings: [],
@@ -435,6 +443,7 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
           parsed: parsedRes.parsed,
           valid: false,
           config: coerceConfig(resolvedConfigRaw),
+          template: coerceConfig(resolved),
           hash,
           issues: validated.issues,
           warnings: validated.warnings,
@@ -443,6 +452,19 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
       }
 
       warnIfConfigFromFuture(validated.config, deps.logger);
+
+      const template = normalizeConfigPaths(
+        applyTalkApiKey(
+          applyModelDefaults(
+            applyAgentDefaults(
+              applySessionDefaults(
+                applyLoggingDefaults(applyMessageDefaults(resolved as OpenClawConfig)),
+              ),
+            ),
+          ),
+        ),
+      );
+
       return {
         path: configPath,
         exists: true,
@@ -458,6 +480,7 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
             ),
           ),
         ),
+        template,
         hash,
         issues: [],
         warnings: validated.warnings,
@@ -471,6 +494,7 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
         parsed: {},
         valid: false,
         config: {},
+        template: {},
         hash: hashConfigRaw(null),
         issues: [{ path: "", message: `read failed: ${String(err)}` }],
         warnings: [],
@@ -479,7 +503,7 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
     }
   }
 
-  async function writeConfigFile(cfg: OpenClawConfig) {
+  async function writeConfigFile(cfg: OpenClawConfig, template?: OpenClawConfig) {
     clearConfigCache();
     const validated = validateConfigObjectWithPlugins(cfg);
     if (!validated.ok) {
@@ -493,9 +517,14 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
         .join("\n");
       deps.logger.warn(`Config warnings:\n${details}`);
     }
+
+    const output = template
+      ? (restoreConfigEnvVars(cfg, template, deps.env) as OpenClawConfig)
+      : cfg;
+
     const dir = path.dirname(configPath);
     await deps.fs.promises.mkdir(dir, { recursive: true, mode: 0o700 });
-    const json = JSON.stringify(applyModelDefaults(stampConfigVersion(cfg)), null, 2)
+    const json = JSON.stringify(applyModelDefaults(stampConfigVersion(output)), null, 2)
       .trimEnd()
       .concat("\n");
 
@@ -610,7 +639,10 @@ export async function readConfigFileSnapshot(): Promise<ConfigFileSnapshot> {
   return await createConfigIO().readConfigFileSnapshot();
 }
 
-export async function writeConfigFile(cfg: OpenClawConfig): Promise<void> {
+export async function writeConfigFile(
+  cfg: OpenClawConfig,
+  template?: OpenClawConfig,
+): Promise<void> {
   clearConfigCache();
-  await createConfigIO().writeConfigFile(cfg);
+  await createConfigIO().writeConfigFile(cfg, template);
 }
