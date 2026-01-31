@@ -23,6 +23,9 @@ const DEFAULT_REDACT_PATTERNS: string[] = [
   String.raw`\bBearer\s+([A-Za-z0-9._\-+=]{18,})\b`,
   // PEM blocks.
   String.raw`-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY-----`,
+  // Key-Mask provider keys.
+  String.raw`\b(sk-proj-[A-Za-z0-9_-]{10,})\b`,
+  String.raw`\b(sk-ant-[A-Za-z0-9_-]{10,})\b`,
   // Common token prefixes.
   String.raw`\b(sk-[A-Za-z0-9_-]{8,})\b`,
   String.raw`\b(ghp_[A-Za-z0-9]{20,})\b`,
