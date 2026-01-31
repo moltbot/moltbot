@@ -881,11 +881,21 @@ export class CallManager {
     if (!this.provider || verificationQueue.length === 0) return;
 
     const concurrency = Math.min(5, verificationQueue.length);
-    const queue = [...verificationQueue];
+    let nextIndex = 0;
 
     const workers = Array.from({ length: concurrency }, async () => {
-      while (queue.length > 0) {
-        const [callId, call] = queue.shift()!;
+      while (true) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+
+        if (currentIndex >= verificationQueue.length) {
+          break;
+        }
+
+        const [callId, call] = verificationQueue[currentIndex] ?? [];
+        if (!callId || !call) {
+          break;
+        }
 
         try {
           const status = await this.provider.getCallStatus({
