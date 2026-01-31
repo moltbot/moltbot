@@ -8,6 +8,7 @@ import {
 } from "../../channels/channel-config.js";
 import type { AllowlistMatch } from "../../channels/allowlist-match.js";
 import { formatDiscordUserTag } from "./format.js";
+import type { DiscordReactionTriggerConfig } from "../../config/types.discord.js";
 
 export type DiscordAllowList = {
   allowAll: boolean;
@@ -17,11 +18,14 @@ export type DiscordAllowList = {
 
 export type DiscordAllowListMatch = AllowlistMatch<"wildcard" | "id" | "name" | "tag">;
 
+export type DiscordReactionTriggerResolved = DiscordReactionTriggerConfig;
+
 export type DiscordGuildEntryResolved = {
   id?: string;
   slug?: string;
   requireMention?: boolean;
   reactionNotifications?: "off" | "own" | "all" | "allowlist";
+  reactionTrigger?: DiscordReactionTriggerResolved;
   users?: Array<string | number>;
   channels?: Record<
     string,
