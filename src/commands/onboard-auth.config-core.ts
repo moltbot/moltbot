@@ -1,5 +1,11 @@
 import { buildXiaomiProvider, XIAOMI_DEFAULT_MODEL_ID } from "../agents/models-config.providers.js";
 import {
+  buildClarifaiModelDefinition,
+  CLARIFAI_BASE_URL,
+  CLARIFAI_DEFAULT_MODEL_REF,
+  CLARIFAI_MODEL_CATALOG,
+} from "../agents/clarifai-models.js";
+import {
   buildSyntheticModelDefinition,
   SYNTHETIC_BASE_URL,
   SYNTHETIC_DEFAULT_MODEL_REF,
@@ -451,6 +457,83 @@ export function applyVeniceConfig(cfg: OpenClawConfig): OpenClawConfig {
               }
             : undefined),
           primary: VENICE_DEFAULT_MODEL_REF,
+        },
+      },
+    },
+  };
+}
+
+/**
+ * Apply Clarifai provider configuration without changing the default model.
+ * Registers Clarifai models and sets up the provider, but preserves existing model selection.
+ */
+export function applyClarifaiProviderConfig(cfg: MoltbotConfig): MoltbotConfig {
+  const models = { ...cfg.agents?.defaults?.models };
+  models[CLARIFAI_DEFAULT_MODEL_REF] = {
+    ...models[CLARIFAI_DEFAULT_MODEL_REF],
+    alias: models[CLARIFAI_DEFAULT_MODEL_REF]?.alias ?? "GPT-4 Turbo (Clarifai)",
+  };
+
+  const providers = { ...cfg.models?.providers };
+  const existingProvider = providers.clarifai;
+  const existingModels = Array.isArray(existingProvider?.models) ? existingProvider.models : [];
+  const clarifaiModels = CLARIFAI_MODEL_CATALOG.map(buildClarifaiModelDefinition);
+  const mergedModels = [
+    ...existingModels,
+    ...clarifaiModels.filter(
+      (model) => !existingModels.some((existing) => existing.id === model.id),
+    ),
+  ];
+  const { apiKey: existingApiKey, ...existingProviderRest } = (existingProvider ?? {}) as Record<
+    string,
+    unknown
+  > as { apiKey?: string };
+  const resolvedApiKey = typeof existingApiKey === "string" ? existingApiKey : undefined;
+  const normalizedApiKey = resolvedApiKey?.trim();
+  providers.clarifai = {
+    ...existingProviderRest,
+    baseUrl: CLARIFAI_BASE_URL,
+    api: "openai-completions",
+    ...(normalizedApiKey ? { apiKey: normalizedApiKey } : {}),
+    models: mergedModels.length > 0 ? mergedModels : clarifaiModels,
+  };
+
+  return {
+    ...cfg,
+    agents: {
+      ...cfg.agents,
+      defaults: {
+        ...cfg.agents?.defaults,
+        models,
+      },
+    },
+    models: {
+      mode: cfg.models?.mode ?? "merge",
+      providers,
+    },
+  };
+}
+
+/**
+ * Apply Clarifai provider configuration AND set Clarifai as the default model.
+ * Use this when Clarifai is the primary provider choice during onboarding.
+ */
+export function applyClarifaiConfig(cfg: MoltbotConfig): MoltbotConfig {
+  const next = applyClarifaiProviderConfig(cfg);
+  const existingModel = next.agents?.defaults?.model;
+  return {
+    ...next,
+    agents: {
+      ...next.agents,
+      defaults: {
+        ...next.agents?.defaults,
+        model: {
+          ...(existingModel && "fallbacks" in (existingModel as Record<string, unknown>)
+            ? {
+                fallbacks: (existingModel as { fallbacks?: string[] }).fallbacks,
+              }
+            : undefined),
+          primary: CLARIFAI_DEFAULT_MODEL_REF,
         },
       },
     },

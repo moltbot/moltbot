@@ -4,7 +4,13 @@ export {
 } from "../agents/synthetic-models.js";
 export { VENICE_DEFAULT_MODEL_ID, VENICE_DEFAULT_MODEL_REF } from "../agents/venice-models.js";
 export {
+  CLARIFAI_DEFAULT_MODEL_ID,
+  CLARIFAI_DEFAULT_MODEL_REF,
+} from "../agents/clarifai-models.js";
+export {
   applyAuthProfileConfig,
+  applyClarifaiConfig,
+  applyClarifaiProviderConfig,
   applyKimiCodeConfig,
   applyKimiCodeProviderConfig,
   applyMoonshotConfig,
@@ -35,8 +41,10 @@ export {
   applyOpencodeZenProviderConfig,
 } from "./onboard-auth.config-opencode.js";
 export {
+  CLARIFAI_DEFAULT_MODEL_REF as CLARIFAI_MODEL_REF,
   OPENROUTER_DEFAULT_MODEL_REF,
   setAnthropicApiKey,
+  setClarifaiApiKey,
   setGeminiApiKey,
   setKimiCodingApiKey,
   setMinimaxApiKey,
