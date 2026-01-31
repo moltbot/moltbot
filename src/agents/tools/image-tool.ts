@@ -267,9 +267,11 @@ async function runImagePrompt(params: {
       }
 
       const context = buildImageContext(params.prompt, params.base64, params.mimeType);
+      // Use 2048 tokens to support reasoning-capable vision models (e.g., Kimi K2.5)
+      // that consume internal reasoning tokens before producing output.
       const message = (await complete(model, context, {
         apiKey,
-        maxTokens: 512,
+        maxTokens: 2048,
       })) as AssistantMessage;
       const text = coerceImageAssistantText({
         message,
