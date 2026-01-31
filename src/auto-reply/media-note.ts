@@ -21,7 +21,8 @@ function truncatePath(path: string, maxLen: number): string {
 
     // Only use this strategy if we can show meaningful dir prefix
     if (available >= 10 && filename.length < maxLen - 10) {
-      return dirPart.slice(0, available) + ".../" + filename;
+      const sep = path[lastSlash] === "\\" ? "\\" : "/";
+      return dirPart.slice(0, available) + "..." + sep + filename;
     }
   }
 
