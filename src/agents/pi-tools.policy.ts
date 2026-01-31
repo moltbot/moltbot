@@ -97,12 +97,16 @@ const DEFAULT_SUBAGENT_TOOL_DENY = [
 
 export function resolveSubagentToolPolicy(cfg?: OpenClawConfig): SandboxToolPolicy {
   const configured = cfg?.tools?.subagents?.tools;
+  const allow = Array.isArray(configured?.allow) ? configured.allow : [];
+  const allowSet = new Set(allow);
+
+  // If a tool is explicitly allowed, remove it from default deny
   const deny = [
-    ...DEFAULT_SUBAGENT_TOOL_DENY,
+    ...DEFAULT_SUBAGENT_TOOL_DENY.filter((tool) => !allowSet.has(tool)),
     ...(Array.isArray(configured?.deny) ? configured.deny : []),
   ];
-  const allow = Array.isArray(configured?.allow) ? configured.allow : undefined;
-  return { allow, deny };
+
+  return { allow: allow.length ? allow : undefined, deny };
 }
 
 export function isToolAllowedByPolicyName(name: string, policy?: SandboxToolPolicy): boolean {
