@@ -414,9 +414,12 @@ export function attachGatewayWsMessageHandler(params: {
               type: "res",
               id: frame.id,
               ok: false,
-              error: errorShape(ErrorCodes.NOT_PAIRED, "device identity required"),
+              error: errorShape(
+                ErrorCodes.NOT_PAIRED,
+                "device identity required (missing keypair? see https://docs.openclaw.ai)",
+              ),
             });
-            close(1008, "device identity required");
+            close(1008, "device identity required (missing keypair? see https://docs.openclaw.ai)");
             return;
           }
         }
