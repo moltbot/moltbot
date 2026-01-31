@@ -6,7 +6,7 @@ import { readChannelAllowFromStore } from "../pairing/pairing-store.js";
 import { note } from "../terminal/note.js";
 import { formatCliCommand } from "../cli/command-format.js";
 import { resolveGatewayAuth } from "../gateway/auth.js";
-import { isLoopbackHost, resolveGatewayBindHost } from "../gateway/net.js";
+import { isLoopbackHost, resolveGatewayBindHost, getPublicIPs, isPrivateIP } from "../gateway/net.js";
 
 export async function noteSecurityWarnings(cfg: OpenClawConfig) {
   const warnings: string[] = [];
@@ -44,6 +44,12 @@ export async function noteSecurityWarnings(cfg: OpenClawConfig) {
   const bindDescriptor = `"${gatewayBind}" (${resolvedBindHost})`;
 
   if (isExposed) {
+    // Check for public IP exposure (this is how installations end up on Shodan)
+    const publicIPs = getPublicIPs();
+    const hasPublicIP = publicIPs.length > 0;
+    const isBindingToPublicIP =
+      resolvedBindHost === "0.0.0.0" || !isPrivateIP(resolvedBindHost);
+
     if (!hasSharedSecret) {
       const authFixLines =
         resolvedAuth.mode === "password"
@@ -68,6 +74,16 @@ export async function noteSecurityWarnings(cfg: OpenClawConfig) {
       warnings.push(
         `- WARNING: Gateway bound to ${bindDescriptor} (network-accessible).`,
         `  Ensure your auth credentials are strong and not exposed.`,
+      );
+    }
+
+    // Additional warning for public IP exposure (Shodan risk)
+    if (isBindingToPublicIP && hasPublicIP) {
+      warnings.push(
+        `- WARNING: System has public IP(s): ${publicIPs.join(", ")}`,
+        `  Binding to ${resolvedBindHost} exposes your gateway to the internet.`,
+        `  This is how installations end up on Shodan.`,
+        `  For remote access, consider: VPN/Tailscale (preferred) or HTTPS reverse proxy.`,
       );
     }
   }

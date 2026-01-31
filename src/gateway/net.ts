@@ -1,6 +1,91 @@
 import net from "node:net";
+import os from "node:os";
 
 import { pickPrimaryTailnetIPv4, pickPrimaryTailnetIPv6 } from "../infra/tailnet.js";
+
+/**
+ * Check if an IPv4 address is in a private range (RFC 1918 + loopback + link-local).
+ *
+ * Private ranges:
+ * - 10.0.0.0/8
+ * - 172.16.0.0/12
+ * - 192.168.0.0/16
+ * - 127.0.0.0/8 (loopback)
+ * - 169.254.0.0/16 (link-local)
+ */
+export function isPrivateIPv4(ip: string): boolean {
+  // 10.0.0.0/8
+  if (ip.startsWith("10.")) return true;
+  // 172.16.0.0/12 (172.16.x.x - 172.31.x.x)
+  if (ip.startsWith("172.")) {
+    const parts = ip.split(".");
+    if (parts.length >= 2) {
+      const second = parseInt(parts[1], 10);
+      if (!Number.isNaN(second) && second >= 16 && second <= 31) return true;
+    }
+  }
+  // 192.168.0.0/16
+  if (ip.startsWith("192.168.")) return true;
+  // 127.0.0.0/8 (loopback)
+  if (ip.startsWith("127.")) return true;
+  // 169.254.0.0/16 (link-local)
+  if (ip.startsWith("169.254.")) return true;
+  return false;
+}
+
+/**
+ * Check if an IPv6 address is in a private/local range.
+ *
+ * Private ranges:
+ * - fc00::/7 (unique local addresses - fc00:: and fd00::)
+ * - fe80::/10 (link-local)
+ * - ::1 (loopback)
+ */
+export function isPrivateIPv6(ip: string): boolean {
+  const lower = ip.toLowerCase();
+  // fc00::/7 (unique local) - starts with fc or fd
+  if (lower.startsWith("fc") || lower.startsWith("fd")) return true;
+  // fe80::/10 (link-local)
+  if (lower.startsWith("fe80")) return true;
+  // ::1 (loopback)
+  if (lower === "::1") return true;
+  // ::ffff: mapped IPv4 - check the IPv4 portion
+  if (lower.startsWith("::ffff:")) {
+    const ipv4Part = ip.slice("::ffff:".length);
+    return isPrivateIPv4(ipv4Part);
+  }
+  return false;
+}
+
+/**
+ * Check if an IP address (v4 or v6) is private/local.
+ */
+export function isPrivateIP(ip: string): boolean {
+  if (!ip) return false;
+  const trimmed = ip.trim();
+  if (trimmed.includes(":")) return isPrivateIPv6(trimmed);
+  return isPrivateIPv4(trimmed);
+}
+
+/**
+ * Get all public (non-private) IP addresses from network interfaces.
+ * Useful for warning users when they bind to 0.0.0.0 on a machine with public IPs.
+ */
+export function getPublicIPs(): string[] {
+  const interfaces = os.networkInterfaces();
+  const publicIPs: string[] = [];
+
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name] ?? []) {
+      if (iface.internal) continue;
+      if (!isPrivateIP(iface.address)) {
+        publicIPs.push(iface.address);
+      }
+    }
+  }
+
+  return publicIPs;
+}
 
 export function isLoopbackAddress(ip: string | undefined): boolean {
   if (!ip) {
