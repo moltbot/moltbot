@@ -3,8 +3,9 @@ import lockfile from "proper-lockfile";
 
 import type { OpenClawConfig } from "../../config/config.js";
 import { refreshChutesTokens } from "../chutes-oauth.js";
+import { writeClaudeCliCredentials } from "../cli-credentials.js";
 import { refreshQwenPortalCredentials } from "../../providers/qwen-portal-oauth.js";
-import { AUTH_STORE_LOCK_OPTIONS, log } from "./constants.js";
+import { AUTH_STORE_LOCK_OPTIONS, CLAUDE_CLI_PROFILE_ID, log } from "./constants.js";
 import { formatAuthDoctorHint } from "./doctor.js";
 import { ensureAuthStoreFile, resolveAuthStorePath } from "./paths.js";
 import { suggestOAuthProfileIdForLegacyDefault } from "./repair.js";
@@ -70,6 +71,17 @@ async function refreshOAuthTokenWithLock(params: {
       type: "oauth",
     };
     saveAuthProfileStore(store, params.agentDir);
+
+    // Keep Claude CLI credentials file in sync after refresh
+    if (params.profileId === CLAUDE_CLI_PROFILE_ID && cred.provider === "anthropic") {
+      try {
+        writeClaudeCliCredentials(result.newCredentials);
+      } catch (error) {
+        log.warn("failed to write back refreshed credentials to claude cli", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
 
     return result;
   } finally {

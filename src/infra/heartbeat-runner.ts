@@ -435,18 +435,20 @@ export async function runHeartbeatOnce(opts: {
   agentId?: string;
   heartbeat?: HeartbeatConfig;
   reason?: string;
+  forcedByCron?: boolean;
   deps?: HeartbeatDeps;
 }): Promise<HeartbeatRunResult> {
   const cfg = opts.cfg ?? loadConfig();
   const agentId = normalizeAgentId(opts.agentId ?? resolveDefaultAgentId(cfg));
   const heartbeat = opts.heartbeat ?? resolveHeartbeatConfig(cfg, agentId);
+  const isCronWake = opts.forcedByCron === true;
   if (!heartbeatsEnabled) {
     return { status: "skipped", reason: "disabled" };
   }
-  if (!isHeartbeatEnabledForAgent(cfg, agentId)) {
+  if (!isCronWake && !isHeartbeatEnabledForAgent(cfg, agentId)) {
     return { status: "skipped", reason: "disabled" };
   }
-  if (!resolveHeartbeatIntervalMs(cfg, undefined, heartbeat)) {
+  if (!isCronWake && !resolveHeartbeatIntervalMs(cfg, undefined, heartbeat)) {
     return { status: "skipped", reason: "disabled" };
   }
 
@@ -509,6 +511,10 @@ export async function runHeartbeatOnce(opts: {
     To: sender,
     Provider: hasExecCompletion ? "exec-event" : "heartbeat",
     SessionKey: sessionKey,
+    // Pass the resolved account ID so that tool calls (e.g. message send)
+    // during the heartbeat turn use the correct channel account rather than
+    // falling back to the default agent's account.
+    AccountId: delivery.accountId,
   };
   if (!visibility.showAlerts && !visibility.showOk && !visibility.useIndicator) {
     emitHeartbeatEvent({
