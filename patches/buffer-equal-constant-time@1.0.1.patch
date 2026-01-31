@@ -1,0 +1,40 @@
+diff --git a/.npmignore b/.npmignore
+deleted file mode 100644
+index 34e4f5c298de294fa5c1c1769b6489eb047bde9a..0000000000000000000000000000000000000000
+diff --git a/index.js b/index.js
+index 5462c1f830bdbe79bf2b1fcfd811cd9799b4dd11..b10b0fa413a0a625badfe229a63a4e38b4043f9e 100644
+--- a/index.js
++++ b/index.js
+@@ -1,6 +1,7 @@
+ /*jshint node:true */
+ 'use strict';
+ var Buffer = require('buffer').Buffer; // browserify
++// SlowBuffer was removed in Node.js 22+
+ var SlowBuffer = require('buffer').SlowBuffer;
+ 
+ module.exports = bufferEq;
+@@ -28,14 +29,21 @@ function bufferEq(a, b) {
+ }
+ 
+ bufferEq.install = function() {
+-  Buffer.prototype.equal = SlowBuffer.prototype.equal = function equal(that) {
++  Buffer.prototype.equal = function equal(that) {
+     return bufferEq(this, that);
+   };
++  if (SlowBuffer) {
++    SlowBuffer.prototype.equal = function equal(that) {
++      return bufferEq(this, that);
++    };
++  }
+ };
+ 
+ var origBufEqual = Buffer.prototype.equal;
+-var origSlowBufEqual = SlowBuffer.prototype.equal;
++var origSlowBufEqual = SlowBuffer ? SlowBuffer.prototype.equal : undefined;
+ bufferEq.restore = function() {
+   Buffer.prototype.equal = origBufEqual;
+-  SlowBuffer.prototype.equal = origSlowBufEqual;
++  if (SlowBuffer && origSlowBufEqual !== undefined) {
++    SlowBuffer.prototype.equal = origSlowBufEqual;
++  }
+ };

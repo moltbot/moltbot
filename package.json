@@ -239,6 +239,9 @@
     "overrides": {
       "@sinclair/typebox": "0.34.47",
       "tar": "7.5.7"
+    },
+    "patchedDependencies": {
+      "buffer-equal-constant-time@1.0.1": "patches/buffer-equal-constant-time@1.0.1.patch"
     }
   },
   "vitest": {
