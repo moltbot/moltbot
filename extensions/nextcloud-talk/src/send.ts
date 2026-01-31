@@ -94,7 +94,7 @@ export async function sendMessageNextcloudTalk(
   const bodyStr = JSON.stringify(body);
 
   const { random, signature } = generateNextcloudTalkSignature({
-    body: bodyStr,
+    body: message,
     secret,
   });
 
