@@ -14,12 +14,13 @@ import { createCliProgress } from "../cli/progress.js";
 import { note as emitNote } from "../terminal/note.js";
 import { stylePromptHint, stylePromptMessage, stylePromptTitle } from "../terminal/prompt-style.js";
 import { theme } from "../terminal/theme.js";
+import { t } from "../i18n/index.js";
 import type { WizardProgress, WizardPrompter } from "./prompts.js";
 import { WizardCancelledError } from "./prompts.js";
 
 function guardCancel<T>(value: T | symbol): T {
   if (isCancel(value)) {
-    cancel(stylePromptTitle("Setup cancelled.") ?? "Setup cancelled.");
+    cancel(stylePromptTitle(t("setupCancelled")) ?? t("setupCancelled"));
     throw new WizardCancelledError();
   }
   return value as T;

@@ -13,6 +13,7 @@ import { formatCliCommand } from "../../cli/command-format.js";
 import { readConfigFileSnapshot, type OpenClawConfig } from "../../config/config.js";
 import { logConfigUpdated } from "../../config/logging.js";
 import type { RuntimeEnv } from "../../runtime.js";
+import { t } from "../../i18n/index.js";
 import { stylePromptHint, stylePromptMessage } from "../../terminal/prompt-style.js";
 import { applyAuthProfileConfig } from "../onboard-auth.js";
 import { isRemoteEnvironment } from "../oauth-env.js";
@@ -429,6 +430,6 @@ export async function modelsAuthLoginCommand(opts: LoginOptions, runtime: Runtim
     );
   }
   if (result.notes && result.notes.length > 0) {
-    await prompter.note(result.notes.join("\n"), "Provider notes");
+    await prompter.note(result.notes.join("\n"), t("Provider notes"));
   }
 }

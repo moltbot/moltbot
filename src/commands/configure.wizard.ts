@@ -5,6 +5,7 @@ import { logConfigUpdated } from "../config/logging.js";
 import { ensureControlUiAssetsBuilt } from "../infra/control-ui-assets.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { defaultRuntime } from "../runtime.js";
+import { t } from "../i18n/index.js";
 import { note } from "../terminal/note.js";
 import { resolveUserPath } from "../utils.js";
 import { createClackPrompter } from "../wizard/clack-prompter.js";
@@ -223,19 +224,19 @@ export async function runConfigureWizard(
         options: [
           {
             value: "local",
-            label: "Local (this machine)",
+            label: t("Local (this machine)"),
             hint: localProbe.ok
-              ? `Gateway reachable (${localUrl})`
-              : `No gateway detected (${localUrl})`,
+              ? t(`Gateway reachable (${localUrl})`)
+              : t(`No gateway detected (${localUrl})`),
           },
           {
             value: "remote",
-            label: "Remote (info-only)",
+            label: t("Remote (info-only)"),
             hint: !remoteUrl
-              ? "No remote URL configured yet"
+              ? t("No remote URL configured yet")
               : remoteProbe?.ok
-                ? `Gateway reachable (${remoteUrl})`
-                : `Configured but unreachable (${remoteUrl})`,
+                ? t(`Gateway reachable (${remoteUrl})`)
+                : t(`Configured but unreachable (${remoteUrl})`),
           },
         ],
       }),

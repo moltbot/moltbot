@@ -6,9 +6,31 @@ function splitLongWord(word: string, maxLen: number): string[] {
   if (maxLen <= 0) return [word];
   const chars = Array.from(word);
   const parts: string[] = [];
-  for (let i = 0; i < chars.length; i += maxLen) {
-    parts.push(chars.slice(i, i + maxLen).join(""));
+  let currentPart = "";
+  let currentWidth = 0;
+
+  for (const char of chars) {
+    const charWidth = visibleWidth(char);
+    if (currentWidth + charWidth > maxLen) {
+      if (currentPart) {
+        parts.push(currentPart);
+        currentPart = "";
+        currentWidth = 0;
+      }
+      // 如果单个字符的宽度就超过了最大宽度，直接添加
+      if (charWidth > maxLen) {
+        parts.push(char);
+        continue;
+      }
+    }
+    currentPart += char;
+    currentWidth += charWidth;
   }
+
+  if (currentPart) {
+    parts.push(currentPart);
+  }
+
   return parts.length > 0 ? parts : [word];
 }
 

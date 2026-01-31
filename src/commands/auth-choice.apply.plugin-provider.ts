@@ -16,6 +16,7 @@ import { applyAuthProfileConfig } from "./onboard-auth.js";
 import { openUrl } from "./onboard-helpers.js";
 import { createVpsAwareOAuthHandlers } from "./oauth-flow.js";
 import { isRemoteEnvironment } from "./oauth-env.js";
+import { t } from "../i18n/index.js";
 
 export type PluginProviderAuthChoiceOptions = {
   authChoice: string;
@@ -187,7 +188,7 @@ export async function applyAuthChoicePluginProvider(
   }
 
   if (result.notes && result.notes.length > 0) {
-    await params.prompter.note(result.notes.join("\n"), "Provider notes");
+    await params.prompter.note(result.notes.join("\n"), t("Provider notes"));
   }
 
   return { config: nextConfig, agentModelOverride };

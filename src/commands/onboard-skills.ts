@@ -3,6 +3,7 @@ import { buildWorkspaceSkillStatus } from "../agents/skills-status.js";
 import { formatCliCommand } from "../cli/command-format.js";
 import type { OpenClawConfig } from "../config/config.js";
 import type { RuntimeEnv } from "../runtime.js";
+import { t } from "../i18n/index.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
 import { detectBinary, resolveNodeManagerOptions } from "./onboard-helpers.js";
 
@@ -19,8 +20,13 @@ function formatSkillHint(skill: {
 }): string {
   const desc = skill.description?.trim();
   const installLabel = skill.install[0]?.label?.trim();
-  const combined = desc && installLabel ? `${desc} — ${installLabel}` : desc || installLabel;
-  if (!combined) return "install";
+  const translatedDesc = desc ? t(desc) : undefined;
+  const translatedInstallLabel = installLabel ? t(installLabel) : undefined;
+  const combined =
+    translatedDesc && translatedInstallLabel
+      ? `${translatedDesc} — ${translatedInstallLabel}`
+      : translatedDesc || translatedInstallLabel;
+  if (!combined) return t("install");
   const maxLen = 90;
   return combined.length > maxLen ? `${combined.slice(0, maxLen - 1)}…` : combined;
 }
@@ -60,15 +66,15 @@ export async function setupSkills(
 
   await prompter.note(
     [
-      `Eligible: ${eligible.length}`,
-      `Missing requirements: ${missing.length}`,
-      `Blocked by allowlist: ${blocked.length}`,
+      t(`Eligible: ${eligible.length}`),
+      t(`Missing requirements: ${missing.length}`),
+      t(`Blocked by allowlist: ${blocked.length}`),
     ].join("\n"),
-    "Skills status",
+    t("Skills status"),
   );
 
   const shouldConfigure = await prompter.confirm({
-    message: "Configure skills now? (recommended)",
+    message: t("Configure skills now? (recommended)"),
     initialValue: true,
   });
   if (!shouldConfigure) return cfg;
@@ -76,28 +82,28 @@ export async function setupSkills(
   if (needsBrewPrompt) {
     await prompter.note(
       [
-        "Many skill dependencies are shipped via Homebrew.",
-        "Without brew, you'll need to build from source or download releases manually.",
+        t("Many skill dependencies are shipped via Homebrew."),
+        t("Without brew, you'll need to build from source or download releases manually."),
       ].join("\n"),
-      "Homebrew recommended",
+      t("Homebrew recommended"),
     );
     const showBrewInstall = await prompter.confirm({
-      message: "Show Homebrew install command?",
+      message: t("Show Homebrew install command?"),
       initialValue: true,
     });
     if (showBrewInstall) {
       await prompter.note(
         [
-          "Run:",
+          t("Run:"),
           '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"',
         ].join("\n"),
-        "Homebrew install",
+        t("Homebrew install"),
       );
     }
   }
 
   const nodeManager = (await prompter.select({
-    message: "Preferred node manager for skill installs",
+    message: t("Preferred node manager for skill installs"),
     options: resolveNodeManagerOptions(),
   })) as "npm" | "pnpm" | "bun";
 
@@ -117,12 +123,12 @@ export async function setupSkills(
   );
   if (installable.length > 0) {
     const toInstall = await prompter.multiselect({
-      message: "Install missing skill dependencies",
+      message: t("Install missing skill dependencies"),
       options: [
         {
           value: "__skip__",
-          label: "Skip for now",
-          hint: "Continue without installing dependencies",
+          label: t("Skip for now"),
+          hint: t("Continue without installing dependencies"),
         },
         ...installable.map((skill) => ({
           value: skill.name,

@@ -16,6 +16,7 @@ import type { RuntimeEnv } from "../runtime.js";
 import { formatDocsLink } from "../terminal/links.js";
 import { formatCliCommand } from "../cli/command-format.js";
 import { enablePluginInConfig } from "../plugins/enable.js";
+import { t } from "../i18n/index.js";
 import type { WizardPrompter, WizardSelectOption } from "../wizard/prompts.js";
 import type { ChannelChoice } from "./onboard-types.js";
 import {
@@ -168,7 +169,7 @@ export async function noteChannelStatus(params: {
     accountOverrides: params.accountOverrides ?? {},
   });
   if (statusLines.length > 0) {
-    await params.prompter.note(statusLines.join("\n"), "Channel status");
+    await params.prompter.note(statusLines.join("\n"), t("Channel status"));
   }
 }
 
@@ -187,15 +188,17 @@ async function noteChannelPrimer(
   );
   await prompter.note(
     [
-      "DM security: default is pairing; unknown DMs get a pairing code.",
-      `Approve with: ${formatCliCommand("openclaw pairing approve <channel> <code>")}`,
-      'Public DMs require dmPolicy="open" + allowFrom=["*"].',
-      'Multi-user DMs: set session.dmScope="per-channel-peer" (or "per-account-channel-peer" for multi-account channels) to isolate sessions.',
-      `Docs: ${formatDocsLink("/start/pairing", "start/pairing")}`,
+      t("DM security: default is pairing; unknown DMs get a pairing code."),
+      t(`Approve with: ${formatCliCommand("openclaw pairing approve <channel> <code>")}`),
+      t('Public DMs require dmPolicy="open" + allowFrom=["*"].'),
+      t(
+        'Multi-user DMs: set session.dmScope="per-channel-peer" (or "per-account-channel-peer" for multi-account channels) to isolate sessions.',
+      ),
+      t(`Docs: ${formatDocsLink("/start/pairing", "start/pairing")}`),
       "",
       ...channelLines,
     ].join("\n"),
-    "How channels work",
+    t("How channels work"),
   );
 }
 
@@ -578,13 +581,15 @@ export async function setupChannels(
   if (options?.quickstartDefaults) {
     const { entries } = getChannelEntries();
     const choice = (await prompter.select({
-      message: "Select channel (QuickStart)",
+      message: t("Select channel (QuickStart)"),
       options: [
         ...buildSelectionOptions(entries),
         {
           value: "__skip__",
-          label: "Skip for now",
-          hint: `You can add channels later via \`${formatCliCommand("openclaw channels add")}\``,
+          label: t("Skip for now"),
+          hint: t(
+            `You can add channels later via \`${formatCliCommand("openclaw channels add")}\``,
+          ),
         },
       ],
       initialValue: quickstartDefault,
@@ -598,13 +603,13 @@ export async function setupChannels(
     while (true) {
       const { entries } = getChannelEntries();
       const choice = (await prompter.select({
-        message: "Select a channel",
+        message: t("Select a channel"),
         options: [
           ...buildSelectionOptions(entries),
           {
             value: doneValue,
-            label: "Finished",
-            hint: selection.length > 0 ? "Done" : "Skip for now",
+            label: t("Finished"),
+            hint: selection.length > 0 ? t("Done") : t("Skip for now"),
           },
         ],
         initialValue,
@@ -625,7 +630,7 @@ export async function setupChannels(
     .map((channel) => selectionNotes.get(channel))
     .filter((line): line is string => Boolean(line));
   if (selectedLines.length > 0) {
-    await prompter.note(selectedLines.join("\n"), "Selected channels");
+    await prompter.note(selectedLines.join("\n"), t("Selected channels"));
   }
 
   if (!options?.skipDmPolicyPrompt) {

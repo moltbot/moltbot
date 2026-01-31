@@ -11,6 +11,7 @@ import {
 } from "../agents/model-selection.js";
 import type { OpenClawConfig } from "../config/config.js";
 import type { WizardPrompter, WizardSelectOption } from "../wizard/prompts.js";
+import { t } from "../i18n/index.js";
 import { formatTokenK } from "./models/shared.js";
 
 const KEEP_VALUE = "__keep__";
@@ -78,10 +79,12 @@ async function promptManualModel(params: {
   initialValue?: string;
 }): Promise<PromptDefaultModelResult> {
   const modelInput = await params.prompter.text({
-    message: params.allowBlank ? "Default model (blank to keep)" : "Default model",
+    message: params.allowBlank ? t("Default model (blank to keep)") : t("Default model"),
     initialValue: params.initialValue,
-    placeholder: "provider/model",
-    validate: params.allowBlank ? undefined : (value) => (value?.trim() ? undefined : "Required"),
+    placeholder: t("provider/model"),
+    validate: params.allowBlank
+      ? undefined
+      : (value) => (value?.trim() ? undefined : t("Required")),
   });
   const model = String(modelInput ?? "").trim();
   if (!model) return {};
@@ -249,7 +252,7 @@ export async function promptDefaultModel(
   }
 
   const selection = await params.prompter.select({
-    message: params.message ?? "Default model",
+    message: params.message ? t(params.message) : t("Default model"),
     options,
     initialValue,
   });

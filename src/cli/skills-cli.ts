@@ -7,6 +7,7 @@ import {
 } from "../agents/skills-status.js";
 import { loadConfig } from "../config/config.js";
 import { defaultRuntime } from "../runtime.js";
+import { t } from "../i18n/index.js";
 import { formatDocsLink } from "../terminal/links.js";
 import { renderTable } from "../terminal/table.js";
 import { theme } from "../terminal/theme.js";
@@ -76,7 +77,8 @@ export function formatSkillsList(report: SkillStatusReport, opts: SkillsListOpti
       managedSkillsDir: report.managedSkillsDir,
       skills: skills.map((s) => ({
         name: s.name,
-        description: s.description,
+        description: t(s.description),
+        originalDescription: s.description,
         emoji: s.emoji,
         eligible: s.eligible,
         disabled: s.disabled,
@@ -104,7 +106,7 @@ export function formatSkillsList(report: SkillStatusReport, opts: SkillsListOpti
     return {
       Status: formatSkillStatus(skill),
       Skill: formatSkillName(skill),
-      Description: theme.muted(skill.description),
+      Description: theme.muted(t(skill.description)),
       Source: skill.source ?? "",
       Missing: missing ? theme.warn(missing) : "",
     };
